@@ -54,9 +54,7 @@ export function updateUI(data) {
     document.getElementById('live-s2').innerText = data.cumulativeScores.team2;
     if (data.deckSize !== undefined) document.getElementById('deck-count').innerText = data.deckSize;
 
-    // Turn Logic
-    state.currentTurnSeat = data.currentPlayer;
-    state.gameStarted = true;
+    
 
     // Names
     if (data.names) {
@@ -65,6 +63,26 @@ export function updateUI(data) {
         document.getElementById('name-left').innerText = data.names[(s + 1) % 4];
         document.getElementById('name-right').innerText = data.names[(s + 3) % 4];
     }
+    const lightMap = [
+        { id: 'light-me',      seatIndex: s },
+        { id: 'light-left',    seatIndex: (s + 1) % 4 },
+        { id: 'light-partner', seatIndex: (s + 2) % 4 },
+        { id: 'light-right',   seatIndex: (s + 3) % 4 }
+    ];
+
+    lightMap.forEach(mapping => {
+        const el = document.getElementById(mapping.id);
+        if (el) {
+            if (mapping.seatIndex === data.currentPlayer) {
+                el.classList.add('active'); // Turns GREEN
+            } else {
+                el.classList.remove('active'); // Turns RED
+            }
+        }
+    });
+    // Turn Logic
+    state.currentTurnSeat = data.currentPlayer;
+    state.gameStarted = true;
 }
 
 function renderHand(hand) {
@@ -73,35 +91,78 @@ function renderHand(hand) {
     div.innerHTML = "";
     if (!hand || hand.length === 0) return;
 
-    // Grouping Logic
+    // 1. Group cards by Rank (Same as before)
     const groups = [];
     let currentGroup = [];
+    
+    // Sort hand first to ensure groups are contiguous (optional but safer)
+    // Assuming hand is already sorted by the game logic, but groups rely on order.
+    
     hand.forEach((card, index) => {
-        if (currentGroup.length === 0) currentGroup.push({card, index});
-        else {
-            if (currentGroup[currentGroup.length - 1].card.rank === card.rank) currentGroup.push({card, index});
-            else { groups.push(currentGroup); currentGroup = [{card, index}]; }
+        if (currentGroup.length === 0) {
+            currentGroup.push({card, index});
+        } else {
+            // Compare rank with the first card of the current group
+            if (currentGroup[0].card.rank === card.rank) {
+                currentGroup.push({card, index});
+            } else { 
+                groups.push(currentGroup); 
+                currentGroup = [{card, index}]; 
+            }
         }
     });
     if (currentGroup.length > 0) groups.push(currentGroup);
 
-    groups.forEach((grp) => {
+    // 2. Calculate Horizontal Overlap (The "Squeeze")
+    const cardWidth = 50; // Match your CSS --card-w var (approx)
+    const screenWidth = div.clientWidth;
+    const totalGroups = groups.length;
+    
+    // Total width if laid out side-by-side with no overlap
+    const totalRawWidth = totalGroups * cardWidth;
+    
+    // If raw width > screen, we must overlap. 
+    // Formula: (Excess Width) / (Number of gaps between groups)
+    let overlap = 0;
+    if (totalRawWidth > screenWidth) {
+        const excess = totalRawWidth - screenWidth;
+        // Add a tiny buffer (10px) so they don't touch the exact edge
+        overlap = (excess + 10) / (totalGroups - 1);
+    }
+
+    // 3. Render Groups
+    groups.forEach((grp, gIndex) => {
         const groupDiv = document.createElement("div");
         groupDiv.className = "hand-group";
         
+        // Apply Horizontal Overlap
+        // We shift every group (except the first) to the left
+        if (gIndex > 0 && overlap > 0) {
+            groupDiv.style.marginLeft = `-${overlap}px`;
+        }
+
+        // Render Vertical Cards (Same Rank)
         grp.forEach((item, cIdx) => {
             const wrapper = document.createElement("div");
             wrapper.className = "hand-card-wrap";
-            if (cIdx > 0) wrapper.style.marginTop = "-70px"; // Simplified overlap
+            
+            // Vertical Cascade: Stack identical ranks
+            if (cIdx > 0) {
+                wrapper.style.marginTop = "-120px"; // Tweak this number to control vertical tightness
+            }
+
             if (state.selectedIndices.includes(item.index)) wrapper.classList.add("selected");
             
             const img = document.createElement("img");
             img.src = getCardImage(item.card);
-            wrapper.appendChild(img);
-            // NOTE: We call window.toggleSelect because we will attach it globally
+            
+            // Interaction
             wrapper.onclick = function() { window.toggleSelect(item.index); };
+            
+            wrapper.appendChild(img);
             groupDiv.appendChild(wrapper);
         });
+        
         div.appendChild(groupDiv);
     });
 }

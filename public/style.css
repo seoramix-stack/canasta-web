@@ -234,8 +234,38 @@ body {
     border-radius: 4px; border: 1px solid #111;
 }
 
-#my-hand { display: flex; padding: 0 10px; width: 100%; overflow: visible; height: 100%; justify-content: center; align-items: flex-start; }
-.hand-group { display: flex; flex-direction: column; align-items: center; min-width: var(--card-w); position: relative; margin-right: 5px; }
+#my-hand {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    
+    /* 1. Disable Scroll */
+    overflow: hidden; 
+    
+    /* 2. Center the "fan" of cards */
+    justify-content: center; 
+    align-items: center; 
+    
+    /* Ensure padding doesn't mess up width calculations */
+    padding: 0 5px; 
+    box-sizing: border-box;
+}
+
+.hand-group {
+    display: flex;
+    flex-direction: column; 
+    align-items: center; 
+    
+    /* Important for overlap logic */
+    position: relative; 
+    
+    /* Ensure groups don't shrink smaller than a card width */
+    min-width: var(--card-w); 
+    width: var(--card-w);
+    
+    /* Smooth transition if you discard and cards slide over */
+    transition: margin 0.3s ease; 
+}
 .hand-card-wrap { width: var(--card-w); height: var(--card-h); position: relative; transition: margin 0.2s, transform 0.1s; }
 .hand-card-wrap.selected::after { content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(255, 253, 208, 0.4); border: 2px solid #f1c40f; border-radius: 4px; pointer-events: none; }
 .hand-card-wrap img { width: 100%; height: 100%; border-radius: 4px; }
