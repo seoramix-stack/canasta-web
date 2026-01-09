@@ -21,8 +21,13 @@ export function updateUI(data) {
     // Safety check for critical elements
     if(!document.getElementById('game-ui')) return;
 
-    if (data.currentPlayer !== -1) {
-        document.getElementById('ready-modal').style.display = 'none';
+    const readyModal = document.getElementById('ready-modal');
+    if (data.currentPlayer === -1 && data.phase !== 'game_over') {
+        // Game hasn't started -> SHOW Ready Modal
+        if(readyModal) readyModal.style.display = 'flex';
+    } else {
+        // Game is running -> HIDE Ready Modal
+        if(readyModal) readyModal.style.display = 'none';
     }
     document.getElementById('game-ui').style.display = 'block';
 
