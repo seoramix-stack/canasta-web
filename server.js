@@ -15,8 +15,11 @@ const io = new Server(server);
 app.use(express.static('public')); 
 
 // --- 2. MONGODB CONNECTION ---
-// Replace the string below with your actual connection string from .env or hardcoded
-const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://seoramix_db_user:lacanasta2026@la-canasta.sr3w5ij.mongodb.net/?appName=la-canasta";
+const MONGO_URI = process.env.MONGO_URI; 
+
+if (!MONGO_URI) {
+    console.error("FATAL ERROR: MONGO_URI is missing. Check Render Environment Variables.");
+}
 
 mongoose.connect(MONGO_URI)
     .then(() => console.log("[DB] Connected to MongoDB"))
