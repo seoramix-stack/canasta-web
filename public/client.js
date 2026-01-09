@@ -1,4 +1,8 @@
 // client.js
+window.hardReset = () => {
+    localStorage.clear();
+    location.reload();
+};
 import { state, saveSession, logout } from './state.js';
 import * as UI from './ui.js';
 import * as Anim from './animations.js';
