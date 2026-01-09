@@ -90,13 +90,25 @@ io.on('connection', async (socket) => {
 
     // 1. HANDLE JOIN (Merged Logic)
     socket.on('request_join', (data) => {
-        // A. If player is refreshing (has gameId attached), just update them
+        // A. Handle "Force New Game" requests
+        // If user is already in a game memory but asks for a NEW mode, remove them from the old one.
         if (socket.data.gameId && games[socket.data.gameId]) {
-             sendUpdate(socket.data.gameId, socket.id, socket.data.seat);
-             return;
+             console.log(`[Switch] User switching from Game ${socket.data.gameId} to new ${data.mode} game.`);
+             
+             // Leave the old room
+             socket.leave(socket.data.gameId);
+             
+             // Clear the old session from memory
+             const token = socket.handshake.auth.token;
+             if (token && playerSessions[token]) {
+                 delete playerSessions[token];
+             }
+             
+             // Reset socket data
+             socket.data.gameId = null;
         }
 
-        // B. Check Mode
+        // B. Proceed to Join
         if (data.mode === 'bot') {
             startBotGame(socket, data.difficulty || 'medium');
         } else {
@@ -296,7 +308,29 @@ io.on('connection', async (socket) => {
             }
         }
     });
+// --- NEW HANDLER: LEAVE GAME ---
+    socket.on('leave_game', () => {
+        const gameId = socket.data.gameId;
+        const token = socket.handshake.auth.token;
 
+        console.log(`[Leave] User requesting to leave Game ${gameId}`);
+
+        // 1. Remove from Global Session Memory
+        if (token && playerSessions[token]) {
+            delete playerSessions[token];
+        }
+
+        // 2. Clear Socket Data
+        socket.data.gameId = null;
+        socket.data.seat = null;
+        
+        // 3. Leave the Socket Room
+        if (gameId) {
+            socket.leave(gameId);
+            // Also remove from lobby if they were just waiting
+            waitingPlayers = waitingPlayers.filter(s => s.id !== socket.id);
+        }
+    });
     socket.on('disconnect', () => {
         waitingPlayers = waitingPlayers.filter(s => s.id !== socket.id);
     });
@@ -536,7 +570,7 @@ function getPlayerNames(gameId) {
 const https = require('https'); // Use 'http' if running locally, 'https' for Render
 
 setInterval(() => {
-    const url = 'https://YOUR-APP-NAME.onrender.com'; // <--- REPLACE THIS WITH YOUR ACTUAL RENDER URL
+    const url = 'https://la-canasta.onrender.com/'; // <--- REPLACE THIS WITH YOUR ACTUAL RENDER URL
     
     https.get(url, (res) => {
         console.log(`[Keep-Alive] Ping sent to ${url}. Status: ${res.statusCode}`);
