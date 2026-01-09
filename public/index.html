@@ -24,8 +24,10 @@
             <div class="form-group">
                 <input type="text" id="login-user" class="form-input" placeholder="Username">
             </div>
-            <div class="form-group">
+
+            <div class="form-group" style="position: relative;">
                 <input type="password" id="login-pass" class="form-input" placeholder="Password">
+                <span class="pass-toggle" onclick="togglePass('login-pass', this)">👁️</span>
             </div>
             
             <button class="menu-btn primary" onclick="doLogin()">LOGIN</button>
@@ -38,23 +40,31 @@
             <div class="form-group">
                 <input type="text" id="reg-user" class="form-input" placeholder="Choose Username">
             </div>
-            <div class="form-group">
+
+            <div class="form-group" style="position: relative;">
                 <input type="password" id="reg-pass" class="form-input" placeholder="Choose Password">
+                <span class="pass-toggle" onclick="togglePass('reg-pass', this)">👁️</span>
             </div>
 
             <button class="menu-btn success" onclick="doRegister()">CREATE ACCOUNT</button>
             <div class="link-text" onclick="toggleForms('login')">Back to Login</div>
+    </div> </div> <div id="screen-home" class="app-screen"> 
+    
+    <div class="profile-preview" onclick="navTo('screen-profile')">
+        <div class="avatar"></div>
+        <div class="profile-text">
+            <div class="p-name">Player One</div>
+            <div class="p-rank">Rating: 1200</div>
         </div>
     </div>
+    
+    <div class="menu-list">
+        <button class="menu-btn primary" onclick="navTo('screen-online')"><span>🌍</span> PLAY ONLINE</button>
+        <button class="menu-btn" onclick="navTo('screen-bot')"><span>🤖</span> TRAIN VS BOTS</button>
+        <button class="menu-btn secondary" onclick="navTo('screen-profile')"><span>👤</span> MY PROFILE</button>
+    </div>
 
-    <div id="screen-home" class="app-screen">
-        <div class="profile-preview" onclick="navTo('screen-profile')">
-            <div class="avatar"></div>
-            <div class="profile-text">
-                <div class="p-name">Player One</div>
-                <div class="p-rank">Rating: 1200</div>
-            </div>
-        </div>
+</div>
         <div class="menu-list">
             <button class="menu-btn primary" onclick="navTo('screen-online')"><span>🌍</span> PLAY ONLINE</button>
             <button class="menu-btn" onclick="navTo('screen-bot')"><span>🤖</span> TRAIN VS BOTS</button>
@@ -95,6 +105,7 @@
                 <div>Losses: <b>3</b></div>
             </div>
         </div>
+        <button class="menu-btn danger" onclick="logout()" style="margin-bottom: 10px;">LOG OUT</button>
         <button class="menu-btn text-only" onclick="navTo('screen-home')">BACK</button>
     </div>
 <div id="screen-victory" class="app-screen">
@@ -211,6 +222,15 @@
         </div>
 
         <div id="game-ui">
+            <div id="btn-game-menu" onclick="toggleGameMenu()">☰</div>
+
+    <div id="game-menu-overlay" style="display: none;">
+        <div class="menu-box">
+            <h3>PAUSED</h3>
+            <button class="menu-btn primary" onclick="toggleGameMenu()">RESUME</button>
+            <button class="menu-btn danger" onclick="confirmLeave()">LEAVE GAME</button>
+        </div>
+    </div>
             <div id="game-grid">
     
                 <div id="partner-zone">
@@ -281,8 +301,7 @@
             </div>
         </div>
     </div> 
-    
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="client.js?v=2"></script> 
+<script src="/socket.io/socket.io.js"></script>
+<script type="module" src="client.js"></script>
 </body>
 </html>

@@ -5,7 +5,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const { CanastaGame } = require('./game'); 
-const mongoose = require('mongoose'); // Import Mongoose
+
 const app = express();
 app.use(express.json()); // Allows parsing JSON bodies
 const server = http.createServer(app);
@@ -14,73 +14,40 @@ const io = new Server(server);
 app.use(express.static('public')); 
 
 // --- 1. DATABASE CONNECTION (MongoDB) ---
-// Connect to the cloud database using the URL from your .env file
-mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log("[DB] Connected to MongoDB Atlas"))
-    .catch(err => console.error("[DB] Connection Error:", err));
-
-// Define the User Schema (The blueprint for your data)
-const UserSchema = new mongoose.Schema({
-    username: { type: String, required: true, unique: true },
-    password: { type: String, required: true }, // In production, hash this!
-    token: { type: String },
-    stats: {
-        wins: { type: Number, default: 0 },
-        losses: { type: Number, default: 0 }
-    }
-});
-
-const User = mongoose.model('User', UserSchema);
-
-// --- 2. AUTHENTICATION ROUTES ---
+// --- MOCK DATABASE (In-Memory) ---
+// This temporarily replaces MongoDB so you can test immediately
+const localUsers = {}; 
 
 app.post('/api/register', async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) return res.json({ success: false, message: "Missing fields" });
 
-    try {
-        // Check if user exists
-        const existing = await User.findOne({ username });
-        if (existing) return res.json({ success: false, message: "Username taken" });
-
-        // Create new user
-        const token = 'user_' + Math.random().toString(36).substr(2, 9);
-        const newUser = new User({
-            username,
-            password, 
-            token,
-            stats: { wins: 0, losses: 0 }
-        });
-
-        await newUser.save();
-        console.log(`[AUTH] New User Registered: ${username}`);
-        res.json({ success: true, token: token, username: username });
-
-    } catch (err) {
-        console.error(err);
-        res.json({ success: false, message: "Server error" });
+    // Check mock storage
+    if (localUsers[username]) {
+        return res.json({ success: false, message: "Username taken" });
     }
+
+    // Create new mock user
+    const token = 'user_' + Math.random().toString(36).substr(2, 9);
+    localUsers[username] = { password: password, token: token };
+
+    console.log(`[AUTH] Mock Register: ${username}`);
+    res.json({ success: true, token: token, username: username });
 });
 
 app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
+    const user = localUsers[username];
 
-    try {
-        // Look up user in MongoDB
-        const user = await User.findOne({ username });
-
-        // Validate password
-        if (!user || user.password !== password) {
-            return res.json({ success: false, message: "Invalid credentials" });
-        }
-
-        console.log(`[AUTH] User Logged In: ${username}`);
+    // Check mock storage
+    if (user && user.password === password) {
+        console.log(`[AUTH] Mock Login: ${username}`);
         res.json({ success: true, token: user.token, username: username });
-    } catch (err) {
-        console.error(err);
-        res.json({ success: false, message: "Server error" });
+    } else {
+        return res.json({ success: false, message: "Invalid credentials" });
     }
 });
+
 
 // --- GLOBAL STATE ---
 
@@ -93,17 +60,14 @@ let waitingPlayers = []; // This can stay global for the "public lobby"
 io.on('connection', async (socket) => {
     console.log('User connected:', socket.id);
     const token = socket.handshake.auth.token;
+    const handshakeUser = socket.handshake.auth.username;
     if (token) {
-        // Fetch username from DB to cache in memory
-        const user = await User.findOne({ token });
-        if (user) {
-            // If they are in a game, update the session cache
-            if (playerSessions[token]) {
-                playerSessions[token].username = user.username;
-            } else {
-                // Just hold it in memory just in case
-                playerSessions[token] = { username: user.username };
-            }
+        if (!playerSessions[token]) {
+            playerSessions[token] = {};
+        }
+        // Use the name sent from client, or fallback to existing, or "Player"
+        if (handshakeUser) {
+            playerSessions[token].username = handshakeUser;
         }
     }
 
@@ -359,7 +323,17 @@ function startBotGame(humanSocket, difficulty) {
     humanSocket.data.seat = 0;
     humanSocket.data.gameId = gameId; // IMPORTANT: Attach ID to socket
     const token = humanSocket.handshake.auth.token;
-    if (token) playerSessions[token] = { gameId, seat: 0 };
+    if (token) {
+        // We check if we already have a username stored for this token
+        // If yes, we keep it. If no, we default to "Player".
+        const existingName = playerSessions[token] ? playerSessions[token].username : "Player";
+
+        playerSessions[token] = { 
+            gameId: gameId, 
+            seat: 0, 
+            username: existingName // We explicitly pass the name back into the new session
+        };
+    }
 
     // 4. Create Bots
     for (let i = 1; i <= 3; i++) {
@@ -557,3 +531,17 @@ function getPlayerNames(gameId) {
     });
     return names;
 }
+
+// PREVENT SLEEP MODE (Self-Ping)
+const https = require('https'); // Use 'http' if running locally, 'https' for Render
+
+setInterval(() => {
+    const url = 'https://YOUR-APP-NAME.onrender.com'; // <--- REPLACE THIS WITH YOUR ACTUAL RENDER URL
+    
+    https.get(url, (res) => {
+        console.log(`[Keep-Alive] Ping sent to ${url}. Status: ${res.statusCode}`);
+    }).on('error', (e) => {
+        console.error(`[Keep-Alive] Error: ${e.message}`);
+    });
+
+}, 14 * 60 * 1000); // 14 minutes in milliseconds
