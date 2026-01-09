@@ -1,53 +1,75 @@
 // server.js
-require('dotenv').config(); // Load environment variables
-const { CanastaBot } = require('./bot');
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const mongoose = require('mongoose'); // 1. Import Mongoose
 const { CanastaGame } = require('./game'); 
+const { CanastaBot } = require('./bot');
 
 const app = express();
-app.use(express.json()); // Allows parsing JSON bodies
+app.use(express.json());
 const server = http.createServer(app);
 const io = new Server(server);
 
 app.use(express.static('public')); 
 
-// --- 1. DATABASE CONNECTION (MongoDB) ---
-// --- MOCK DATABASE (In-Memory) ---
-// This temporarily replaces MongoDB so you can test immediately
-const localUsers = {}; 
+// --- 2. MONGODB CONNECTION ---
+// Replace the string below with your actual connection string from .env or hardcoded
+const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://YOUR_USER:YOUR_PASS@cluster0.mongodb.net/canasta?retryWrites=true&w=majority";
 
+mongoose.connect(MONGO_URI)
+    .then(() => console.log("[DB] Connected to MongoDB"))
+    .catch(err => console.error("[DB] Connection Error:", err));
+
+// --- 3. USER SCHEMA ---
+const userSchema = new mongoose.Schema({
+    username: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+    token: String,
+    stats: {
+        wins: { type: Number, default: 0 },
+        losses: { type: Number, default: 0 },
+        rating: { type: Number, default: 1200 }
+    }
+});
+const User = mongoose.model('User', userSchema);
+
+// --- AUTH ROUTES (Now using DB) ---
 app.post('/api/register', async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) return res.json({ success: false, message: "Missing fields" });
 
-    // Check mock storage
-    if (localUsers[username]) {
-        return res.json({ success: false, message: "Username taken" });
+    try {
+        const existing = await User.findOne({ username });
+        if (existing) return res.json({ success: false, message: "Username taken" });
+
+        const token = 'user_' + Math.random().toString(36).substr(2, 9);
+        const newUser = new User({ username, password, token });
+        await newUser.save();
+
+        console.log(`[AUTH] Registered: ${username}`);
+        res.json({ success: true, token: token, username: username });
+    } catch (e) {
+        console.error("Register Error:", e);
+        res.status(500).json({ success: false, message: "Server Error" });
     }
-
-    // Create new mock user
-    const token = 'user_' + Math.random().toString(36).substr(2, 9);
-    localUsers[username] = { password: password, token: token };
-
-    console.log(`[AUTH] Mock Register: ${username}`);
-    res.json({ success: true, token: token, username: username });
 });
 
 app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
-    const user = localUsers[username];
-
-    // Check mock storage
-    if (user && user.password === password) {
-        console.log(`[AUTH] Mock Login: ${username}`);
-        res.json({ success: true, token: user.token, username: username });
-    } else {
-        return res.json({ success: false, message: "Invalid credentials" });
+    try {
+        const user = await User.findOne({ username });
+        if (user && user.password === password) {
+            console.log(`[AUTH] Login: ${username}`);
+            res.json({ success: true, token: user.token, username: username });
+        } else {
+            res.json({ success: false, message: "Invalid credentials" });
+        }
+    } catch (e) {
+        res.status(500).json({ success: false, message: "Server Error" });
     }
 });
-
 
 // --- GLOBAL STATE ---
 
