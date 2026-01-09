@@ -16,7 +16,7 @@ app.use(express.static('public'));
 
 // --- 2. MONGODB CONNECTION ---
 // Replace the string below with your actual connection string from .env or hardcoded
-const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://YOUR_USER:YOUR_PASS@cluster0.mongodb.net/canasta?retryWrites=true&w=majority";
+const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://seoramix_db_user:lacanasta2026@la-canasta.sr3w5ij.mongodb.net/?appName=la-canasta";
 
 mongoose.connect(MONGO_URI)
     .then(() => console.log("[DB] Connected to MongoDB"))
