@@ -370,6 +370,9 @@ async function startBotGame(humanSocket, difficulty) { // <--- Mark ASYNC
     const gameId = generateGameId();
     games[gameId] = new CanastaGame();
     games[gameId].resetMatch();
+    games[gameId].names = ["Bot 1", "Bot 2", "Bot 3", "Bot 4"];
+    const userName = humanSocket.handshake.auth.username || "Player";
+    games[gameId].names[0] = userName;
     gameBots[gameId] = {};
 
     await humanSocket.join(gameId); // <--- AWAIT
@@ -403,12 +406,17 @@ function joinGlobalGame(socket) {
         games[gameId].resetMatch();
         games[gameId].readySeats = new Set();
         games[gameId].currentPlayer = -1;
+        games[gameId].names = ["Player 1", "Player 2", "Player 3", "Player 4"];
         
         // Loop through the 4 waiting players and assign them seats
         waitingPlayers.forEach((p, i) => {
             p.join(gameId); // Socket join room
             p.data.seat = i;
             p.data.gameId = gameId;
+
+            // Extract username from the socket handshake and save to game
+            const pName = p.handshake.auth.username || `Player ${i+1}`;
+            games[gameId].names[i] = pName;
 
             const token = p.handshake.auth.token;
             
@@ -560,18 +568,13 @@ async function cacheUsernames(gameId) {
     // simpler strategy: Trust the client provided username or fetch on login.
 }
 
-// SIMPLIFIED getPlayerNames for now
 function getPlayerNames(gameId) {
-    const names = ["Bot 1", "Bot 2", "Bot 3", "Bot 4"];
-    
-    // We can try to look up active sessions
-    Object.keys(playerSessions).forEach(token => {
-        const session = playerSessions[token];
-        if (session.gameId === gameId && session.username) {
-             names[session.seat] = session.username;
-        }
-    });
-    return names;
+    // If the game exists and has names stored, return them
+    if (games[gameId] && games[gameId].names) {
+        return games[gameId].names;
+    }
+    // Fallback if something goes wrong
+    return ["Bot 1", "Bot 2", "Bot 3", "Bot 4"];
 }
 
 // PREVENT SLEEP MODE (Self-Ping)
