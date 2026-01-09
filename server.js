@@ -72,45 +72,46 @@ io.on('connection', async (socket) => {
     }
 
     // --- RECONNECTION LOGIC (FIXED) ---
-    // 1. Check if we know this token
     const session = playerSessions[token];
 
-    // 2. Check if the game they were in still exists
-    if (session && games[session.gameId]) {
-        // Restore context
-        socket.data.gameId = session.gameId;
-        socket.data.seat = session.seat;
-        socket.join(session.gameId); // IMPORTANT: Re-join the room
-
-        console.log(`Player reconnected to Game ${session.gameId}, Seat ${session.seat}`);
-        
-        // Send update
-        sendUpdate(session.gameId, socket.id, session.seat);
+    if (session) {
+        if (games[session.gameId]) {
+            // Game exists -> Auto Rejoin
+            socket.data.gameId = session.gameId;
+            socket.data.seat = session.seat;
+            await socket.join(session.gameId); // <--- ADD AWAIT
+            console.log(`[Reconnect] Player restored to Game ${session.gameId}`);
+            sendUpdate(session.gameId, socket.id, session.seat);
+        } else {
+            // Game is DEAD -> Clean up the stale session so they can join a new one
+            console.log(`[Cleanup] Removing stale session for game ${session.gameId}`);
+            delete playerSessions[token];
+        }
     }
 
-    // 1. HANDLE JOIN (Merged Logic)
-    socket.on('request_join', (data) => {
-        // A. Handle "Force New Game" requests
-        // If user is already in a game memory but asks for a NEW mode, remove them from the old one.
-        if (socket.data.gameId && games[socket.data.gameId]) {
-             console.log(`[Switch] User switching from Game ${socket.data.gameId} to new ${data.mode} game.`);
+    // 1. HANDLE JOIN (Async & Aggressive Cleanup)
+    socket.on('request_join', async (data) => { // <--- Mark function ASYNC
+        // A. SWITCHING GAMES?
+        const token = socket.handshake.auth.token;
+        const currentId = socket.data.gameId || (playerSessions[token] ? playerSessions[token].gameId : null);
+
+        if (currentId) {
+             console.log(`[Switch] Force leaving old Game ${currentId} for new ${data.mode} game.`);
              
-             // Leave the old room
-             socket.leave(socket.data.gameId);
+             // 1. Leave old room (Await ensures it finishes!)
+             await socket.leave(currentId); 
              
-             // Clear the old session from memory
-             const token = socket.handshake.auth.token;
-             if (token && playerSessions[token]) {
-                 delete playerSessions[token];
-             }
+             // 2. Delete old session
+             if (token && playerSessions[token]) delete playerSessions[token];
              
-             // Reset socket data
+             // 3. Reset data
              socket.data.gameId = null;
+             socket.data.seat = null;
         }
 
         // B. Proceed to Join
         if (data.mode === 'bot') {
-            startBotGame(socket, data.difficulty || 'medium');
+            await startBotGame(socket, data.difficulty || 'medium'); // <--- AWAIT
         } else {
             joinGlobalGame(socket);
         }
@@ -308,29 +309,27 @@ io.on('connection', async (socket) => {
             }
         }
     });
-// --- NEW HANDLER: LEAVE GAME ---
-    socket.on('leave_game', () => {
+// --- NEW HANDLER: LEAVE GAME (Async) ---
+    socket.on('leave_game', async () => { // <--- Mark function ASYNC
         const gameId = socket.data.gameId;
         const token = socket.handshake.auth.token;
 
         console.log(`[Leave] User requesting to leave Game ${gameId}`);
 
-        // 1. Remove from Global Session Memory
-        if (token && playerSessions[token]) {
-            delete playerSessions[token];
-        }
+        // 1. Clear Session
+        if (token && playerSessions[token]) delete playerSessions[token];
 
         // 2. Clear Socket Data
         socket.data.gameId = null;
         socket.data.seat = null;
         
-        // 3. Leave the Socket Room
+        // 3. Leave Room
         if (gameId) {
-            socket.leave(gameId);
-            // Also remove from lobby if they were just waiting
+            await socket.leave(gameId); // <--- AWAIT
             waitingPlayers = waitingPlayers.filter(s => s.id !== socket.id);
         }
     });
+    
     socket.on('disconnect', () => {
         waitingPlayers = waitingPlayers.filter(s => s.id !== socket.id);
     });
@@ -342,43 +341,27 @@ function generateGameId() {
     return 'game_' + Math.random().toString(36).substr(2, 9);
 }
 
-function startBotGame(humanSocket, difficulty) {
+async function startBotGame(humanSocket, difficulty) { // <--- Mark ASYNC
     const gameId = generateGameId();
-    
-    // 1. Create the Game Instance
     games[gameId] = new CanastaGame();
     games[gameId].resetMatch();
-    
-    // 2. Initialize Bots container for this specific game
     gameBots[gameId] = {};
 
-    // 3. Setup Human
-    humanSocket.join(gameId); // Socket.IO room join
+    await humanSocket.join(gameId); // <--- AWAIT
     humanSocket.data.seat = 0;
-    humanSocket.data.gameId = gameId; // IMPORTANT: Attach ID to socket
+    humanSocket.data.gameId = gameId;
+
     const token = humanSocket.handshake.auth.token;
     if (token) {
-        // We check if we already have a username stored for this token
-        // If yes, we keep it. If no, we default to "Player".
         const existingName = playerSessions[token] ? playerSessions[token].username : "Player";
-
-        playerSessions[token] = { 
-            gameId: gameId, 
-            seat: 0, 
-            username: existingName // We explicitly pass the name back into the new session
-        };
+        playerSessions[token] = { gameId: gameId, seat: 0, username: existingName };
     }
 
-    // 4. Create Bots
-    for (let i = 1; i <= 3; i++) {
-        gameBots[gameId][i] = new CanastaBot(i, difficulty);
-    }
+    for (let i = 1; i <= 3; i++) gameBots[gameId][i] = new CanastaBot(i, difficulty);
 
-    // 5. Start
     games[gameId].currentPlayer = 0;
     games[gameId].roundStarter = 0;
-    console.log(`[DEBUG-INIT] Game ${gameId} Started. Initial Starter: ${games[gameId].roundStarter}, Current: ${games[gameId].currentPlayer}`);
-    sendUpdate(gameId, humanSocket.id, 0); // Pass gameId to update function
+    sendUpdate(gameId, humanSocket.id, 0);
 }
 
 function joinGlobalGame(socket) {
