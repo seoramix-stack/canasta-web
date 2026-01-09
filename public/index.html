@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Canasta Master</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="stylesheet" href="style.css">
+    <style> 
+        /* Spinner Animation */
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } } 
+    </style>
+</head>
+<body>
+
+    <div id="screen-login" class="app-screen active-screen">
+        <div class="logo-area">
+            <div style="font-size: 60px;">🃏</div>
+            <div class="logo">CANASTA</div>
+        </div>
+
+        <div id="form-login" style="display:flex; flex-direction:column; align-items:center; width:100%;">
+            <div class="error-msg" id="login-error">Invalid credentials</div>
+            
+            <div class="form-group">
+                <input type="text" id="login-user" class="form-input" placeholder="Username">
+            </div>
+            <div class="form-group">
+                <input type="password" id="login-pass" class="form-input" placeholder="Password">
+            </div>
+            
+            <button class="menu-btn primary" onclick="doLogin()">LOGIN</button>
+            <div class="link-text" onclick="toggleForms('register')">Create an Account</div>
+        </div>
+
+        <div id="form-register" style="display:none; flex-direction:column; align-items:center; width:100%;">
+            <div class="error-msg" id="reg-error">Username taken</div>
+            
+            <div class="form-group">
+                <input type="text" id="reg-user" class="form-input" placeholder="Choose Username">
+            </div>
+            <div class="form-group">
+                <input type="password" id="reg-pass" class="form-input" placeholder="Choose Password">
+            </div>
+
+            <button class="menu-btn success" onclick="doRegister()">CREATE ACCOUNT</button>
+            <div class="link-text" onclick="toggleForms('login')">Back to Login</div>
+        </div>
+    </div>
+
+    <div id="screen-home" class="app-screen">
+        <div class="profile-preview" onclick="navTo('screen-profile')">
+            <div class="avatar"></div>
+            <div class="profile-text">
+                <div class="p-name">Player One</div>
+                <div class="p-rank">Rating: 1200</div>
+            </div>
+        </div>
+        <div class="menu-list">
+            <button class="menu-btn primary" onclick="navTo('screen-online')"><span>🌍</span> PLAY ONLINE</button>
+            <button class="menu-btn" onclick="navTo('screen-bot')"><span>🤖</span> TRAIN VS BOTS</button>
+            <button class="menu-btn secondary" onclick="navTo('screen-profile')"><span>👤</span> MY PROFILE</button>
+        </div>
+    </div>
+
+    <div id="screen-online" class="app-screen">
+        <h2>PLAY ONLINE</h2>
+        <p>Choose your mode</p>
+        <button class="menu-btn primary" onclick="connectToGame('rated')">🏆 RATED (4P)</button>
+        <div class="info-text">Ranked matches. 2v2 Teams.</div>
+        <button class="menu-btn secondary" onclick="connectToGame('casual')">🎲 CASUAL</button>
+        <br><br>
+        <button class="menu-btn text-only" onclick="navTo('screen-home')">BACK</button>
+    </div>
+
+    <div id="screen-bot" class="app-screen">
+        <h2>TRAINING MODE</h2>
+        <p>Select Difficulty</p>
+        <div class="diff-grid">
+            <div class="diff-btn" onclick="selectBotDiff('easy', this)">Easy</div>
+            <div class="diff-btn selected" onclick="selectBotDiff('medium', this)">Med</div>
+            <div class="diff-btn" onclick="selectBotDiff('hard', this)">Hard</div>
+        </div>
+        <br>
+        <button class="menu-btn primary" onclick="connectToGame('bot')">START TRAINING</button>
+        <button class="menu-btn text-only" onclick="navTo('screen-home')">BACK</button>
+    </div>
+
+    <div id="screen-profile" class="app-screen">
+        <h2>MY PROFILE</h2>
+        <div class="profile-card">
+            <div class="avatar large"></div>
+            <h3>Player One</h3>
+            <div class="stats-row">
+                <div>Wins: <b>14</b></div>
+                <div>Losses: <b>3</b></div>
+            </div>
+        </div>
+        <button class="menu-btn text-only" onclick="navTo('screen-home')">BACK</button>
+    </div>
+<div id="screen-victory" class="app-screen">
+            <div class="victory-content">
+                <div style="font-size: 80px;">🏆</div>
+                <h1 id="vic-title">VICTORY!</h1>
+                <p id="vic-sub">TEAM 1 WINS THE MATCH</p>
+                
+                <div class="final-score-box">
+                    <div class="fs-row">
+                        <span>TEAM 1</span>
+                        <span id="final-s1">5200</span>
+                    </div>
+                    <div class="fs-row">
+                        <span>TEAM 2</span>
+                        <span id="final-s2">4800</span>
+                    </div>
+                </div>
+
+                <button class="menu-btn primary" onclick="navTo('screen-home')">BACK TO MENU</button>
+            </div>
+        </div>
+    <div id="screen-game" class="app-screen game-bg">
+        <div id="status" class="game-status">Connecting...</div>
+        
+        <div id="ready-modal">
+            <div class="ready-box">
+                <div id="ready-step-1">
+                    <div class="ready-title">GAME FOUND!</div>
+                    <div class="ready-sub">Are you ready to start?</div>
+                    <button class="action-btn success" onclick="sendReady()">START GAME</button>
+                </div>
+
+                <div id="ready-step-2" style="display:none; flex-direction:column; align-items:center;">
+    <div class="ready-title" style="color:#bdc3c7">WAITING...</div>
+    <div class="ready-sub" style="margin:10px 0;">Waiting for other players...</div>
+    
+    <div id="ready-indicators" style="display:flex; gap:15px; margin-bottom:20px;">
+        <div class="p-indicator" id="ind-0">P1</div>
+        <div class="p-indicator" id="ind-1">P2</div>
+        <div class="p-indicator" id="ind-2">P3</div>
+        <div class="p-indicator" id="ind-3">P4</div>
+    </div>
+
+    <div style="width: 30px; height: 30px; border: 4px solid #444; border-top: 4px solid #f1c40f; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+</div>
+            </div>
+        </div>
+
+        <div id="score-modal" style="display: none;">
+        <div class="score-box">
+            <h2>🏆 ROUND OVER 🏆</h2>
+            
+            <div style="margin-top:10px; margin-bottom: 20px; font-size:24px; font-weight:bold;">
+                Match Score: <span id="match-s1">0</span> - <span id="match-s2">0</span>
+            </div>
+
+            <table class="score-table">
+                <thead>
+        <tr>
+            <th>Category</th>
+            <th id="header-col-1">Team 1</th>
+            <th id="header-col-2">Team 2</th>
+        </tr>
+    </thead>
+                <tbody>
+                    <tr>
+                        <td>Base Points</td>
+                        <td id="row-base-1">0</td>
+                        <td id="row-base-2">0</td>
+                    </tr>
+                    <tr>
+                        <td>Red 3s</td>
+                        <td id="row-red3-1">0</td>
+                        <td id="row-red3-2">0</td>
+                    </tr>
+                    <tr>
+                        <td>Canastas</td>
+                        <td id="row-canasta-1">0</td>
+                        <td id="row-canasta-2">0</td>
+                    </tr>
+                    <tr>
+                        <td>Go Out Bonus</td>
+                        <td id="row-bonus-1">0</td>
+                        <td id="row-bonus-2">0</td>
+                    </tr>
+                    <tr>
+                        <td>Deductions</td>
+                        <td id="row-deduct-1">0</td>
+                        <td id="row-deduct-2">0</td>
+                    </tr>
+                    <tr class="total-row">
+                        <td>ROUND TOTAL</td>
+                        <td id="row-total-1">0</td>
+                        <td id="row-total-2">0</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <button class="action-btn success" onclick="startNextRound()" style="margin-top:20px; width:100%;">START NEXT ROUND</button>
+            <button class="action-btn danger" onclick="leaveGame()" style="margin-top:10px; width:100%;">LEAVE GAME</button>
+        </div>
+    </div>
+
+        
+
+        <div id="staging-panel">
+            <div class="staging-header">
+                <span>STAGED: <span id="staged-pts">0</span> / <span id="req-pts">0</span></span>
+                <button class="close-btn" onclick="cancelOpening()">X</button>
+            </div>
+            <div id="staged-container"></div>
+            <button id="btn-confirm-open" onclick="sendOpening()" class="action-btn success full-width" disabled>CONFIRM</button>
+        </div>
+
+        <div id="game-ui">
+            <div id="game-grid">
+    
+                <div id="partner-zone">
+                    <div id="hand-partner" class="horiz-hand-container"></div>
+                </div>
+
+                <div id="timers-top" class="timer-row"></div>
+                
+                <div id="hud-left" class="player-hud">
+                    <div class="status-light" id="light-left"></div>
+                    <div class="hud-name" id="name-left">P4</div>
+                    <div class="timer-text" id="timer-left">12:00</div>
+                </div>
+
+                <div id="hud-partner" class="player-hud">
+                    <div class="status-light" id="light-partner"></div>
+                    <div class="hud-name" id="name-partner">P3</div>
+                    <div class="timer-text" id="timer-partner">12:00</div>
+                </div>
+
+                <div id="hud-right" class="player-hud">
+                    <div class="status-light" id="light-right"></div>
+                    <div class="hud-name" id="name-right">P2</div>
+                    <div class="timer-text" id="timer-right">12:00</div>
+                </div>
+
+                <div id="hand-left-zone" class="side-zone">
+                    <div id="hand-left" class="vert-hand-container"></div>
+                </div>
+
+                <div id="table-zone">
+                    <div id="enemy-melds" class="meld-row"></div>
+                    <div class="pile-area">
+                        <div class="score-group">
+    <div><span id="lbl-s1">TEAM 1</span>: <span id="live-s1" class="score-val">0</span></div>
+    <div><span id="lbl-s2">TEAM 2</span>: <span id="live-s2" class="score-val">0</span></div>
+</div>
+                        <div class="piles-group">
+                            <div id="draw-area" onclick="drawCard()">
+                                <img src="cards/BackRed.png" class="card-img">
+                                <div id="deck-count">0</div>
+                            </div>
+                            <div id="discard-area" onclick="handleDiscardClick()">
+                                <div id="frozen-underlay"></div>
+                                <div id="discard-display"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="my-melds" class="meld-row" onclick="meldSelected()"></div>
+                </div>
+
+                <div id="hand-right-zone" class="side-zone">
+                    <div id="hand-right" class="vert-hand-container"></div>
+                </div>
+
+                <div id="timers-bottom" class="timer-row"></div>
+
+                <div id="hud-me" class="player-hud">
+                    <div class="status-light" id="light-me"></div>
+                    <div class="hud-name" id="name-me">P1</div>
+                    <div class="timer-text" id="timer-me">12:00</div>
+                </div>
+
+                <div id="my-zone">
+                    <div id="my-hand"></div>
+                </div>
+
+            </div>
+        </div>
+    </div> 
+    
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="client.js?v=2"></script> 
+</body>
+</html>
