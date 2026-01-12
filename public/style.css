@@ -426,14 +426,15 @@ body {
         /* Columns: Left Opponent (140px) | CENTER TABLE (Flexible) | Right Opponent (140px) */
         grid-template-columns: 140px 1fr 140px; 
         
-        /* Rows: 
+        /* ROWS:
            1. Partner Hand (80px)
            2. Partner Timer (40px)
-           3. TABLE AREA (Melds, Scores, Piles - Flexible)
+           3. TABLE AREA (1fr) -> Gains the extra space!
            4. Player Timer (40px)
-           5. Player Hand (140px) 
+           5. Player Hand (130px) -> REDUCED from 200px. 
+              (105px card + 25px buffer is enough now that we don't stack)
         */
-        grid-template-rows: 80px 40px 1fr 40px 200px; 
+        grid-template-rows: 80px 40px 1fr 40px 170px; 
         
         /* The Map */
         grid-template-areas: 
@@ -531,10 +532,12 @@ body {
     #table-zone {
         grid-area: center;
         display: grid;
-        /* FIX 4: Desktop Grid with FIXED rows for melds */
-        /* Row 1: 220px (Enemy) | Row 2: Auto (Center Strip) | Row 3: 220px (Me) */
-        /* 220px = Card 105px + (5 * 22px strip) + buffer */
-        grid-template-rows: 220px auto 220px !important;
+       /* CHANGED: 
+           Instead of fixed 220px, use minmax to allow shrinking on laptops 
+           but expanding on large screens. 
+           We use fractional units (1fr) for the meld areas so they share available height equally.
+        */
+        grid-template-rows: 1fr auto 1fr !important;
         padding: 0 40px; /* Add side padding so cards don't hit the timers */
         height: 100%;
         overflow: hidden; 

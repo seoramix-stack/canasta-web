@@ -372,7 +372,12 @@ function renderHand(hand) {
         if (currentGroup.length === 0) {
             currentGroup.push({card, index});
         } else {
-            if (currentGroup[0].card.rank === card.rank) {
+            // LOGIC CHANGE: 
+            // On Desktop, we NEVER group by rank. We treat every card as unique column.
+            // On Mobile, we keep grouping by rank (current logic).
+            const shouldGroup = !isDesktop && (currentGroup[0].card.rank === card.rank);
+            
+            if (shouldGroup) {
                 currentGroup.push({card, index});
             } else { 
                 groups.push(currentGroup); 
@@ -389,7 +394,8 @@ function renderHand(hand) {
 
     if (totalGroups > 1) {
         const calculated = ((containerWidth - groupWidth) / (totalGroups - 1)) - groupWidth;
-        groupOverlap = Math.min(15, Math.max(-30, calculated));
+        const minOverlap = isDesktop ? -50 : -30;
+        groupOverlap = Math.min(15, Math.max(minOverlap, calculated));
     }
 
     groups.forEach((grp, gIndex) => {
