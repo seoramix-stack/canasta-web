@@ -53,7 +53,28 @@ export function updateUI(data) {
     document.getElementById('live-s1').innerText = data.cumulativeScores.team1;
     document.getElementById('live-s2').innerText = data.cumulativeScores.team2;
     if (data.deckSize !== undefined) document.getElementById('deck-count').innerText = data.deckSize;
+    // --- NEW: DYNAMIC TEAM NAMES ---
+    // Determine if I am Team 1 (Seats 0 & 2) or Team 2 (Seats 1 & 3)
+    const amITeam1 = (state.mySeat === 0 || state.mySeat === 2);
+    
+    // 1. Update In-Game Scoreboard Labels
+    const lbl1 = document.getElementById('lbl-s1');
+    const lbl2 = document.getElementById('lbl-s2');
+    
+    if (lbl1 && lbl2) {
+        lbl1.innerText = amITeam1 ? "MY TEAM" : "OPPONENTS";
+        lbl2.innerText = amITeam1 ? "OPPONENTS" : "MY TEAM";
+    }
 
+    // 2. Update Round-End Modal Headers
+    const head1 = document.getElementById('header-col-1');
+    const head2 = document.getElementById('header-col-2');
+    
+    if (head1 && head2) {
+        head1.innerText = amITeam1 ? "My Team" : "Opponents";
+        head2.innerText = amITeam1 ? "Opponents" : "My Team";
+    }
+    
     // Names
     if (data.names) {
         document.getElementById('name-me').innerText = data.names[s];
