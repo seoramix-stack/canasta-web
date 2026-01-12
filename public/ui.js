@@ -94,30 +94,22 @@ function renderTable(elementId, meldsObj, red3sArray) {
     container.innerHTML = "";
     const groupsToRender = [];
 
-    // Detect Desktop
     const isDesktop = window.innerWidth > 800;
-    
-    // Config matches your CSS variables implicitly
     const visibleStrip = isDesktop ? 22 : 18; 
     const cardHeight = isDesktop ? 105 : 70;
     const vertMargin = visibleStrip - cardHeight; 
 
-    // 1. Add Red 3s (Leftmost)
     if (red3sArray && red3sArray.length > 0) {
         groupsToRender.push({ type: 'red3', label: '', cards: red3sArray });
     }
 
-    // 2. Add Melds (Sorted A -> 3)
     if (meldsObj) {
-        // "3" is at the end so Black 3s sort to the right
         const rankPriority = ["A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3"];
-        
         const sortedRanks = Object.keys(meldsObj).sort((a, b) => { 
             return rankPriority.indexOf(a) - rankPriority.indexOf(b); 
         });
         
         sortedRanks.forEach(rank => { 
-            // Use .length for the label count
             groupsToRender.push({ 
                 type: 'meld', 
                 rank: rank, 
@@ -127,7 +119,6 @@ function renderTable(elementId, meldsObj, red3sArray) {
         });
     }
 
-    // 3. Layout Calculations (Horizontal Spacing)
     const safeWidth = container.clientWidth || window.innerWidth;
     const containerWidth = safeWidth - 10; 
     const groupWidth = isDesktop ? 75 : 50;
@@ -136,19 +127,15 @@ function renderTable(elementId, meldsObj, red3sArray) {
 
     if (totalGroups > 1) {
          const calculated = ((containerWidth - groupWidth) / (totalGroups - 1)) - groupWidth;
-         // Clamp margin
          horizMargin = Math.min(10, Math.max(-15, calculated));
     }
 
-    // 4. Render Groups
     groupsToRender.forEach((groupData, gIdx) => {
         const groupDiv = document.createElement("div");
         groupDiv.className = "meld-group";
-        
         const teamSuffix = (elementId === "my-melds") ? "my" : "enemy";
         groupDiv.id = `meld-pile-${teamSuffix}-${groupData.rank}`;
         
-        // Stacking Context: Higher index sits on top of lower index visually if they overlap
         groupDiv.style.position = "relative";
         groupDiv.style.zIndex = gIdx; 
         
@@ -156,14 +143,11 @@ function renderTable(elementId, meldsObj, red3sArray) {
             groupDiv.style.marginRight = `${horizMargin}px`;
         }
 
-        // Click Handler (Only for My Melds)
         if (elementId === "my-melds" && groupData.type === 'meld') {
-            // We use onclick attribute to hook into the window-level function defined in client.js
             groupDiv.setAttribute("onclick", `handleMeldClick(event, '${groupData.rank}')`);
             groupDiv.style.cursor = "pointer";
         }
         
-        // Build HTML String for speed/simplicity
         let html = `<span class='meld-label'>${groupData.label}</span>`;
         html += `<div class='meld-container' style='display:flex; flex-direction:column; align-items:center;'>`;
         
@@ -171,10 +155,7 @@ function renderTable(elementId, meldsObj, red3sArray) {
         const isClosed = (groupData.type !== 'red3' && pile.length >= 7);
 
         if (isClosed) {
-            // --- CLOSED CANASTA (Stacked) ---
             const isNatural = !pile.some(c => c.isWild);
-            
-            // Find appropriate top card
             let topCard = pile[0]; 
             if (isNatural) {
                 topCard = pile.find(c => c.suit === 'Hearts' || c.suit === 'Diamonds') || pile[0];
@@ -185,7 +166,6 @@ function renderTable(elementId, meldsObj, red3sArray) {
             const badgeColor = isNatural ? "#d63031" : "#2d3436";
             const badgeText = isNatural ? "NAT" : "MIX";
 
-            // CRITICAL FIX: Added 'card-img' class here
             html += `
                 <div style="position:relative;">
                     <img src="${getCardImage(topCard)}" class="card-img meld-card" style="box-shadow:2px 2px 0 #555; border:1px solid #000;">
@@ -194,14 +174,11 @@ function renderTable(elementId, meldsObj, red3sArray) {
                     </div>
                 </div>`;
         } else {
-            // --- OPEN MELD (Cascade) ---
             let activeMargin = vertMargin;
-            // Squish tighter if pile is getting tall (Visual Polish)
             if (pile.length > 5) activeMargin -= 5; 
 
             pile.forEach((c, cIdx) => { 
                 const marginTop = (cIdx > 0) ? `margin-top:${activeMargin}px;` : "";
-                // CRITICAL FIX: Added 'card-img' class here
                 html += `<img src="${getCardImage(c)}" class="card-img meld-card" style="${marginTop} margin-left: 0; transform: none; box-shadow: 1px 1px 2px rgba(0,0,0,0.3);">`; 
             });
         }
@@ -239,33 +216,6 @@ function renderOtherHand(elementId, count, orientation) {
             else card.style.marginLeft = "-35px";
         }
         div.appendChild(card);
-    }
-}
-
-function renderTable(elementId, meldsObj, red3s) {
-    const container = document.getElementById(elementId);
-    if(!container) return;
-    container.innerHTML = "";
-    
-    // (Simplified Logic for brevity - paste your full logic here if needed)
-    if (meldsObj) {
-        Object.keys(meldsObj).forEach(rank => {
-            const groupDiv = document.createElement("div");
-            groupDiv.className = "meld-group";
-            // Click Handler
-            if(elementId === "my-melds") {
-                groupDiv.onclick = (e) => window.handleMeldClick(e, rank);
-            }
-            
-            meldsObj[rank].forEach((c, idx) => {
-                const img = document.createElement("img");
-                img.src = getCardImage(c);
-                img.className = "meld-card";
-                if(idx > 0) img.style.marginTop = "-85px";
-                groupDiv.appendChild(img);
-            });
-            container.appendChild(groupDiv);
-        });
     }
 }
 
