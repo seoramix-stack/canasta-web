@@ -434,7 +434,7 @@ body {
            5. Player Hand (130px) -> REDUCED from 200px. 
               (105px card + 25px buffer is enough now that we don't stack)
         */
-        grid-template-rows: 80px 40px 1fr 0px 130px; 
+        grid-template-rows: 50px 0px 1fr 0px 130px; 
         
         /* The Map */
         grid-template-areas: 
@@ -537,6 +537,17 @@ body {
         
         /* Ensure it doesn't block clicks on the table area above it */
         pointer-events: none; 
+    }
+    #hud-partner {
+        /* Ensure visibility */
+        z-index: 100 !important;
+        overflow: visible !important;
+        
+        /* FLOATING EFFECT: 
+           Pull it UP (-15px) so it sits just on the bottom edge of the partner's cards. */
+        transform: translateY(-15px) !important;
+        
+        pointer-events: none;
     }
     /* --- 5. THE CENTER TABLE (Expanded) --- */
     #table-zone {
