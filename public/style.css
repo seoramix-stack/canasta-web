@@ -542,10 +542,7 @@ body {
         /* Ensure visibility */
         z-index: 100 !important;
         overflow: visible !important;
-        
-        /* FLOATING EFFECT: 
-           Pull it UP (-15px) so it sits just on the bottom edge of the partner's cards. */
-        transform: translateY(15px) !important;
+        transform: translateY(10px) !important;
         
         pointer-events: none;
     }
