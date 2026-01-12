@@ -40,13 +40,97 @@ export function flyCard(sourceRect, destRect, imageSrc, delay = 0, onComplete = 
     }, delay);
 }
 
+export function animatePlayerDiscard(cardIndex, cardData) {
+    // 1. Find the specific DOM element in the hand
+    const allHandCards = document.querySelectorAll('#my-hand .hand-card-wrap');
+    const targetEl = allHandCards[cardIndex];
+    const discardArea = document.getElementById('discard-area');
+
+    if (targetEl && discardArea) {
+        // 2. Get Coordinates
+        const srcRect = targetEl.getBoundingClientRect();
+        const destRect = discardArea.getBoundingClientRect();
+        
+        // 3. Get Image URL (reuse your existing helper)
+        const imgUrl = getCardImage(cardData);
+
+        // 4. Fly!
+        flyCard(srcRect, destRect, imgUrl, 0);
+    }
+}
+
 export function handleServerAnimations(oldData, newData) {
     if (!oldData || !newData) return;
 
-    // 1. Self Draw Animation
-    if (oldData.hand.length < newData.hand.length) {
-        // ... (Logic to find new card)
-        const getCounts = (hand) => {
+    // --- 1. DETECT DISCARDS (Opponents Only) ---
+    // Logic: If the top card of the discard pile changed, the person whose turn it WAS likely discarded it.
+    const getSig = (c) => c ? (c.rank + c.suit) : "null";
+    const oldTop = oldData.topDiscard;
+    const newTop = newData.topDiscard;
+
+    if (getSig(oldTop) !== getSig(newTop) && newTop) {
+        const actorSeat = oldData.currentPlayer; // The player who just finished their turn
+
+        // Only animate if it wasn't ME (I handle my own animations optimistically)
+        if (actorSeat !== -1 && actorSeat !== state.mySeat) {
+            const actorHandDiv = getHandDiv(actorSeat);
+            const discardArea = document.getElementById('discard-area');
+
+            if (actorHandDiv && discardArea) {
+                // Fly the card image from their hand to the pile
+                const srcRect = actorHandDiv.getBoundingClientRect();
+                const destRect = discardArea.getBoundingClientRect();
+                const imgUrl = getCardImage(newTop);
+
+                flyCard(srcRect, destRect, imgUrl, 0);
+            }
+        }
+    }
+
+    // --- 2. DETECT DRAWS (Opponents Only) ---
+    // Logic: Loop through all seats. If a hand grew larger, they drew cards.
+    for (let i = 0; i < 4; i++) {
+        if (i === state.mySeat) continue; // Skip me
+
+        const oldSize = oldData.handSizes ? oldData.handSizes[i] : 0;
+        const newSize = newData.handSizes ? newData.handSizes[i] : 0;
+
+        if (newSize > oldSize) {
+            // They gained cards. Determine source (Deck vs Pile).
+            const deckDecreased = (newData.deckSize < oldData.deckSize);
+            const handDiv = getHandDiv(i);
+            const drawArea = document.getElementById('draw-area');     // Deck
+            const discardArea = document.getElementById('discard-area'); // Pile
+
+            if (handDiv) {
+                let srcRect = null;
+                // Opponents usually draw face-down (BackRed), unless picking up the pile
+                const imgUrl = "cards/BackRed.png"; 
+
+                if (deckDecreased && drawArea) {
+                    // Standard Draw
+                    srcRect = drawArea.getBoundingClientRect();
+                } else if (discardArea) {
+                    // Pile Pickup (Deck didn't decrease, but hand grew)
+                    srcRect = discardArea.getBoundingClientRect();
+                }
+
+                if (srcRect) {
+                    const destRect = handDiv.getBoundingClientRect();
+                    flyCard(srcRect, destRect, imgUrl, 0);
+                }
+            }
+        }
+    }
+
+    // --- 3. LOCAL PLAYER DRAW (Keep existing logic) ---
+    // This handles the visual update for YOUR draw if it wasn't optimistic
+    if (oldData.hand && newData.hand && oldData.hand.length < newData.hand.length) {
+         // ... (Keep your existing Self-Draw logic here if you haven't moved it to optimistic UI) ...
+         // If you have moved completely to optimistic UI for draws, you can remove this block.
+         // Otherwise, ensure it only runs if the animation hasn't played yet.
+         // For safety, the existing logic I saw in your file is good to keep:
+         const getCounts = (hand) => {
             const counts = {};
             hand.forEach(c => { const key = c.rank + c.suit; counts[key] = (counts[key] || 0) + 1; });
             return counts;
@@ -57,7 +141,6 @@ export function handleServerAnimations(oldData, newData) {
         newData.hand.forEach((c, index) => {
             const key = c.rank + c.suit;
             if ((oldC[key] || 0) < (newC[key] || 0)) {
-                // Delay slightly to allow React-like render in UI to finish
                 setTimeout(() => {
                     const myHandImages = document.querySelectorAll('#my-hand .hand-card-wrap img');
                     const targetImg = myHandImages[index];
@@ -74,7 +157,6 @@ export function handleServerAnimations(oldData, newData) {
             }
         });
     }
-    // ... (You can add the Opponent Draw logic here if needed, keeping it simple for now)
 }
 
 export function getCardImage(card) {

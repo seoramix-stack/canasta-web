@@ -161,14 +161,41 @@ body {
 /* ========================================= */
 /* === CARDS & TABLE ELEMENTS === */
 /* ========================================= */
-
+    
 /* Push Left Opponent further Left */
 #hand-left { transform: translateX(-20px); }
 /* Push Right Opponent further Right */
 #hand-right { transform: translateX(20px); }
 
-.vert-hand-container { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; overflow: hidden }
+.vert-hand-container { display: flex; flex-direction: column; justify-content: center; height: 100%; overflow: hidden }
 .horiz-hand-container { display: flex; flex-direction: row; align-items: center; justify-content: center; }
+    /* 2. Left Player (P4): Align to Left Edge (Screen Side) */
+#hand-left {
+    align-items: flex-start; /* Pushes cards to the left wall */
+    
+    /* OPTIONAL TWEAK: 
+       Since cards are rotated 90deg, their "width" is visually their "height".
+       Depending on rotation origin, you might need a slight negative margin 
+       to make them look truly "cut off". 
+       Uncomment below if they aren't close enough to the edge: */
+    /* margin-left: -15px; */
+}
+
+/* 3. Right Player (P2): Align to Right Edge (Screen Side) */
+#hand-right {
+    align-items: flex-end;   /* Pushes cards to the right wall */
+    
+    /* OPTIONAL TWEAK: same logic as above */
+    /* margin-right: -15px; */
+}
+
+/* 4. Ensure Desktop Layout respects this */
+@media (min-width: 800px) {
+    #hand-left, #hand-right {
+        transform: none !important; /* Remove old offsets */
+        padding: 20px 0; /* Vertical padding only */
+    }
+}
 
 /* --- MELDS & TABLE AREAS --- */
 .meld-row { 
