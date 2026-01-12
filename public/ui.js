@@ -288,17 +288,65 @@ function renderDiscardPile(data) {
     discardDiv.appendChild(img);
 }
 
+// ui.js
+
 function renderOtherHand(elementId, count, orientation) {
     const div = document.getElementById(elementId);
     if (!div) return;
     div.innerHTML = "";
     if (!count) return;
+
+    // 1. Detect Environment
+    const isDesktop = window.innerWidth > 800;
+    
+    // 2. Define Card Dimensions based on CSS variables/media query
+    // Desktop: 105px height, Mobile: 70px height
+    const cardHeight = isDesktop ? 105 : 70; 
+
+    // 3. Calculate Overlap (Squeeze) Logic
+    let dynamicMargin = 0;
+
+    if (orientation === 'vert' && isDesktop) {
+        // Get the parent zone height (the available space)
+        // We look at the parent element (#hand-left-zone or #hand-right-zone)
+        const containerHeight = div.parentElement ? div.parentElement.clientHeight : 400;
+        
+        // Safety buffer (padding top/bottom)
+        const availableHeight = containerHeight - 40; 
+
+        // Default overlap (if plenty of space)
+        const defaultOverlap = -50; 
+        
+        // Calculate needed overlap to fit all cards
+        // Formula: TotalHeight = CardHeight + (Count - 1) * VisibleStrip
+        // We solve for VisibleStrip, then Margin = VisibleStrip - CardHeight
+        if (count > 1) {
+            const maxVisibleStrip = (availableHeight - cardHeight) / (count - 1);
+            
+            // The margin is the visible strip minus the full card height
+            let calculatedMargin = maxVisibleStrip - cardHeight;
+            
+            // Cap the margin so they don't spread out too much if there are few cards
+            // (e.g., don't let them float far apart)
+            dynamicMargin = Math.min(defaultOverlap, calculatedMargin);
+        }
+    } else {
+        // Default Logic for Mobile or Horizontal (Partner)
+        if (orientation === 'vert') dynamicMargin = -55; // Mobile vertical default
+        else dynamicMargin = -35; // Partner horizontal default
+    }
+
+    // 4. Render Cards
     for (let i = 0; i < count; i++) {
         const card = document.createElement("div");
         card.className = (orientation === 'vert') ? "side-card" : "partner-card";
+        
         if (i > 0) {
-            if (orientation === 'vert') card.style.marginTop = "-55px";
-            else card.style.marginLeft = "-35px";
+            if (orientation === 'vert') {
+                card.style.marginTop = `${dynamicMargin}px`;
+            } else {
+                card.style.marginLeft = `${dynamicMargin}px`;
+            }
         }
         div.appendChild(card);
     }

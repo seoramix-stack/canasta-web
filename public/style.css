@@ -167,7 +167,7 @@ body {
 /* Push Right Opponent further Right */
 #hand-right { transform: translateX(20px); }
 
-.vert-hand-container { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; }
+.vert-hand-container { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; overflow: hidden }
 .horiz-hand-container { display: flex; flex-direction: row; align-items: center; justify-content: center; }
 
 /* --- MELDS & TABLE AREAS --- */
@@ -242,8 +242,14 @@ body {
     border-radius: 4px; border: 1px solid #111;
     transform: rotate(90deg); 
     box-shadow: -2px 2px 5px rgba(0,0,0,0.4);
+    flex-shrink: 0; /* Important: prevents the card from being squished by flexbox */
 }
-@media (min-width: 800px) { .side-card { margin-top: -50px; } }
+@media (min-width: 800px) { 
+    #hand-left, #hand-right {
+        transform: none !important; /* Remove the translate offsets */
+        padding: 20px 0; /* Add small buffer */
+    }
+}
 
 .partner-card {
     width: var(--card-w); height: var(--card-h); 
