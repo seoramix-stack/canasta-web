@@ -434,7 +434,7 @@ body {
            5. Player Hand (130px) -> REDUCED from 200px. 
               (105px card + 25px buffer is enough now that we don't stack)
         */
-        grid-template-rows: 80px 40px 1fr 0px 200px; 
+        grid-template-rows: 80px 40px 1fr 0px 130px; 
         
         /* The Map */
         grid-template-areas: 
