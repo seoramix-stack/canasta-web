@@ -140,8 +140,16 @@
 
 <div id="screen-create-room" class="app-screen">
     <h2>CREATE ROOM</h2>
-    <p>Set a 4-digit PIN</p>
-    <input type="number" id="create-pin" class="form-input" placeholder="0000" maxlength="4" style="font-size: 24px; letter-spacing: 5px; width: 150px;">
+    <p>Name your room & set a PIN</p>
+    
+    <div class="form-group">
+        <input type="text" id="create-room-name" class="form-input" placeholder="Room Name (e.g. 'table1')" maxlength="12">
+    </div>
+
+    <div class="form-group">
+        <input type="number" id="create-pin" class="form-input" placeholder="PIN (4 digits)" maxlength="4" style="font-size: 24px; letter-spacing: 5px; width: 150px;">
+    </div>
+
     <br>
     <button class="menu-btn success" onclick="doCreateRoom()">CREATE & JOIN</button>
     <button class="menu-btn text-only" onclick="navTo('screen-private-menu')">CANCEL</button>

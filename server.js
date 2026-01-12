@@ -36,6 +36,7 @@ if (!DEV_MODE) {
         username: { type: String, required: true, unique: true },
         password: { type: String, required: true },
         token: String,
+        isOnline: { type: Boolean, default: false },
         stats: {
             wins: { type: Number, default: 0 },
             losses: { type: Number, default: 0 },
@@ -158,11 +159,20 @@ io.on('connection', async (socket) => {
     });
 
     socket.on('request_create_private', (data) => {
-        // 1. Create a Game ID
-        const gameId = generateGameId();
-        const pin = data.pin; // 4-digit code
+        // 1. Validate Input
+        const requestedId = data.gameId.trim();
+        const pin = data.pin;
 
-        // 2. Setup Game Object immediately (Waiting state)
+        if (!requestedId || !pin) return socket.emit('error_message', "Invalid data.");
+        
+        // 2. Check if name is taken
+        if (games[requestedId]) {
+            return socket.emit('error_message', "Room name already exists. Choose another.");
+        }
+
+        // 3. Create Game with Custom ID
+        const gameId = requestedId; // Use the user's string directly
+        
         games[gameId] = new CanastaGame();
         games[gameId].resetMatch();
         games[gameId].isPrivate = true;
@@ -171,12 +181,12 @@ io.on('connection', async (socket) => {
         games[gameId].readySeats = new Set();
         games[gameId].names = [socket.handshake.auth.username || "Host", "Waiting...", "Waiting...", "Waiting..."];
         
-        // 3. Join Host
+        // 4. Join Host
         socket.join(gameId);
         socket.data.gameId = gameId;
         socket.data.seat = 0; // Host is seat 0
         
-        // 4. Notify Client
+        // 5. Notify Client
         socket.emit('private_created', { gameId: gameId, pin: pin });
         sendUpdate(gameId, socket.id, 0);
     });
@@ -253,7 +263,19 @@ io.on('connection', async (socket) => {
     socket.on('social_get_lists', async () => {
         if (DEV_MODE) return;
         const me = await User.findOne({ username: socket.handshake.auth.username });
-        if(me) socket.emit('social_list_data', { friends: me.friends, blocked: me.blocked });
+        if (me) {
+            // Fetch friend documents to see 'isOnline' status
+            const friendDocs = await User.find({ username: { $in: me.friends } });
+            
+            // Map to an array of objects: [{ username: "Bob", isOnline: true }, ...]
+            const friendData = friendDocs.map(f => ({ 
+                username: f.username, 
+                isOnline: f.isOnline 
+            }));
+
+            // Send full object for friends, keep blocked as strings
+            socket.emit('social_list_data', { friends: friendData, blocked: me.blocked });
+        }
     });
     
     // 2. GAME ACTIONS

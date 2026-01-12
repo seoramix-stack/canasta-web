@@ -581,10 +581,15 @@ function updateTimerDOM() {
 // --- PRIVATE ROOM LOGIC ---
 
 window.doCreateRoom = () => {
+    const roomName = document.getElementById('create-room-name').value; // Get Name
     const pin = document.getElementById('create-pin').value;
+    
+    // Validation
+    if (!roomName) return alert("Please enter a Room Name");
     if (!pin || pin.length !== 4) return alert("Enter a 4-digit PIN");
     
-    state.socket.emit('request_create_private', { pin: pin });
+    // Send both Name (as gameId) and PIN
+    state.socket.emit('request_create_private', { gameId: roomName, pin: pin });
 };
 
 window.doJoinPrivate = () => {
@@ -635,23 +640,37 @@ window.addFriend = (name, btn) => {
 
 window.blockUser = (name) => state.socket.emit('social_block_user', name);
 
-// client.js
 
-function renderUserList(names, mode) {
+function renderUserList(items, mode) {
     const div = document.getElementById('friend-content');
     div.innerHTML = "";
-    if (!names || names.length === 0) {
+    if (!items || items.length === 0) {
         div.innerHTML = "<div style='text-align:center; color:#777; padding:20px;'>No players found.</div>";
         return;
     }
 
-    names.forEach(name => {
+    items.forEach(item => {
         const row = document.createElement('div');
-        row.style.cssText = "display:flex; justify-content:space-between; padding:10px; border-bottom:1px solid #444; color:white;";
+        row.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid #444; color:white;";
         
+        // Handle both Strings (Search/Blocked) and Objects (Friends with Status)
+        let name = item;
+        let isOnline = false;
+        
+        if (typeof item === 'object') {
+            name = item.username;
+            isOnline = item.isOnline;
+        }
+
+        // Create Status Dot (Only for Friends list)
+        let statusDot = "";
+        if (mode === 'list') { // 'list' is the ID for "My Friends" tab
+            const color = isOnline ? "#2ecc71" : "#7f8c8d"; // Green vs Grey
+            statusDot = `<span style="display:inline-block; width:8px; height:8px; background:${color}; border-radius:50%; margin-right:8px; box-shadow: 0 0 5px ${color};"></span>`;
+        }
+
         let actions = "";
         if (mode === 'search') {
-            // CHANGE: Added 'this' to the onclick handler
             actions = `<button onclick="addFriend('${name}', this)" style="background:#2ecc71; border:none; border-radius:4px; cursor:pointer; width:30px; color:#2c3e50; font-weight:bold;">+</button>`;
         } else if (mode === 'list') {
             actions = `<button onclick="blockUser('${name}')" style="background:#e74c3c; color:white; border:none; border-radius:4px; font-size:10px; padding:2px 5px; cursor:pointer;">BLOCK</button>`;
@@ -659,7 +678,8 @@ function renderUserList(names, mode) {
             actions = `<span style="color:#e74c3c; font-size:12px;">BLOCKED</span>`;
         }
 
-        row.innerHTML = `<span>${name}</span> <div>${actions}</div>`;
+        // Insert Name with Dot
+        row.innerHTML = `<div style="display:flex; align-items:center;">${statusDot}<span>${name}</span></div> <div>${actions}</div>`;
         div.appendChild(row);
     });
 }
