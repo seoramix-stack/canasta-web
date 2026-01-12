@@ -513,7 +513,8 @@ state.socket.on('social_search_results', (names) => {
 
     // Initial UI Update
     const pName = storedUser || "Player";
-    document.querySelector('.p-name').innerText = pName;
+    const nameEl = document.querySelector('.p-name');
+if (nameEl) nameEl.innerText = pName;
     UI.navTo('screen-home'); 
 }
 
