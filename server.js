@@ -620,19 +620,26 @@ function checkBotTurn(gameId) {
     if (bot) {
         game.processingTurnFor = curr;
         
-        // Pass a callback that runs after every bot action (Draw, Meld, Discard)
-        bot.executeTurn(game, (updatedSeat) => {
-            
-            // --- FIX: CHECK IF BOT ENDED THE ROUND ---
-            if (game.turnPhase === 'game_over') {
-                console.log(`[BOT] Player ${updatedSeat} ended the round.`);
-                game.processingTurnFor = null; // Release lock
-                handleRoundEnd(gameId, io);    // Trigger Score Calculation & Events
-            } else {
-                // Normal turn update
-                broadcastAll(gameId, updatedSeat); 
-            }
-        });
+        // --- NEW: Add 1s delay only at the START of the turn (Draw Phase) ---
+        // This ensures visual pause after the previous player's discard.
+        const delay = (game.turnPhase === 'draw') ? 1000 : 0;
+
+        setTimeout(() => {
+            // Pass a callback that runs after every bot action (Draw, Meld, Discard)
+            bot.executeTurn(game, (updatedSeat) => {
+                
+                // --- FIX: CHECK IF BOT ENDED THE ROUND ---
+                if (game.turnPhase === 'game_over') {
+                    console.log(`[BOT] Player ${updatedSeat} ended the round.`);
+                    game.processingTurnFor = null; // Release lock
+                    handleRoundEnd(gameId, io);    // Trigger Score Calculation & Events
+                } else {
+                    // Normal turn update
+                    broadcastAll(gameId, updatedSeat); 
+                }
+            });
+        }, delay);
+
     } else {
         game.processingTurnFor = null;
     }
