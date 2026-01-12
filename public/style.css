@@ -545,7 +545,7 @@ body {
         
         /* FLOATING EFFECT: 
            Pull it UP (-15px) so it sits just on the bottom edge of the partner's cards. */
-        transform: translateY(-15px) !important;
+        transform: translateY(15px) !important;
         
         pointer-events: none;
     }
@@ -668,7 +668,7 @@ body {
     /* Adjust Card rotation overlap for vertical columns */
     .side-card { margin-top: -50px; }
     /* FORCE TRANSPARENT BACKGROUNDS FOR ALL BOTS */
-    #hud-left, #hud-right {
+    #hud-left, #hud-right, #hud-partner {
         background: transparent !important;
         border: none !important;
         box-shadow: none !important;
