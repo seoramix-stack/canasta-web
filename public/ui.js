@@ -15,6 +15,8 @@ export function toggleGameMenu() {
 }
 
 // --- RENDER FUNCTIONS ---
+export { renderHand };
+
 export function updateUI(data) {
     state.activeData = data;
     
@@ -91,18 +93,30 @@ function renderHand(hand) {
     div.innerHTML = "";
     if (!hand || hand.length === 0) return;
 
-    // 1. Group cards by Rank (Same as before)
+    // 1. Detect Desktop vs Mobile (Matches your CSS media query)
+    const isDesktop = window.innerWidth > 800;
+    
+    // 2. Restore Original Dimensions & Config from client2.js
+    // Desktop: Cards are 105px high. Mobile: 70px high.
+    const cardHeight = isDesktop ? 105 : 70;
+    const groupWidth = isDesktop ? 75 : 50;
+    
+    // Container Limits (Crucial for preventing overflow)
+    // Desktop row is 200px, Mobile row is 110px
+    const containerLimit = isDesktop ? 180 : 110; 
+    
+    const buffer = 5; 
+    const defaultVisibleStrip = isDesktop ? 40 : 25; 
+
+    // 3. Group cards by Rank
     const groups = [];
     let currentGroup = [];
     
-    // Sort hand first to ensure groups are contiguous (optional but safer)
-    // Assuming hand is already sorted by the game logic, but groups rely on order.
-    
+    // We assume hand is already sorted, but logic holds regardless
     hand.forEach((card, index) => {
         if (currentGroup.length === 0) {
             currentGroup.push({card, index});
         } else {
-            // Compare rank with the first card of the current group
             if (currentGroup[0].card.rank === card.rank) {
                 currentGroup.push({card, index});
             } else { 
@@ -113,45 +127,61 @@ function renderHand(hand) {
     });
     if (currentGroup.length > 0) groups.push(currentGroup);
 
-    // 2. Calculate Horizontal Overlap (The "Squeeze")
-    const cardWidth = 50; // Match your CSS --card-w var (approx)
-    const screenWidth = div.clientWidth;
+    // 4. Horizontal Calculation (Fit groups side-by-side)
+    const safeWidth = div.clientWidth || window.innerWidth;
+    const containerWidth = safeWidth - 20; // 20px padding safety
     const totalGroups = groups.length;
-    
-    // Total width if laid out side-by-side with no overlap
-    const totalRawWidth = totalGroups * cardWidth;
-    
-    // If raw width > screen, we must overlap. 
-    // Formula: (Excess Width) / (Number of gaps between groups)
-    let overlap = 0;
-    if (totalRawWidth > screenWidth) {
-        const excess = totalRawWidth - screenWidth;
-        // Add a tiny buffer (10px) so they don't touch the exact edge
-        overlap = (excess + 10) / (totalGroups - 1);
+    let groupOverlap = 5; // Default gap
+
+    // If groups don't fit, calculate negative margin (overlap)
+    if (totalGroups > 1) {
+        const calculated = ((containerWidth - groupWidth) / (totalGroups - 1)) - groupWidth;
+        // Clamp overlap: Max 15px gap, Min -30px overlap
+        groupOverlap = Math.min(15, Math.max(-30, calculated));
     }
 
-    // 3. Render Groups
+    // 5. Render Groups
     groups.forEach((grp, gIndex) => {
         const groupDiv = document.createElement("div");
         groupDiv.className = "hand-group";
         
-        // Apply Horizontal Overlap
-        // We shift every group (except the first) to the left
-        if (gIndex > 0 && overlap > 0) {
-            groupDiv.style.marginLeft = `-${overlap}px`;
+        // Apply horizontal spacing/overlap
+        if (gIndex < totalGroups - 1) {
+            groupDiv.style.marginRight = `${groupOverlap}px`;
+        }
+        
+        // --- RESTORED SQUISH LOGIC ---
+        // Calculate how much vertical space we have available for the "spine" (the stacked part)
+        const availableSpine = containerLimit - cardHeight - buffer;
+        let stepSize = defaultVisibleStrip;
+
+        // If we have multiple cards, check if they fit
+        if (grp.length > 1) {
+            const neededSpine = (grp.length - 1) * defaultVisibleStrip;
+            
+            // If the stack is too tall, shrink the stepSize to fit exactly in availableSpine
+            if (neededSpine > availableSpine) {
+                stepSize = availableSpine / (grp.length - 1);
+            }
         }
 
-        // Render Vertical Cards (Same Rank)
+        // Apply negative margin to pull cards UP
+        // Logic: Shift Up by (Height - VisibleStrip)
+        const negMargin = -(cardHeight - stepSize);
+        
         grp.forEach((item, cIdx) => {
             const wrapper = document.createElement("div");
             wrapper.className = "hand-card-wrap";
             
-            // Vertical Cascade: Stack identical ranks
+            // Apply calculated vertical squish
             if (cIdx > 0) {
-                wrapper.style.marginTop = "-5px"; // Tweak this number to control vertical tightness
+                wrapper.style.marginTop = `${negMargin}px`;
             }
-
-            if (state.selectedIndices.includes(item.index)) wrapper.classList.add("selected");
+            
+            // Check selection state
+            if (state.selectedIndices.includes(item.index)) {
+                wrapper.classList.add("selected");
+            }
             
             const img = document.createElement("img");
             img.src = getCardImage(item.card);
