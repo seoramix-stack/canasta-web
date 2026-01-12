@@ -148,7 +148,7 @@ function renderHand(hand) {
             
             // Vertical Cascade: Stack identical ranks
             if (cIdx > 0) {
-                wrapper.style.marginTop = "-20px"; // Tweak this number to control vertical tightness
+                wrapper.style.marginTop = "-5px"; // Tweak this number to control vertical tightness
             }
 
             if (state.selectedIndices.includes(item.index)) wrapper.classList.add("selected");
