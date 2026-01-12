@@ -434,7 +434,7 @@ body {
            5. Player Hand (130px) -> REDUCED from 200px. 
               (105px card + 25px buffer is enough now that we don't stack)
         */
-        grid-template-rows: 80px 40px 1fr 40px 170px; 
+        grid-template-rows: 80px 40px 1fr 0px 200px; 
         
         /* The Map */
         grid-template-areas: 
@@ -527,7 +527,17 @@ body {
     #hud-me      { grid-area: timer-bot; align-self: center; justify-self: center; margin: 0; }
 
     /* ... inside @media (min-width: 800px) ... */
-
+    #hud-me {
+        /* Ensure it's visible even though its row height is 0 */
+        z-index: 100 !important;
+        overflow: visible !important;
+        
+        /* Nudge it down so it sits closer to the cards */
+        transform: translateY(15px) !important;
+        
+        /* Ensure it doesn't block clicks on the table area above it */
+        pointer-events: none; 
+    }
     /* --- 5. THE CENTER TABLE (Expanded) --- */
     #table-zone {
         grid-area: center;
