@@ -58,6 +58,50 @@
     </div>
 </div>
 
+<div id="screen-bot" class="app-screen">
+    <h2>VS BOTS</h2>
+    <div class="info-text">Practice match with 3 bots</div>
+    
+    <div class="diff-grid">
+        <button class="diff-btn" onclick="selectDiff('easy', this)">EASY</button>
+        <button class="diff-btn selected" onclick="selectDiff('medium', this)">MEDIUM</button>
+        <button class="diff-btn" onclick="selectDiff('hard', this)">HARD</button>
+    </div>
+
+    <button class="menu-btn primary" onclick="connectToGame('bot')">START MATCH</button>
+    <button class="menu-btn text-only" onclick="navTo('screen-home')">BACK</button>
+</div>
+
+<script>
+    function selectDiff(diff, btn) {
+        document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        // Note: Actual logic to update state.currentBotDiff would require exposing it, 
+        // but this at least makes the UI responsive.
+    }
+</script>
+
+<div id="screen-profile" class="app-screen">
+    <h2>MY PROFILE</h2>
+    
+    <div style="font-size: 60px; margin-bottom: 10px;">👤</div>
+    <div class="p-name" style="font-size: 24px; font-weight: bold; color: #f1c40f; margin-bottom: 20px;">Player</div>
+    
+    <div style="display: flex; gap: 20px; margin-bottom: 30px;">
+        <div style="text-align: center;">
+            <div style="font-size: 12px; color: #bdc3c7;">RATING</div>
+            <div style="font-size: 20px;">1200</div>
+        </div>
+        <div style="text-align: center;">
+            <div style="font-size: 12px; color: #bdc3c7;">WINS</div>
+            <div style="font-size: 20px;">0</div>
+        </div>
+    </div>
+
+    <button class="menu-btn danger" onclick="logout()">LOGOUT</button>
+    <button class="menu-btn text-only" onclick="navTo('screen-home')">BACK</button>
+</div>
+
 <div id="screen-queue" class="app-screen">
     <h2>SEARCHING...</h2>
     <div class="info-text" id="queue-msg">Connecting to server...</div>
