@@ -87,113 +87,128 @@ export function updateUI(data) {
     state.gameStarted = true;
 }
 
-function renderHand(hand) {
-    const div = document.getElementById('my-hand');
-    if(!div) return;
-    div.innerHTML = "";
-    if (!hand || hand.length === 0) return;
+function renderTable(elementId, meldsObj, red3sArray) {
+    const container = document.getElementById(elementId);
+    if (!container) return;
+    
+    container.innerHTML = "";
+    const groupsToRender = [];
 
-    // 1. Detect Desktop vs Mobile (Matches your CSS media query)
+    // Detect Desktop
     const isDesktop = window.innerWidth > 800;
     
-    // 2. Restore Original Dimensions & Config from client2.js
-    // Desktop: Cards are 105px high. Mobile: 70px high.
+    // Config matches your CSS variables implicitly
+    const visibleStrip = isDesktop ? 22 : 18; 
     const cardHeight = isDesktop ? 105 : 70;
-    const groupWidth = isDesktop ? 75 : 50;
-    
-    // Container Limits (Crucial for preventing overflow)
-    // Desktop row is 200px, Mobile row is 110px
-    const containerLimit = isDesktop ? 180 : 110; 
-    
-    const buffer = 5; 
-    const defaultVisibleStrip = isDesktop ? 40 : 25; 
+    const vertMargin = visibleStrip - cardHeight; 
 
-    // 3. Group cards by Rank
-    const groups = [];
-    let currentGroup = [];
-    
-    // We assume hand is already sorted, but logic holds regardless
-    hand.forEach((card, index) => {
-        if (currentGroup.length === 0) {
-            currentGroup.push({card, index});
-        } else {
-            if (currentGroup[0].card.rank === card.rank) {
-                currentGroup.push({card, index});
-            } else { 
-                groups.push(currentGroup); 
-                currentGroup = [{card, index}]; 
-            }
-        }
-    });
-    if (currentGroup.length > 0) groups.push(currentGroup);
-
-    // 4. Horizontal Calculation (Fit groups side-by-side)
-    const safeWidth = div.clientWidth || window.innerWidth;
-    const containerWidth = safeWidth - 20; // 20px padding safety
-    const totalGroups = groups.length;
-    let groupOverlap = 5; // Default gap
-
-    // If groups don't fit, calculate negative margin (overlap)
-    if (totalGroups > 1) {
-        const calculated = ((containerWidth - groupWidth) / (totalGroups - 1)) - groupWidth;
-        // Clamp overlap: Max 15px gap, Min -30px overlap
-        groupOverlap = Math.min(15, Math.max(-30, calculated));
+    // 1. Add Red 3s (Leftmost)
+    if (red3sArray && red3sArray.length > 0) {
+        groupsToRender.push({ type: 'red3', label: '', cards: red3sArray });
     }
 
-    // 5. Render Groups
-    groups.forEach((grp, gIndex) => {
-        const groupDiv = document.createElement("div");
-        groupDiv.className = "hand-group";
+    // 2. Add Melds (Sorted A -> 3)
+    if (meldsObj) {
+        // "3" is at the end so Black 3s sort to the right
+        const rankPriority = ["A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3"];
         
-        // Apply horizontal spacing/overlap
-        if (gIndex < totalGroups - 1) {
-            groupDiv.style.marginRight = `${groupOverlap}px`;
-        }
-        
-        // --- RESTORED SQUISH LOGIC ---
-        // Calculate how much vertical space we have available for the "spine" (the stacked part)
-        const availableSpine = containerLimit - cardHeight - buffer;
-        let stepSize = defaultVisibleStrip;
-
-        // If we have multiple cards, check if they fit
-        if (grp.length > 1) {
-            const neededSpine = (grp.length - 1) * defaultVisibleStrip;
-            
-            // If the stack is too tall, shrink the stepSize to fit exactly in availableSpine
-            if (neededSpine > availableSpine) {
-                stepSize = availableSpine / (grp.length - 1);
-            }
-        }
-
-        // Apply negative margin to pull cards UP
-        // Logic: Shift Up by (Height - VisibleStrip)
-        const negMargin = -(cardHeight - stepSize);
-        
-        grp.forEach((item, cIdx) => {
-            const wrapper = document.createElement("div");
-            wrapper.className = "hand-card-wrap";
-            
-            // Apply calculated vertical squish
-            if (cIdx > 0) {
-                wrapper.style.marginTop = `${negMargin}px`;
-            }
-            
-            // Check selection state
-            if (state.selectedIndices.includes(item.index)) {
-                wrapper.classList.add("selected");
-            }
-            
-            const img = document.createElement("img");
-            img.src = getCardImage(item.card);
-            
-            // Interaction
-            wrapper.onclick = function() { window.toggleSelect(item.index); };
-            
-            wrapper.appendChild(img);
-            groupDiv.appendChild(wrapper);
+        const sortedRanks = Object.keys(meldsObj).sort((a, b) => { 
+            return rankPriority.indexOf(a) - rankPriority.indexOf(b); 
         });
         
-        div.appendChild(groupDiv);
+        sortedRanks.forEach(rank => { 
+            // Use .length for the label count
+            groupsToRender.push({ 
+                type: 'meld', 
+                rank: rank, 
+                label: meldsObj[rank].length, 
+                cards: meldsObj[rank] 
+            }); 
+        });
+    }
+
+    // 3. Layout Calculations (Horizontal Spacing)
+    const safeWidth = container.clientWidth || window.innerWidth;
+    const containerWidth = safeWidth - 10; 
+    const groupWidth = isDesktop ? 75 : 50;
+    const totalGroups = groupsToRender.length; 
+    let horizMargin = 5; 
+
+    if (totalGroups > 1) {
+         const calculated = ((containerWidth - groupWidth) / (totalGroups - 1)) - groupWidth;
+         // Clamp margin
+         horizMargin = Math.min(10, Math.max(-15, calculated));
+    }
+
+    // 4. Render Groups
+    groupsToRender.forEach((groupData, gIdx) => {
+        const groupDiv = document.createElement("div");
+        groupDiv.className = "meld-group";
+        
+        const teamSuffix = (elementId === "my-melds") ? "my" : "enemy";
+        groupDiv.id = `meld-pile-${teamSuffix}-${groupData.rank}`;
+        
+        // Stacking Context: Higher index sits on top of lower index visually if they overlap
+        groupDiv.style.position = "relative";
+        groupDiv.style.zIndex = gIdx; 
+        
+        if (gIdx < totalGroups - 1) {
+            groupDiv.style.marginRight = `${horizMargin}px`;
+        }
+
+        // Click Handler (Only for My Melds)
+        if (elementId === "my-melds" && groupData.type === 'meld') {
+            // We use onclick attribute to hook into the window-level function defined in client.js
+            groupDiv.setAttribute("onclick", `handleMeldClick(event, '${groupData.rank}')`);
+            groupDiv.style.cursor = "pointer";
+        }
+        
+        // Build HTML String for speed/simplicity
+        let html = `<span class='meld-label'>${groupData.label}</span>`;
+        html += `<div class='meld-container' style='display:flex; flex-direction:column; align-items:center;'>`;
+        
+        const pile = groupData.cards;
+        const isClosed = (groupData.type !== 'red3' && pile.length >= 7);
+
+        if (isClosed) {
+            // --- CLOSED CANASTA (Stacked) ---
+            const isNatural = !pile.some(c => c.isWild);
+            
+            // Find appropriate top card
+            let topCard = pile[0]; 
+            if (isNatural) {
+                topCard = pile.find(c => c.suit === 'Hearts' || c.suit === 'Diamonds') || pile[0];
+            } else {
+                topCard = pile.find(c => !c.isWild && (c.suit === 'Clubs' || c.suit === 'Spades')) || pile[0];
+            }
+            
+            const badgeColor = isNatural ? "#d63031" : "#2d3436";
+            const badgeText = isNatural ? "NAT" : "MIX";
+
+            // CRITICAL FIX: Added 'card-img' class here
+            html += `
+                <div style="position:relative;">
+                    <img src="${getCardImage(topCard)}" class="card-img meld-card" style="box-shadow:2px 2px 0 #555; border:1px solid #000;">
+                    <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-30deg); background:${badgeColor}; color:white; font-size:8px; padding:1px 3px; border:1px solid white;">
+                        ${badgeText}
+                    </div>
+                </div>`;
+        } else {
+            // --- OPEN MELD (Cascade) ---
+            let activeMargin = vertMargin;
+            // Squish tighter if pile is getting tall (Visual Polish)
+            if (pile.length > 5) activeMargin -= 5; 
+
+            pile.forEach((c, cIdx) => { 
+                const marginTop = (cIdx > 0) ? `margin-top:${activeMargin}px;` : "";
+                // CRITICAL FIX: Added 'card-img' class here
+                html += `<img src="${getCardImage(c)}" class="card-img meld-card" style="${marginTop} margin-left: 0; transform: none; box-shadow: 1px 1px 2px rgba(0,0,0,0.3);">`; 
+            });
+        }
+        
+        html += "</div>"; 
+        groupDiv.innerHTML = html; 
+        container.appendChild(groupDiv);
     });
 }
 
