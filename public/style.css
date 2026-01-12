@@ -500,7 +500,7 @@ body {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-}
+    }
     /* Pin Left Timer to the left of the table */
     #hud-left {
         justify-self: start !important; /* Stick to left edge of center zone */
@@ -656,6 +656,12 @@ body {
 
     /* Adjust Card rotation overlap for vertical columns */
     .side-card { margin-top: -50px; }
+    /* FORCE TRANSPARENT BACKGROUNDS FOR ALL BOTS */
+    #hud-left, #hud-right, #hud-partner {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
 }
 /* 1. LOCK THE PARENT CONTAINER */
 /* Ensure the draw area is exactly the size of a card and acts as an anchor */
