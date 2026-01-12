@@ -48,82 +48,103 @@
 
             <button class="menu-btn success" onclick="doRegister()">CREATE ACCOUNT</button>
             <div class="link-text" onclick="toggleForms('login')">Back to Login</div>
-    </div> </div> <div id="screen-home" class="app-screen"> 
-    
-    <div class="profile-preview" onclick="navTo('screen-profile')">
-        <div class="avatar"></div>
-        <div class="profile-text">
-            <div class="p-name">Player One</div>
-            <div class="p-rank">Rating: 1200</div>
-        </div>
-    </div>
-    
+    </div> </div> 
+    <div id="screen-home" class="app-screen">
     <div class="menu-list">
         <button class="menu-btn primary" onclick="navTo('screen-online')"><span>🌍</span> PLAY ONLINE</button>
         <button class="menu-btn" onclick="navTo('screen-bot')"><span>🤖</span> TRAIN VS BOTS</button>
+        <button class="menu-btn secondary" onclick="openFriendsScreen()"><span>👥</span> FRIENDS</button> 
         <button class="menu-btn secondary" onclick="navTo('screen-profile')"><span>👤</span> MY PROFILE</button>
     </div>
-
 </div>
-        <div class="menu-list">
-            <button class="menu-btn primary" onclick="navTo('screen-online')"><span>🌍</span> PLAY ONLINE</button>
-            <button class="menu-btn" onclick="navTo('screen-bot')"><span>🤖</span> TRAIN VS BOTS</button>
-            <button class="menu-btn secondary" onclick="navTo('screen-profile')"><span>👤</span> MY PROFILE</button>
-        </div>
+
+<div id="screen-online" class="app-screen">
+    <h2>PLAY ONLINE</h2>
+    
+    <button class="menu-btn primary" onclick="connectToGame('rated')">🏆 RATED (4P)</button>
+    <div class="info-text">Ranked matches. Auto-match.</div>
+    
+    <hr style="width: 50%; border-color: #555; margin: 15px 0;">
+
+    <div style="color: #bdc3c7; margin-bottom:10px;">CASUAL</div>
+    
+    <button class="menu-btn secondary" onclick="connectToGame('casual')">⚡ QUICK MATCH</button>
+    <button class="menu-btn secondary" onclick="navTo('screen-private-menu')">🔒 PRIVATE ROOM</button>
+    
+    <br>
+    <button class="menu-btn text-only" onclick="navTo('screen-home')">BACK</button>
+</div>
+
+<div id="screen-private-menu" class="app-screen">
+    <h2>PRIVATE ROOM</h2>
+    <p>Play with friends</p>
+
+    <button class="menu-btn primary" onclick="navTo('screen-create-room')">CREATE ROOM</button>
+    <button class="menu-btn secondary" onclick="navTo('screen-join-room')">JOIN ROOM</button>
+    <br>
+    <button class="menu-btn text-only" onclick="navTo('screen-online')">BACK</button>
+</div>
+
+<div id="screen-create-room" class="app-screen">
+    <h2>CREATE ROOM</h2>
+    <p>Set a 4-digit PIN</p>
+    <input type="number" id="create-pin" class="form-input" placeholder="0000" maxlength="4" style="font-size: 24px; letter-spacing: 5px; width: 150px;">
+    <br>
+    <button class="menu-btn success" onclick="doCreateRoom()">CREATE & JOIN</button>
+    <button class="menu-btn text-only" onclick="navTo('screen-private-menu')">CANCEL</button>
+</div>
+
+<div id="screen-join-room" class="app-screen">
+    <h2>JOIN ROOM</h2>
+    <div class="form-group">
+        <input type="text" id="join-id" class="form-input" placeholder="Room ID (e.g. game_xyz)">
+    </div>
+    <div class="form-group">
+        <input type="number" id="join-pin" class="form-input" placeholder="PIN" style="letter-spacing: 3px;">
+    </div>
+    <button class="menu-btn primary" onclick="doJoinPrivate()">ENTER ROOM</button>
+    <button class="menu-btn text-only" onclick="navTo('screen-private-menu')">CANCEL</button>
+</div>
+
+<div id="screen-friends" class="app-screen">
+    <h2>FRIENDS & PLAYERS</h2>
+    
+    <div style="display:flex; gap:10px; margin-bottom:15px;">
+        <button class="action-btn" onclick="showFriendTab('list')">MY FRIENDS</button>
+        <button class="action-btn secondary" onclick="showFriendTab('search')">SEARCH</button>
+        <button class="action-btn danger" onclick="showFriendTab('blocked')">BLOCKED</button>
     </div>
 
-    <div id="screen-online" class="app-screen">
-        <h2>PLAY ONLINE</h2>
-        <p>Choose your mode</p>
-        <button class="menu-btn primary" onclick="connectToGame('rated')">🏆 RATED (4P)</button>
-        <div class="info-text">Ranked matches. 2v2 Teams.</div>
-        <button class="menu-btn secondary" onclick="connectToGame('casual')">🎲 CASUAL</button>
-        <br><br>
-        <button class="menu-btn text-only" onclick="navTo('screen-home')">BACK</button>
+    <div id="friend-content" style="width: 90%; max-width: 400px; background: rgba(0,0,0,0.2); height: 300px; overflow-y: auto; border-radius: 8px; padding: 10px;">
+        <div style="text-align:center; color:#aaa; margin-top:50px;">Loading...</div>
+    </div>
+    
+    <div id="friend-search-bar" style="display:none; width: 90%; margin-top: 10px;">
+        <input type="text" id="search-query" class="form-input" placeholder="Type username..." onkeyup="doUserSearch()">
     </div>
 
-    <div id="screen-bot" class="app-screen">
-        <h2>TRAINING MODE</h2>
-        <p>Select Difficulty</p>
-        <div class="diff-grid">
-            <div class="diff-btn" onclick="selectBotDiff('easy', this)">Easy</div>
-            <div class="diff-btn selected" onclick="selectBotDiff('medium', this)">Med</div>
-            <div class="diff-btn" onclick="selectBotDiff('hard', this)">Hard</div>
-        </div>
-        <br>
-        <button class="menu-btn primary" onclick="connectToGame('bot')">START TRAINING</button>
-        <button class="menu-btn text-only" onclick="navTo('screen-home')">BACK</button>
-    </div>
+    <br>
+    <button class="menu-btn text-only" onclick="navTo('screen-home')">BACK</button>
+</div>
 
-    <div id="screen-queue" class="app-screen">
-        <div style="font-size: 60px; margin-bottom: 20px;">🔍</div>
-        <h2>SEARCHING...</h2>
-        <p>Searching for more players...</p>
-        
-        <div id="queue-msg" style="color: #f1c40f; font-weight: bold; margin-top: 10px; font-size: 18px;">
-            1 / 4 Players Ready
-        </div>
-        
-        <br><br>
-        <div style="width: 40px; height: 40px; border: 4px solid #444; border-top: 4px solid #f1c40f; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-        
-        <br><br>
-        <button class="menu-btn text-only" onclick="leaveGame()">CANCEL</button>
+<div id="screen-lobby" class="app-screen">
+    <h2>LOBBY</h2>
+    <div style="background:#2ecc71; color:white; padding:5px 10px; border-radius:5px; margin-bottom:10px;">
+        ROOM ID: <span id="lobby-room-id" style="font-weight:bold;">---</span>
     </div>
+    <div style="font-size:14px; color:#aaa;">PIN: <span id="lobby-pin">****</span></div>
+    
+    <div id="lobby-players" style="margin: 20px 0; width: 100%;">
+        </div>
+    
+    <div id="lobby-host-controls" style="display:none;">
+        <button class="menu-btn success" onclick="sendReady()">START MATCH</button>
+    </div>
+    <div id="lobby-wait-msg" style="color:#f1c40f;">Waiting for host...</div>
 
-    <div id="screen-profile" class="app-screen">
-        <h2>MY PROFILE</h2>
-        <div class="profile-card">
-            <div class="avatar large"></div>
-            <h3>Player One</h3>
-            <div class="stats-row">
-                <div>Wins: <b>14</b></div>
-                <div>Losses: <b>3</b></div>
-            </div>
-        </div>
-        <button class="menu-btn danger" onclick="logout()" style="margin-bottom: 10px;">LOG OUT</button>
-        <button class="menu-btn text-only" onclick="navTo('screen-home')">BACK</button>
-    </div>
+    <button class="menu-btn danger" onclick="leaveGame()">LEAVE LOBBY</button>
+</div>
+
 <div id="screen-victory" class="app-screen">
             <div class="victory-content">
                 <div style="font-size: 80px;">🏆</div>

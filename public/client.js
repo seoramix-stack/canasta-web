@@ -418,7 +418,7 @@ function initSocket(token) {
         const el = document.getElementById('queue-msg');
         if (el) el.innerText = `${data.count} / 4 Players Found`;
     });
-    
+
     state.socket.on('deal_hand', (data) => {
         state.mySeat = data.seat;
         UI.navTo('screen-game');
@@ -481,6 +481,36 @@ function initSocket(token) {
 
     state.socket.on('error_message', (msg) => alert(msg));
     
+    state.socket.on('private_created', (data) => {
+    UI.navTo('screen-lobby');
+    document.getElementById('lobby-room-id').innerText = data.gameId;
+    document.getElementById('lobby-pin').innerText = data.pin;
+    document.getElementById('lobby-host-controls').style.display = 'block';
+    document.getElementById('lobby-wait-msg').style.display = 'none';
+    
+    // Auto-fill join inputs for easy sharing testing
+    document.getElementById('join-id').value = data.gameId;
+});
+
+state.socket.on('joined_private_success', (data) => {
+    UI.navTo('screen-lobby');
+    document.getElementById('lobby-room-id').innerText = data.gameId;
+    document.getElementById('lobby-host-controls').style.display = 'none';
+    document.getElementById('lobby-wait-msg').style.display = 'block';
+});
+
+state.socket.on('social_list_data', (data) => {
+    if (state.friendMode === 'search') return; // Don't overwrite search results
+    
+    const list = (state.friendMode === 'blocked') ? data.blocked : data.friends;
+    renderUserList(list, state.friendMode);
+});
+
+state.socket.on('social_search_results', (names) => {
+        if (state.friendMode !== 'search') return;
+        renderUserList(names, 'search');
+    });
+
     // Initial UI Update
     const pName = storedUser || "Player";
     document.querySelector('.p-name').innerText = pName;
@@ -543,4 +573,78 @@ function updateTimerDOM() {
         const el = document.getElementById(elId);
         if (el) el.innerText = fmt(state.seatTimers[i]);
     }
+}
+
+// client.js
+
+// --- PRIVATE ROOM LOGIC ---
+
+window.doCreateRoom = () => {
+    const pin = document.getElementById('create-pin').value;
+    if (!pin || pin.length !== 4) return alert("Enter a 4-digit PIN");
+    
+    state.socket.emit('request_create_private', { pin: pin });
+};
+
+window.doJoinPrivate = () => {
+    const gameId = document.getElementById('join-id').value;
+    const pin = document.getElementById('join-pin').value;
+    if(!gameId || !pin) return alert("Fill all fields");
+
+    state.socket.emit('request_join_private', { gameId, pin });
+};
+
+// --- FRIENDS LOGIC ---
+
+window.openFriendsScreen = () => {
+    UI.navTo('screen-friends');
+    state.socket.emit('social_get_lists'); // Fetch data
+    window.showFriendTab('list');
+};
+
+window.showFriendTab = (mode) => {
+    state.friendMode = mode;
+    const content = document.getElementById('friend-content');
+    const searchBar = document.getElementById('friend-search-bar');
+    
+    content.innerHTML = "";
+    searchBar.style.display = (mode === 'search') ? 'block' : 'none';
+
+    if (mode === 'list' || mode === 'blocked') {
+        state.socket.emit('social_get_lists');
+    }
+};
+
+window.doUserSearch = () => {
+    const q = document.getElementById('search-query').value;
+    if (q.length > 2) state.socket.emit('social_search', q);
+};
+
+window.addFriend = (name) => state.socket.emit('social_add_friend', name);
+window.blockUser = (name) => state.socket.emit('social_block_user', name);
+
+function renderUserList(names, mode) {
+    const div = document.getElementById('friend-content');
+    div.innerHTML = "";
+    if (!names || names.length === 0) {
+        div.innerHTML = "<div style='text-align:center; color:#777; padding:20px;'>No players found.</div>";
+        return;
+    }
+
+    names.forEach(name => {
+        const row = document.createElement('div');
+        row.style.cssText = "display:flex; justify-content:space-between; padding:10px; border-bottom:1px solid #444; color:white;";
+        
+        let actions = "";
+        if (mode === 'search') {
+            actions = `<button onclick="addFriend('${name}')" style="background:#2ecc71; border:none; border-radius:4px; cursor:pointer;">+</button>`;
+        } else if (mode === 'list') {
+            actions = `<button onclick="blockUser('${name}')" style="background:#e74c3c; color:white; border:none; border-radius:4px; font-size:10px; padding:2px 5px; cursor:pointer;">BLOCK</button>`;
+        } else if (mode === 'blocked') {
+            actions = `<span style="color:#e74c3c; font-size:12px;">BLOCKED</span>`;
+        }
+
+        row.innerHTML = `<span>${name}</span> <div>${actions}</div>`;
+        div.appendChild(row);
+    });
 }

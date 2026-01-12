@@ -40,7 +40,10 @@ if (!DEV_MODE) {
             wins: { type: Number, default: 0 },
             losses: { type: Number, default: 0 },
             rating: { type: Number, default: 1200 }
-        }
+        },
+        // NEW: Social Arrays
+        friends: [{ type: String }],      // Array of Usernames
+        blocked: [{ type: String }]       // Array of Usernames
     });
     User = mongoose.model('User', userSchema);
 }
@@ -154,6 +157,105 @@ io.on('connection', async (socket) => {
         }
     });
 
+    socket.on('request_create_private', (data) => {
+        // 1. Create a Game ID
+        const gameId = generateGameId();
+        const pin = data.pin; // 4-digit code
+
+        // 2. Setup Game Object immediately (Waiting state)
+        games[gameId] = new CanastaGame();
+        games[gameId].resetMatch();
+        games[gameId].isPrivate = true;
+        games[gameId].pin = pin;
+        games[gameId].host = socket.id;
+        games[gameId].readySeats = new Set();
+        games[gameId].names = [socket.handshake.auth.username || "Host", "Waiting...", "Waiting...", "Waiting..."];
+        
+        // 3. Join Host
+        socket.join(gameId);
+        socket.data.gameId = gameId;
+        socket.data.seat = 0; // Host is seat 0
+        
+        // 4. Notify Client
+        socket.emit('private_created', { gameId: gameId, pin: pin });
+        sendUpdate(gameId, socket.id, 0);
+    });
+
+    socket.on('request_join_private', (data) => {
+        const { gameId, pin } = data;
+        const game = games[gameId];
+
+        if (!game) return socket.emit('error_message', "Game not found.");
+        if (game.pin !== pin) return socket.emit('error_message', "Invalid PIN.");
+        if (!game.isPrivate) return socket.emit('error_message', "Not a private game.");
+        
+        // Find empty seat
+        let seat = -1;
+        // Simple logic: Seat 0 is host. Check 1, 2, 3.
+        // (In a real app, you'd track occupied seats more robustly)
+        const socketsInRoom = io.sockets.adapter.rooms.get(gameId);
+        const playerCount = socketsInRoom ? socketsInRoom.size : 0;
+        
+        if (playerCount >= 4) return socket.emit('error_message', "Room is full.");
+
+        seat = playerCount; // 0 is taken, so 1, 2, 3...
+
+        // Join
+        socket.join(gameId);
+        socket.data.gameId = gameId;
+        socket.data.seat = seat;
+        
+        // Update Name
+        const pName = socket.handshake.auth.username || `Player ${seat+1}`;
+        game.names[seat] = pName;
+
+        // Broadcast to everyone in room
+        broadcastAll(gameId);
+        socket.emit('joined_private_success', { gameId, seat });
+        
+        // If full, auto-start logic? Or wait for Host to click start?
+        // For now, let's auto-start if 4 join, or rely on Ready button.
+    });
+
+    // --- NEW: SOCIAL EVENTS ---
+
+    socket.on('social_search', async (query) => {
+        if (DEV_MODE) return;
+        // Find users matching query (excluding self and blocked)
+        const users = await User.find({ username: { $regex: query, $options: 'i' } }).limit(5);
+        socket.emit('social_search_results', users.map(u => u.username));
+    });
+
+    socket.on('social_add_friend', async (targetUsername) => {
+        if (DEV_MODE) return;
+        const myName = socket.handshake.auth.username;
+        if (myName === targetUsername) return;
+
+        await User.updateOne({ username: myName }, { $addToSet: { friends: targetUsername } });
+        socket.emit('social_update', { message: `Added ${targetUsername}` });
+        // Refresh list
+        const me = await User.findOne({ username: myName });
+        socket.emit('social_list_data', { friends: me.friends, blocked: me.blocked });
+    });
+
+    socket.on('social_block_user', async (targetUsername) => {
+        if (DEV_MODE) return;
+        const myName = socket.handshake.auth.username;
+        await User.updateOne({ username: myName }, { 
+            $addToSet: { blocked: targetUsername },
+            $pull: { friends: targetUsername } // Remove from friends if blocked
+        });
+        socket.emit('social_update', { message: `Blocked ${targetUsername}` });
+        const me = await User.findOne({ username: myName });
+        socket.emit('social_list_data', { friends: me.friends, blocked: me.blocked });
+    });
+
+    socket.on('social_get_lists', async () => {
+        if (DEV_MODE) return;
+        const me = await User.findOne({ username: socket.handshake.auth.username });
+        if(me) socket.emit('social_list_data', { friends: me.friends, blocked: me.blocked });
+    });
+    
     // 2. GAME ACTIONS
     socket.on('act_ready', (data) => {
         const gameId = socket.data.gameId;
@@ -330,7 +432,7 @@ io.on('connection', async (socket) => {
             // Notify remaining players
             waitingPlayers.forEach(p => p.emit('queue_update', { count: waitingPlayers.length }));
         }
-        
+
         console.log(`[Leave] User requesting to leave Game ${gameId}`);
         if (token && playerSessions[token]) delete playerSessions[token];
         socket.data.gameId = null;
@@ -543,7 +645,7 @@ function getPlayerNames(gameId) {
     return ["Bot 1", "Bot 2", "Bot 3", "Bot 4"];
 }
 
-// server.js - Helper Function
+//  Helper Function
 
 async function handleRoundEnd(gameId, io) {
     const game = games[gameId];
