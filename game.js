@@ -21,6 +21,14 @@ class CanastaGame {
         this.cumulativeScores = { team1: 0, team2: 0 }; 
     }
 
+    // --- ADD THIS HELPER FUNCTION ---
+    getCardValue(rank) {
+        if (rank === "Joker") return 50;
+        if (rank === "2" || rank === "A") return 20;
+        if (["8","9","10","J","Q","K"].includes(rank)) return 10;
+        return 5;
+    }
+    
     sortHand(playerIndex) {
         const rankOrder = { "3": 0, "4": 1, "5": 2, "6": 3, "7": 4, "8": 5, "9": 6, "10": 7, "J": 8, "Q": 9, "K": 10, "A": 11, "2": 12, "Joker": 13 };
         this.players[playerIndex].sort((a, b) => {
@@ -52,27 +60,40 @@ class CanastaGame {
         console.log("NEW MATCH STARTED");
     }
 
-    startNextRound() {
-        // 1. Update Cumulative Scores
+    resolveMatchStatus() {
+        // A. Commit the scores to the cumulative total NOW
         if (this.finalScores) {
-            // FIX: Add .total to access the number, otherwise you add the whole object
-            this.cumulativeScores.team1 += this.finalScores.team1.total; 
+            this.cumulativeScores.team1 += this.finalScores.team1.total;
             this.cumulativeScores.team2 += this.finalScores.team2.total;
-            this.finalScores = null;
         }
-        
-        // 2. CHECK WIN CONDITION (5,000 Points)
-        const WIN_THRESHOLD = 1000;
+
+        // B. Check Win Threshold (5000)
+        const WIN_THRESHOLD = 5000;
         let s1 = this.cumulativeScores.team1;
         let s2 = this.cumulativeScores.team2;
 
         if (s1 >= WIN_THRESHOLD || s2 >= WIN_THRESHOLD) {
-            if (s1 > s2) return 'team1';
-            if (s2 > s1) return 'team2';
-            return 'draw'; 
+            // Determine Winner
+            if (s1 > s2) return { isMatchOver: true, winner: 'team1' };
+            if (s2 > s1) return { isMatchOver: true, winner: 'team2' };
+            return { isMatchOver: true, winner: 'draw' };
         }
 
-        // 3. If no winner, setup the next round normally
+        return { isMatchOver: false };
+    }
+    
+    startNextRound() {
+        // NOTE: Score accumulation moved to resolveMatchStatus()
+        
+        // 1. Check if we accidentally called this on a finished game
+        // (Should be handled by server, but safety first)
+        const WIN_THRESHOLD = 5000;
+        if (this.cumulativeScores.team1 >= WIN_THRESHOLD || 
+            this.cumulativeScores.team2 >= WIN_THRESHOLD) {
+            return 'game_already_over'; 
+        }
+
+        // 2. Setup the next round normally
         this.roundStarter = (this.roundStarter + 1) % 4;
         this.setupRound();
         console.log(`NEXT ROUND STARTED. Starter: Player ${this.roundStarter}`);
@@ -206,12 +227,10 @@ class CanastaGame {
         // 5. Opening Score Check (If strictly opening via this single action)
         if (!hasOpened) {
             // Calculate points of the potential meld (Top + Hand Cards)
-            let score = topCard.value;
-            
-            // Note: Only 'natural' method is possible here due to isFrozen logic above
-            if (method === 'natural') {
-                 score += hand[naturalMatches[0]].value + hand[naturalMatches[1]].value;
-            }
+            let score = this.getCardValue(topCard.rank);
+if (method === 'natural') {
+     score += this.getCardValue(hand[naturalMatches[0]].rank) + this.getCardValue(hand[naturalMatches[1]].rank);
+}
 
             let req = this.getOpeningReq((playerIndex % 2 === 0) ? this.cumulativeScores.team1 : this.cumulativeScores.team2);
             
@@ -306,8 +325,8 @@ class CanastaGame {
         if (currentPileSize + cards.length >= 7) hasCanasta = true;
 
         if (!hasCanasta) {
-            if (cardsRemaining <= 1) {
-                return { success: false, message: "Cannot go out (or hold 1 card) without a Canasta!" };
+            if (cardsRemaining === 0) { 
+                return { success: false, message: "Cannot go out without a Canasta!" };
             }
         }
 
@@ -316,7 +335,7 @@ class CanastaGame {
         if (isOpening) {
              let teamScore = (playerIndex % 2 === 0) ? this.cumulativeScores.team1 : this.cumulativeScores.team2;
              let req = this.getOpeningReq(teamScore);
-             let meldPoints = cards.reduce((sum, c) => sum + c.value, 0);
+             let meldPoints = cards.reduce((sum, c) => sum + this.getCardValue(c.rank), 0);
              if (meldPoints < req) return { success: false, message: `Opening meld too low! Need ${req} pts.` };
         }
 
@@ -348,7 +367,7 @@ class CanastaGame {
             for (let rank in melds) {
                 let pile = melds[rank];
                 if (pile.length > 0) hasMelded = true;
-                details.basePoints += pile.reduce((sum, c) => sum + c.value, 0);
+                details.basePoints += pile.reduce((sum, c) => sum + this.getCardValue(c.rank), 0);
                 
                 if (pile.length >= 7) {
                     let isNatural = pile.every(c => !c.isWild);
@@ -362,7 +381,7 @@ class CanastaGame {
 
             // Deductions
             pIndices.forEach(idx => {
-                let handPoints = this.players[idx].reduce((sum, c) => sum + c.value, 0);
+                let handPoints = this.players[idx].reduce((sum, c) => sum + this.getCardValue(c.rank), 0);
                 details.deductions -= handPoints; 
                 
                 if (idx === winnerSeat) {
@@ -388,19 +407,17 @@ class CanastaGame {
 
         let hand = this.players[playerIndex];
         let card = hand[cardIndex];
+        let teamMelds = (playerIndex % 2 === 0) ? this.team1Melds : this.team2Melds;
 
-        // GOING OUT LOGIC
+        // 1. Check Team Canasta Status
+        let hasCanasta = Object.values(teamMelds).some(pile => pile.length >= 7);
+
+        // GOING OUT LOGIC (Discarding the last card)
         if (hand.length === 1) {
-            let teamMelds = (playerIndex % 2 === 0) ? this.team1Melds : this.team2Melds;
-            
-            // 1. Check for Canasta (Required to go out)
-            let hasCanasta = false;
-            for (let rank in teamMelds) {
-                if (teamMelds[rank].length >= 7) { hasCanasta = true; break; }
-            }
+            // Check for Canasta (Required to go out)
             if (!hasCanasta) return { success: false, message: "Need Canasta to go out." };
             
-            // 2. Process the "Go Out"
+            // Process the "Go Out"
             hand.splice(cardIndex, 1);
             this.discardPile.push(card);
             
@@ -410,6 +427,7 @@ class CanastaGame {
             console.log(`ROUND OVER: Player ${playerIndex} went out.`);
             return { success: true, message: "GAME_OVER" };
         }
+
         // Normal Discard
         hand.splice(cardIndex, 1);
         this.discardPile.push(card);
@@ -460,7 +478,7 @@ getOpeningReq(score) {
         }
         // --- FIX END ---
 
-        totalPoints += topCard.value;
+        totalPoints += this.getCardValue(topCard.rank);
     }
 
         for (let index = 0; index < meldsData.length; index++) {
@@ -499,7 +517,7 @@ getOpeningReq(score) {
             return { success: false, message: "Meld " + meldRank + "s must have " + minRequired + "+ cards." };
         }
 
-        totalPoints += cards.reduce((sum, c) => sum + c.value, 0);
+        totalPoints += cards.reduce((sum, c) => sum + this.getCardValue(c.rank), 0);
     }
 
         let teamScore = (seat % 2 === 0) ? this.cumulativeScores.team1 : this.cumulativeScores.team2;
@@ -523,8 +541,8 @@ getOpeningReq(score) {
             if (existingLen + addedLen >= 7) willHaveCanasta = true;
         });
 
-        if (cardsRemaining <= 1 && !willHaveCanasta) {
-            return { success: false, message: "Cannot go out (or hold 1 card) without a Canasta!" };
+        if (cardsRemaining === 0 && !willHaveCanasta) {
+             return { success: false, message: "Cannot go out without a Canasta!" };
         }
 
         // --- EXECUTION PHASE ---

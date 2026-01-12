@@ -3,7 +3,7 @@ require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const mongoose = require('mongoose'); // 1. Import Mongoose
+const mongoose = require('mongoose'); 
 const { CanastaGame } = require('./game'); 
 const { CanastaBot } = require('./bot');
 
@@ -14,33 +14,48 @@ const io = new Server(server);
 
 app.use(express.static('public')); 
 
-// --- 2. MONGODB CONNECTION ---
+// --- 2. MONGODB & DEV MODE CONFIGURATION ---
 const MONGO_URI = process.env.MONGO_URI; 
+let DEV_MODE = false; // Flag to track if we are testing locally
 
 if (!MONGO_URI) {
-    console.error("FATAL ERROR: MONGO_URI is missing. Check Render Environment Variables.");
+    console.log("⚠️  [SYSTEM] MONGO_URI missing. Starting in DEV MODE.");
+    console.log("👉  [SYSTEM] Login bypassed: Use ANY username/password.");
+    console.log("👉  [SYSTEM] Stats will not be saved.");
+    DEV_MODE = true;
+} else {
+    mongoose.connect(MONGO_URI)
+        .then(() => console.log("[DB] Connected to MongoDB"))
+        .catch(err => console.error("[DB] Connection Error:", err));
 }
 
-mongoose.connect(MONGO_URI)
-    .then(() => console.log("[DB] Connected to MongoDB"))
-    .catch(err => console.error("[DB] Connection Error:", err));
+// --- 3. USER SCHEMA (Only if NOT in Dev Mode) ---
+let User;
+if (!DEV_MODE) {
+    const userSchema = new mongoose.Schema({
+        username: { type: String, required: true, unique: true },
+        password: { type: String, required: true },
+        token: String,
+        stats: {
+            wins: { type: Number, default: 0 },
+            losses: { type: Number, default: 0 },
+            rating: { type: Number, default: 1200 }
+        }
+    });
+    User = mongoose.model('User', userSchema);
+}
 
-// --- 3. USER SCHEMA ---
-const userSchema = new mongoose.Schema({
-    username: { type: String, required: true, unique: true },
-    password: { type: String, required: true },
-    token: String,
-    stats: {
-        wins: { type: Number, default: 0 },
-        losses: { type: Number, default: 0 },
-        rating: { type: Number, default: 1200 }
-    }
-});
-const User = mongoose.model('User', userSchema);
-
-// --- AUTH ROUTES (Now using DB) ---
+// --- AUTH ROUTES ---
 app.post('/api/register', async (req, res) => {
     const { username, password } = req.body;
+    
+    // [DEV MODE BYPASS]
+    if (DEV_MODE) {
+        const token = 'dev_token_' + Math.random().toString(36).substr(2, 9);
+        console.log(`[DEV-AUTH] Register Mock: ${username}`);
+        return res.json({ success: true, token: token, username: username });
+    }
+
     if (!username || !password) return res.json({ success: false, message: "Missing fields" });
 
     try {
@@ -61,6 +76,14 @@ app.post('/api/register', async (req, res) => {
 
 app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
+
+    // [DEV MODE BYPASS]
+    if (DEV_MODE) {
+        const token = 'dev_token_' + Math.random().toString(36).substr(2, 9);
+        console.log(`[DEV-AUTH] Login Mock: ${username}`);
+        return res.json({ success: true, token: token, username: username });
+    }
+
     try {
         const user = await User.findOne({ username });
         if (user && user.password === password) {
@@ -76,12 +99,12 @@ app.post('/api/login', async (req, res) => {
 
 // --- GLOBAL STATE ---
 
-const games = {};      // Stores game instances: { 'game_id': new CanastaGame() }
-const gameBots = {};   // Stores bots per game: { 'game_id': { 1: Bot, 2: Bot... } }
+const games = {};      
+const gameBots = {};   
 const playerSessions = {};
-let waitingPlayers = []; // This can stay global for the "public lobby"
+let waitingPlayers = []; 
 
-// --- AUTH ROUTES ---
+// --- SOCKET CONNECTION ---
 io.on('connection', async (socket) => {
     console.log('User connected:', socket.id);
     const token = socket.handshake.auth.token;
@@ -90,53 +113,42 @@ io.on('connection', async (socket) => {
         if (!playerSessions[token]) {
             playerSessions[token] = {};
         }
-        // Use the name sent from client, or fallback to existing, or "Player"
         if (handshakeUser) {
             playerSessions[token].username = handshakeUser;
         }
     }
 
-    // --- RECONNECTION LOGIC (FIXED) ---
+    // --- RECONNECTION LOGIC ---
     const session = playerSessions[token];
 
     if (session) {
         if (games[session.gameId]) {
-            // Game exists -> Auto Rejoin
             socket.data.gameId = session.gameId;
             socket.data.seat = session.seat;
-            await socket.join(session.gameId); // <--- ADD AWAIT
+            await socket.join(session.gameId); 
             console.log(`[Reconnect] Player restored to Game ${session.gameId}`);
             sendUpdate(session.gameId, socket.id, session.seat);
         } else {
-            // Game is DEAD -> Clean up the stale session so they can join a new one
             console.log(`[Cleanup] Removing stale session for game ${session.gameId}`);
             delete playerSessions[token];
         }
     }
 
-    // 1. HANDLE JOIN (Async & Aggressive Cleanup)
-    socket.on('request_join', async (data) => { // <--- Mark function ASYNC
-        // A. SWITCHING GAMES?
+    // 1. HANDLE JOIN
+    socket.on('request_join', async (data) => { 
         const token = socket.handshake.auth.token;
         const currentId = socket.data.gameId || (playerSessions[token] ? playerSessions[token].gameId : null);
 
         if (currentId) {
              console.log(`[Switch] Force leaving old Game ${currentId} for new ${data.mode} game.`);
-             
-             // 1. Leave old room (Await ensures it finishes!)
              await socket.leave(currentId); 
-             
-             // 2. Delete old session
              if (token && playerSessions[token]) delete playerSessions[token];
-             
-             // 3. Reset data
              socket.data.gameId = null;
              socket.data.seat = null;
         }
 
-        // B. Proceed to Join
         if (data.mode === 'bot') {
-            await startBotGame(socket, data.difficulty || 'medium'); // <--- AWAIT
+            await startBotGame(socket, data.difficulty || 'medium'); 
         } else {
             joinGlobalGame(socket);
         }
@@ -149,25 +161,20 @@ io.on('connection', async (socket) => {
 
         if (!game) return;
         
-        // 1. Mark seat ready
         if (!game.readySeats) game.readySeats = new Set();
         game.readySeats.add(data.seat);
 
-        // Auto-ready Bots (if any)
         if (gameBots[gameId]) {
             Object.keys(gameBots[gameId]).forEach(botSeat => {
                 game.readySeats.add(parseInt(botSeat));
             });
         }
 
-        // 2. BROADCAST STATUS (So clients can update lights)
-        // Convert Set to Array for sending
         const readyArray = Array.from(game.readySeats);
         io.to(gameId).emit('ready_status', { readySeats: readyArray });
 
         console.log(`[Ready] Seat ${data.seat} Ready. Total: ${game.readySeats.size}/4`);
 
-        // 3. START GAME if 4/4
         if (game.readySeats.size === 4 && game.currentPlayer === -1) {
              console.log(`[Start] All players ready!`);
              
@@ -181,176 +188,148 @@ io.on('connection', async (socket) => {
     });
 
     socket.on('act_draw', (data) => {
-    const gameId = socket.data.gameId;
-    const game = games[gameId]; 
-
-    if (!game) return;
-
-    // Execute Logic
-    const result = game.drawFromDeck(data.seat);
-
-    if (result.success) {
-        broadcastAll(gameId, data.seat); 
-    } else {
-        // --- NEW: Tell the client WHY it failed ---
-        console.log(`[Draw Failed] Seat ${data.seat}: ${result.message}`);
-        socket.emit('error_message', result.message);
-    }
-});
+        const gameId = socket.data.gameId;
+        const game = games[gameId]; 
+        if (!game) return;
+        const result = game.drawFromDeck(data.seat);
+        // CHECK FOR DECK EMPTY GAME OVER
+        if (result.success && result.message === "GAME_OVER_DECK_EMPTY") {
+            handleRoundEnd(gameId, io); // <--- NEW FLOW
+        } else if (result.success) {
+            broadcastAll(gameId, data.seat);
+        } else {
+            socket.emit('error_message', result.message);
+        }
+    });
     
     socket.on('act_pickup', (data) => {
-    const gameId = socket.data.gameId; // Get the ID attached to this user
-    const game = games[gameId];        // Look up the specific game instance
-
-    if (game) { 
-        let res = game.pickupDiscardPile(data.seat); 
-        // Note: We now pass gameId to broadcastAll so it updates the correct room
-        res.success ? broadcastAll(gameId, data.seat) : socket.emit('error_message', res.message); 
-    }
-});
+        const gameId = socket.data.gameId; 
+        const game = games[gameId];        
+        if (game) { 
+            let res = game.pickupDiscardPile(data.seat); 
+            res.success ? broadcastAll(gameId, data.seat) : socket.emit('error_message', res.message); 
+        }
+    });
     
     socket.on('act_meld', (data) => { 
-    const gameId = socket.data.gameId;
-    const game = games[gameId];
-
-    if (game) { 
-        let res = game.meldCards(data.seat, data.indices, data.targetRank); 
-        res.success ? broadcastAll(gameId, data.seat) : socket.emit('error_message', res.message); 
-    }
-});
+        const gameId = socket.data.gameId;
+        const game = games[gameId];
+        if (game) { 
+            let res = game.meldCards(data.seat, data.indices, data.targetRank); 
+            if (res.success && res.message === "GAME_OVER") {
+                handleRoundEnd(gameId, io); // <--- NEW FLOW
+            } else if (res.success) {
+                broadcastAll(gameId, data.seat);
+            } else {
+                socket.emit('error_message', res.message);
+            }
+        }
+    });
     
     socket.on('act_discard', (data) => { 
-    const gameId = socket.data.gameId;
-    const game = games[gameId];
-
-    if (game) { 
-        let res = game.discardFromHand(data.seat, data.index); 
-        res.success ? broadcastAll(gameId, data.seat) : socket.emit('error_message', res.message); 
-    }
-});
+        const gameId = socket.data.gameId;
+        const game = games[gameId];
+        if (game) { 
+            let res = game.discardFromHand(data.seat, data.index); 
+            if (res.success && res.message === "GAME_OVER") {
+                handleRoundEnd(gameId, io); // <--- NEW FLOW
+            } else if (res.success) {
+                broadcastAll(gameId, data.seat);
+            } else {
+                socket.emit('error_message', res.message);
+            }
+        }
+    });
     
     socket.on('act_open_game', (data) => { 
-    const gameId = socket.data.gameId;
-    const game = games[gameId];
-
-    if (game) { 
-        let res = game.processOpening(data.seat, data.melds, data.pickup); 
-        if (res.success) {
-            broadcastAll(gameId, data.seat); 
-        } else {
-            socket.emit('error_message', res.message); 
+        const gameId = socket.data.gameId;
+        const game = games[gameId];
+        if (game) { 
+            let res = game.processOpening(data.seat, data.melds, data.pickup); 
+            if (res.success && res.message === "GAME_OVER") {
+                handleRoundEnd(gameId, io); // <--- NEW FLOW
+            } else if (res.success) {
+                broadcastAll(gameId, data.seat);
+            } else {
+                socket.emit('error_message', res.message);
+            }
         }
-    }
-});
+    });
     
     socket.on('act_next_round', () => {
         const gameId = socket.data.gameId;
         const game = games[gameId];
+        if (!game) return;
 
-        // [DEBUG] Diagnostic Logs
-        if (!game) {
-            console.log(`[DEBUG-NEXT] Click ignored: Game ${gameId} not found (Match might be over).`);
-            socket.emit('error_message', "Game not found. The match may have ended.");
-            return;
-        }
-        
-        console.log(`[DEBUG-NEXT] Request received. Phase: ${game.turnPhase}, Transitioning: ${game.isTransitioning}`);
-
-        // Check game specific flag
+        // We only proceed if we are in 'game_over' but NOT 'match_over' logic
         if (game.turnPhase === "game_over" && !game.isTransitioning) {
             game.isTransitioning = true;
-            console.log(`[DEBUG-NEXT] Starting next round logic...`);
             
-            // Check Match Over
-            let matchResult = game.startNextRound(); 
-
-            if (matchResult) {
-    console.log(`[DEBUG-NEXT] MATCH ENDED! Winner: Team ${matchResult}`);
-    const winnerTeam = (matchResult === 'team1') ? 0 : 1; 
-
-    io.in(gameId).fetchSockets().then(sockets => {
-        sockets.forEach(async (s) => {
-            const seat = s.data.seat;
-            const token = s.handshake.auth.token;
-            if (!token) return;
-
-            const isTeam1 = (seat === 0 || seat === 2);
-            const playerWon = (winnerTeam === 0 && isTeam1) || (winnerTeam === 1 && !isTeam1);
+            // Just setup the round (scores already handled)
+            game.startNextRound(); 
             
-            // MongoDB Update
-            try {
-                if (playerWon) {
-                    await User.updateOne({ token: token }, { $inc: { "stats.wins": 1 } });
-                } else {
-                    await User.updateOne({ token: token }, { $inc: { "stats.losses": 1 } });
-                }
-            } catch (e) {
-                console.error("Stats update failed", e);
-            }
-        });
-    });       
-                
-                // 1. Send the Final Data
-                io.to(gameId).emit('match_over', { 
-                    winner: matchResult, 
-                    scores: game.cumulativeScores 
-                });
-                
-                // 2. CLEANUP (DELAYED)
-                // Wait 60 seconds before deleting the game from memory.
-                // This prevents "Game Not Found" errors if users refresh the victory screen.
-                setTimeout(() => {
-                    delete games[gameId];
-                    delete gameBots[gameId];
-                    console.log(`[SERVER] Game ${gameId} cleaned up.`);
-                }, 60000); // 1 minute delay
-                
+            // Reset transition flags
+            game.readySeats = new Set();
+            if (gameBots[gameId]) {
+                game.readySeats.add(0);
+                Object.keys(gameBots[gameId]).forEach(b => game.readySeats.add(parseInt(b)));
             } else {
-                console.log(`[DEBUG-NEXT] Resetting for new round...`);
-                // Next Round Setup
-                game.readySeats = new Set(); 
-                game.currentPlayer = -1;     
-                game.isTransitioning = false;
-                
-                // FORCE UNLOCK BOTS (Just in case)
-                game.processingTurnFor = null;
+                game.currentPlayer = -1;
+            }
+            game.isTransitioning = false;
+            game.processingTurnFor = null;
 
-                // Re-deal: Iterate only sockets in this room
-                io.in(gameId).fetchSockets().then(sockets => {
-                    console.log(`[DEBUG-NEXT] Sending new hands to ${sockets.length} players.`);
-                    sockets.forEach(s => {
-                        if (s.data.seat !== undefined) {
-                            sendUpdate(gameId, s.id, s.data.seat);
-                        }
-                    });
+            // Broadcast new hands
+            io.in(gameId).fetchSockets().then(sockets => {
+                sockets.forEach(s => {
+                    if (s.data.seat !== undefined) sendUpdate(gameId, s.id, s.data.seat);
                 });
-            }
-        } else {
-            console.log(`[DEBUG-NEXT] Ignored. Conditions not met.`);
-            // [OPTIONAL] Force fix if it's stuck
-            if (game.turnPhase === "game_over" && game.isTransitioning) {
-                 console.log(`[DEBUG-NEXT] FIX: Resetting stuck transition flag.`);
-                 game.isTransitioning = false;
-            }
+                checkBotTurn(gameId);
+            });
         }
     });
-// --- NEW HANDLER: LEAVE GAME (Async) ---
-    socket.on('leave_game', async () => { // <--- Mark function ASYNC
+
+    // --- TIMEOUT HANDLER ---
+    socket.on('act_timeout', async () => {
+        const gameId = socket.data.gameId;
+        const game = games[gameId];
+        if (!game) return;
+
+        // Security: Ensure the player claiming timeout is actually the one whose turn it is
+        if (game.currentPlayer !== socket.data.seat) return;
+
+        console.log(`[TIMEOUT] Player ${socket.data.seat} ran out of time.`);
+
+        // 1. Determine Winner (Opposing Team)
+        // Seat 0 & 2 = Team 1 | Seat 1 & 3 = Team 2
+        const loserTeam = (socket.data.seat % 2 === 0) ? "team1" : "team2";
+        const winner = (loserTeam === "team1") ? "team2" : "team1";
+
+        // 2. Broadcast Match Over
+        io.to(gameId).emit('match_over', {
+            winner: winner,
+            scores: game.cumulativeScores,
+            reason: "timeout"
+        });
+
+        // 3. Cleanup
+        setTimeout(() => {
+            delete games[gameId];
+            delete gameBots[gameId];
+        }, 5000); // Short delay to allow clients to receive the message
+    });
+    
+    socket.on('leave_game', async () => { 
         const gameId = socket.data.gameId;
         const token = socket.handshake.auth.token;
 
         console.log(`[Leave] User requesting to leave Game ${gameId}`);
-
-        // 1. Clear Session
         if (token && playerSessions[token]) delete playerSessions[token];
-
-        // 2. Clear Socket Data
         socket.data.gameId = null;
         socket.data.seat = null;
         
-        // 3. Leave Room
         if (gameId) {
-            await socket.leave(gameId); // <--- AWAIT
+            await socket.leave(gameId); 
             waitingPlayers = waitingPlayers.filter(s => s.id !== socket.id);
         }
     });
@@ -366,16 +345,15 @@ function generateGameId() {
     return 'game_' + Math.random().toString(36).substr(2, 9);
 }
 
-async function startBotGame(humanSocket, difficulty) { // <--- Mark ASYNC
+async function startBotGame(humanSocket, difficulty) {
     const gameId = generateGameId();
     games[gameId] = new CanastaGame();
     games[gameId].resetMatch();
-    games[gameId].names = ["Bot 1", "Bot 2", "Bot 3", "Bot 4"];
     const userName = humanSocket.handshake.auth.username || "Player";
-    games[gameId].names[0] = userName;
+    games[gameId].names = [userName, "Bot 1", "Bot 2", "Bot 3"];
     gameBots[gameId] = {};
 
-    await humanSocket.join(gameId); // <--- AWAIT
+    await humanSocket.join(gameId); 
     humanSocket.data.seat = 0;
     humanSocket.data.gameId = gameId;
 
@@ -393,36 +371,28 @@ async function startBotGame(humanSocket, difficulty) { // <--- Mark ASYNC
 }
 
 function joinGlobalGame(socket) {
-    // 1. Add player to lobby if not already there
     if (waitingPlayers.find(s => s.id === socket.id)) return;
     waitingPlayers.push(socket);
 
-    // 2. Check if we have 4 players to start a match
     if (waitingPlayers.length === 4) {
         const gameId = generateGameId();
         
-        // Create the game instance
         games[gameId] = new CanastaGame();
         games[gameId].resetMatch();
         games[gameId].readySeats = new Set();
         games[gameId].currentPlayer = -1;
         games[gameId].names = ["Player 1", "Player 2", "Player 3", "Player 4"];
         
-        // Loop through the 4 waiting players and assign them seats
         waitingPlayers.forEach((p, i) => {
-            p.join(gameId); // Socket join room
+            p.join(gameId); 
             p.data.seat = i;
             p.data.gameId = gameId;
 
-            // Extract username from the socket handshake and save to game
             const pName = p.handshake.auth.username || `Player ${i+1}`;
             games[gameId].names[i] = pName;
 
             const token = p.handshake.auth.token;
-            
-            // Save session so they can reconnect if they refresh
             if (token) {
-                 // We preserve the username if we cached it earlier
                  const cachedName = playerSessions[token] ? playerSessions[token].username : null;
                  playerSessions[token] = { 
                      gameId: gameId, 
@@ -430,11 +400,8 @@ function joinGlobalGame(socket) {
                      username: cachedName 
                  }; 
             }
-            
             sendUpdate(gameId, p.id, i);
         });
-        
-        // Clear the lobby
         waitingPlayers = []; 
     }
 }
@@ -449,7 +416,7 @@ function getFreezingCard(game) {
 }
 
 function sendUpdate(gameId, socketId, seat) {
-    const game = games[gameId]; // Look up the specific game
+    const game = games[gameId]; 
     if (!game) return;
 
     const pile = game.discardPile;
@@ -481,10 +448,9 @@ function sendUpdate(gameId, socketId, seat) {
 }
 
 function broadcastAll(gameId, activeSeat) {
-    const game = games[gameId]; // Look up the specific game
+    const game = games[gameId]; 
     if (!game) return;
 
-    // --- SHARED DATA (Same for everyone) ---
     const pile = game.discardPile;
     const topCard = pile.length > 0 ? pile[pile.length-1] : null;
     const prevCard = pile.length > 1 ? pile[pile.length-2] : null;
@@ -493,9 +459,7 @@ function broadcastAll(gameId, activeSeat) {
     const handSizes = game.players.map(p => p.length);
     const names = getPlayerNames(gameId);
 
-    // --- PER-PLAYER UPDATE ---
     io.sockets.sockets.forEach((s) => {
-        // Only update players currently in this specific game
         if (s.data.gameId === gameId) {
             let update = {
                 currentPlayer: game.currentPlayer, 
@@ -515,78 +479,129 @@ function broadcastAll(gameId, activeSeat) {
                 deckSize: game.deck.length
             };
             
-            // Attach PRIVATE hand for this specific player
             let seat = s.data.seat;
             if (seat !== undefined && game.players[seat]) {
                 update.hand = game.players[seat];
             }
-            
             s.emit('update_game', update);
         }
     });
 
-    // Trigger bot if it's their turn
     checkBotTurn(gameId);
 }
 
 function checkBotTurn(gameId) {
     const game = games[gameId];
-    
-    // Check if this game exists and has bots assigned
     if (!game || !gameBots[gameId]) return;
+
+    // 1. Safety: Don't let bots play if the game is already over
+    if (game.turnPhase === 'game_over') return;
 
     let curr = game.currentPlayer;
     let bot = gameBots[gameId][curr];
 
-    // --- NEW LOGIC: PREVENT INFINITE LOOP ---
-    // If we are already processing this specific player's turn, STOP.
+    // Prevent double-submission if bot is already thinking
     if (game.processingTurnFor === curr) return; 
 
     if (bot) {
-        // Lock this turn so we don't trigger it again during intermediate updates
         game.processingTurnFor = curr;
-
-        // Run bot logic
+        
+        // Pass a callback that runs after every bot action (Draw, Meld, Discard)
         bot.executeTurn(game, (updatedSeat) => {
-            // Callback: Bot finished a step (Draw, Meld, or Discard)
-            broadcastAll(gameId, updatedSeat); 
+            
+            // --- FIX: CHECK IF BOT ENDED THE ROUND ---
+            if (game.turnPhase === 'game_over') {
+                console.log(`[BOT] Player ${updatedSeat} ended the round.`);
+                game.processingTurnFor = null; // Release lock
+                handleRoundEnd(gameId, io);    // Trigger Score Calculation & Events
+            } else {
+                // Normal turn update
+                broadcastAll(gameId, updatedSeat); 
+            }
         });
     } else {
-        // It's a human's turn, so clear the lock
         game.processingTurnFor = null;
     }
 }
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, '0.0.0.0', () => { 
-    console.log(`Server running on port ${PORT}`);
-});
-
-async function cacheUsernames(gameId) {
-    // This is a helper you can call when a game starts to load names into memory
-    // For now, we can modify getPlayerNames to query DB if needed, but that's slow.
-    // simpler strategy: Trust the client provided username or fetch on login.
-}
-
 function getPlayerNames(gameId) {
-    // If the game exists and has names stored, return them
     if (games[gameId] && games[gameId].names) {
         return games[gameId].names;
     }
-    // Fallback if something goes wrong
     return ["Bot 1", "Bot 2", "Bot 3", "Bot 4"];
 }
 
-// PREVENT SLEEP MODE (Self-Ping)
-const https = require('https'); // Use 'http' if running locally, 'https' for Render
+// server.js - Helper Function
 
+async function handleRoundEnd(gameId, io) {
+    const game = games[gameId];
+    if (!game) return;
+
+    // 1. Commit scores and check if match is over
+    const result = game.resolveMatchStatus();
+
+    // 2. CASE A: MATCH OVER (5000+ points)
+    if (result.isMatchOver) {
+        console.log(`[MATCH END] Game ${gameId} won by ${result.winner}`);
+
+        // Update DB Stats (if not dev mode)
+        if (!DEV_MODE) {
+            const winnerTeam = (result.winner === 'team1') ? 0 : 1;
+            const sockets = await io.in(gameId).fetchSockets();
+            
+            for (const s of sockets) {
+                const seat = s.data.seat;
+                const token = s.handshake.auth.token;
+                if (!token) continue;
+
+                const isTeam1 = (seat === 0 || seat === 2);
+                const playerWon = (winnerTeam === 0 && isTeam1) || (winnerTeam === 1 && !isTeam1);
+
+                try {
+                    const updateField = playerWon ? "stats.wins" : "stats.losses";
+                    await User.updateOne({ token: token }, { $inc: { [updateField]: 1 } });
+                } catch (e) { console.error("Stats update failed", e); }
+            }
+        }
+
+        // Emit MATCH_OVER immediately (Skips Round End Popup)
+        io.to(gameId).emit('match_over', {
+            winner: result.winner,
+            scores: game.cumulativeScores, // Send FINAL cumulative scores
+            reason: "score_limit"
+        });
+
+        // Cleanup
+        setTimeout(() => {
+            delete games[gameId];
+            delete gameBots[gameId];
+        }, 60000);
+
+    } 
+    // 3. CASE B: JUST A ROUND END
+    else {
+        // Emit standard update (Client triggers Round End Popup)
+        // We pass the "round" scores via update_game's standard payload
+        broadcastAll(gameId); 
+    }
+}
+
+// Keep-Alive for Render (Optional for Local)
+const https = require('https'); 
 setInterval(() => {
-    const url = 'https://la-canasta.onrender.com/'; // <--- REPLACE THIS WITH YOUR ACTUAL RENDER URL
-    
-    https.get(url, (res) => {
-        console.log(`[Keep-Alive] Ping sent to ${url}. Status: ${res.statusCode}`);
-    }).on('error', (e) => {
-        console.error(`[Keep-Alive] Error: ${e.message}`);
-    });
+    // Only ping if NOT in dev mode, to prevent local errors
+    if (!DEV_MODE) {
+        const url = 'https://la-canasta.onrender.com/'; 
+        https.get(url, (res) => {
+             // console.log(`[Keep-Alive] Ping sent.`);
+        }).on('error', (e) => {
+             // console.error(`[Keep-Alive] Error: ${e.message}`);
+        });
+    }
+}, 14 * 60 * 1000); 
 
-}, 14 * 60 * 1000); // 14 minutes in milliseconds
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, '0.0.0.0', () => { 
+    console.log(`Server running on port ${PORT}`);
+    if (DEV_MODE) console.log("⚠️  DEV MODE ACTIVE: DB Disabled. Use ANY login.");
+});

@@ -88,69 +88,77 @@ function renderTable(elementId, meldsObj, red3sArray) {
     if (!container) return;
     
     container.innerHTML = "";
-    const groupsToRender = [];
 
-    const isDesktop = window.innerWidth > 800;
-    const visibleStrip = isDesktop ? 22 : 18; 
-    const cardHeight = isDesktop ? 105 : 70;
-    const vertMargin = visibleStrip - cardHeight; 
-
-    if (red3sArray && red3sArray.length > 0) {
-        groupsToRender.push({ type: 'red3', label: '', cards: red3sArray });
-    }
+    // 1. Sort & Separate Data (Open Melds vs Canastas)
+    const rankPriority = ["A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3"];
+    const openMelds = [];
+    const closedMelds = []; // Canastas (7+ cards)
 
     if (meldsObj) {
-        const rankPriority = ["A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3"];
         const sortedRanks = Object.keys(meldsObj).sort((a, b) => { 
             return rankPriority.indexOf(a) - rankPriority.indexOf(b); 
         });
         
         sortedRanks.forEach(rank => { 
-            groupsToRender.push({ 
-                type: 'meld', 
-                rank: rank, 
-                label: meldsObj[rank].length, 
-                cards: meldsObj[rank] 
-            }); 
+            const pile = meldsObj[rank];
+            if (pile.length >= 7) {
+                closedMelds.push({ rank: rank, cards: pile });
+            } else {
+                openMelds.push({ rank: rank, cards: pile, label: pile.length });
+            }
         });
     }
 
-    const safeWidth = container.clientWidth || window.innerWidth;
-    const containerWidth = safeWidth - 10; 
+    const isDesktop = window.innerWidth > 800;
     const groupWidth = isDesktop ? 75 : 50;
-    const totalGroups = groupsToRender.length; 
-    let horizMargin = 5; 
+    const offsetStep = isDesktop ? 30 : 25; // Spacing between Canastas
+    const red3Overlap = 15; // Tighter overlap for Red 3s
 
-    if (totalGroups > 1) {
-         const calculated = ((containerWidth - groupWidth) / (totalGroups - 1)) - groupWidth;
-         horizMargin = Math.min(10, Math.max(-15, calculated));
-    }
+    // --- 2. RENDER THE "BONUS STACK" (Red 3s + Canastas) ---
+    const hasRed3s = (red3sArray && red3sArray.length > 0);
+    const hasCanastas = (closedMelds.length > 0);
 
-    groupsToRender.forEach((groupData, gIdx) => {
-        const groupDiv = document.createElement("div");
-        groupDiv.className = "meld-group";
-        const teamSuffix = (elementId === "my-melds") ? "my" : "enemy";
-        groupDiv.id = `meld-pile-${teamSuffix}-${groupData.rank}`;
+    if (hasRed3s || hasCanastas) {
+        const stackDiv = document.createElement("div");
+        stackDiv.className = "meld-group";
         
-        groupDiv.style.position = "relative";
-        groupDiv.style.zIndex = gIdx; 
+        // Layout: Relative container to hold absolute stacked cards
+        stackDiv.style.position = "relative";
+        stackDiv.style.marginRight = "10px"; 
+        stackDiv.style.minWidth = "var(--card-w)"; 
         
-        if (gIdx < totalGroups - 1) {
-            groupDiv.style.marginRight = `${horizMargin}px`;
+        let zIndex = 1;
+        let topOffset = 0;
+
+        // A. Render Red 3s (Base of the stack - Cascading)
+        if (hasRed3s) {
+            red3sArray.forEach((card, idx) => {
+                const r3Img = document.createElement("img");
+                r3Img.src = getCardImage(card);
+                r3Img.className = "card-img meld-card";
+                r3Img.style.position = "absolute";
+                
+                // Cascade logic: Shift each 3 down slightly
+                const currentPos = idx * red3Overlap;
+                r3Img.style.top = `${currentPos}px`;
+                r3Img.style.left = "0";
+                
+                r3Img.style.zIndex = zIndex++;
+                r3Img.style.boxShadow = "2px 2px 0 #555";
+                stackDiv.appendChild(r3Img);
+                
+                // Track the bottom of the last Red 3 to start Canastas below it
+                if (idx === red3sArray.length - 1) {
+                    topOffset = currentPos + offsetStep;
+                }
+            });
         }
 
-        if (elementId === "my-melds" && groupData.type === 'meld') {
-            groupDiv.setAttribute("onclick", `handleMeldClick(event, '${groupData.rank}')`);
-            groupDiv.style.cursor = "pointer";
-        }
-        
-        let html = `<span class='meld-label'>${groupData.label}</span>`;
-        html += `<div class='meld-container' style='display:flex; flex-direction:column; align-items:center;'>`;
-        
-        const pile = groupData.cards;
-        const isClosed = (groupData.type !== 'red3' && pile.length >= 7);
-
-        if (isClosed) {
+        // B. Render Canastas (Stacked on top)
+        closedMelds.forEach(m => {
+            const pile = m.cards;
+            
+            // Determine Top Card
             const isNatural = !pile.some(c => c.isWild);
             let topCard = pile[0]; 
             if (isNatural) {
@@ -158,27 +166,109 @@ function renderTable(elementId, meldsObj, red3sArray) {
             } else {
                 topCard = pile.find(c => !c.isWild && (c.suit === 'Clubs' || c.suit === 'Spades')) || pile[0];
             }
+
+            const cWrapper = document.createElement("div");
+            cWrapper.style.position = "absolute";
+            cWrapper.style.top = `${topOffset}px`;
+            cWrapper.style.left = "0";
+            cWrapper.style.zIndex = zIndex++;
             
+            // --- UPDATED BADGE: Right Aligned ---
             const badgeColor = isNatural ? "#d63031" : "#2d3436";
             const badgeText = isNatural ? "NAT" : "MIX";
+            
+            cWrapper.innerHTML = `
+                <img src="${getCardImage(topCard)}" class="card-img meld-card" style="box-shadow: 2px 2px 3px rgba(0,0,0,0.4); border:1px solid #000;">
+                <div style="
+                    position: absolute; 
+                    top: 4px; 
+                    right: 4px; /* <--- ALIGNED RIGHT */
+                    background: ${badgeColor}; 
+                    color: white; 
+                    font-size: 9px; 
+                    font-weight: bold;
+                    padding: 1px 4px; 
+                    border: 1px solid rgba(255,255,255,0.8);
+                    border-radius: 4px;
+                    z-index: 10;
+                    white-space: nowrap;
+                    box-shadow: 0 1px 2px rgba(0,0,0,0.8);
+                ">
+                    ${badgeText}
+                </div>
+            `;
+            
+            stackDiv.appendChild(cWrapper);
+            topOffset += offsetStep;
+        });
 
-            html += `
-                <div style="position:relative;">
-                    <img src="${getCardImage(topCard)}" class="card-img meld-card" style="box-shadow:2px 2px 0 #555; border:1px solid #000;">
-                    <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-30deg); background:${badgeColor}; color:white; font-size:8px; padding:1px 3px; border:1px solid white;">
-                        ${badgeText}
-                    </div>
-                </div>`;
-        } else {
-            let activeMargin = vertMargin;
-            if (pile.length > 5) activeMargin -= 5; 
+        // C. Spacer to maintain container height
+        const spacer = document.createElement("div");
+        spacer.style.width = "var(--card-w)";
+        spacer.style.height = `calc(var(--card-h) + ${Math.max(0, topOffset - offsetStep)}px)`;
+        stackDiv.appendChild(spacer);
 
-            pile.forEach((c, cIdx) => { 
-                const marginTop = (cIdx > 0) ? `margin-top:${activeMargin}px;` : "";
-                html += `<img src="${getCardImage(c)}" class="card-img meld-card" style="${marginTop} margin-left: 0; transform: none; box-shadow: 1px 1px 2px rgba(0,0,0,0.3);">`; 
-            });
-        }
+        container.appendChild(stackDiv);
+    }
+
+    // --- 3. RENDER OPEN MELDS (Standard Waterfall) ---
+    if (openMelds.length === 0) return;
+
+    const safeWidth = container.clientWidth || window.innerWidth;
+    const usedWidth = (hasRed3s || hasCanastas) ? (groupWidth + 20) : 0;
+    const containerWidth = safeWidth - usedWidth - 10; 
+    
+    let horizMargin = 5; 
+
+    if (openMelds.length > 1) {
+         const calculated = ((containerWidth - groupWidth) / (openMelds.length - 1)) - groupWidth;
+         const minVisible = 15; 
+         const maxSqueeze = -(groupWidth - minVisible); 
+         horizMargin = Math.min(10, Math.max(maxSqueeze, calculated));
+    }
+
+    const cardHeight = isDesktop ? 105 : 70;
+    const visibleStrip = isDesktop ? 22 : 18;
+    const vertMargin = visibleStrip - cardHeight;
+
+    openMelds.forEach((groupData, gIdx) => {
+        const groupDiv = document.createElement("div");
+        groupDiv.className = "meld-group";
+        const teamSuffix = (elementId === "my-melds") ? "my" : "enemy";
+        groupDiv.id = `meld-pile-${teamSuffix}-${groupData.rank}`;
         
+        groupDiv.style.position = "relative";
+        groupDiv.style.zIndex = gIdx + 100;
+        
+        if (gIdx < openMelds.length - 1) {
+            groupDiv.style.marginRight = `${horizMargin}px`;
+        }
+
+        if (elementId === "my-melds") {
+            groupDiv.setAttribute("onclick", `handleMeldClick(event, '${groupData.rank}')`);
+            groupDiv.style.cursor = "pointer";
+        }
+        let html = "";
+        html += `<div class='meld-container' style='display:flex; flex-direction:column; align-items:center;'>`;
+        
+        let activeMargin = vertMargin;
+        if (groupData.cards.length > 5) activeMargin -= 5; 
+
+        groupData.cards.forEach((c, cIdx) => { 
+            const marginTop = (cIdx > 0) ? `margin-top:${activeMargin}px;` : "";
+            
+            // --- ROTATION LOGIC (Now correctly INSIDE the loop) ---
+            let transformStyle = "transform: none;";
+            
+            // Check if this specific pile has 6 cards AND we are drawing the last one (index 5)
+            if (groupData.cards.length === 6 && cIdx === 5) {
+                transformStyle = "transform: rotate(-45deg) translateX(10px) translateY(-5px);";
+            }
+
+            // Apply the transformStyle to the img tag
+            html += `<img src="${getCardImage(c)}" class="card-img meld-card" style="${marginTop} margin-left: 0; ${transformStyle} box-shadow: 1px 1px 2px rgba(0,0,0,0.3);">`; 
+        });
+
         html += "</div>"; 
         groupDiv.innerHTML = html; 
         container.appendChild(groupDiv);
@@ -207,7 +297,7 @@ function renderOtherHand(elementId, count, orientation) {
         const card = document.createElement("div");
         card.className = (orientation === 'vert') ? "side-card" : "partner-card";
         if (i > 0) {
-            if (orientation === 'vert') card.style.marginTop = "-35px";
+            if (orientation === 'vert') card.style.marginTop = "-55px";
             else card.style.marginLeft = "-35px";
         }
         div.appendChild(card);
@@ -291,6 +381,44 @@ function renderHand(hand) {
     });
 }
 
+// ui.js - Replace the existing incomplete showScoreModal function with this:
+
 function showScoreModal(round, match) {
+    // 1. Show the modal
     document.getElementById('score-modal').style.display = 'flex';
+
+    // 2. Safety check: Ensure data exists before trying to read it
+    if (!round || !round.team1 || !round.team2 || !match) return;
+
+    // 3. Update Match Score Header (Cumulative)
+    // We add the current round score to the previous cumulative score for the "Match Score" display
+    // Note: The server might have already added them depending on timing, but usually 
+    // 'match' is the score BEFORE this round, or we can just display what the server sent.
+    // Based on your server logic, 'match' is cumulative. 
+    // Let's display the TOTAL (Existing Cumulative + This Round) or just the raw data.
+    // Ideally, pass the UPDATED totals. For now, we display what is passed.
+    document.getElementById('match-s1').innerText = match.team1;
+    document.getElementById('match-s2').innerText = match.team2;
+
+    // 4. Helper to set text by ID
+    const setText = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.innerText = val;
+    };
+
+    // 5. Populate Team 1 Column
+    setText('row-base-1',    round.team1.basePoints);
+    setText('row-red3-1',    round.team1.red3Points);
+    setText('row-canasta-1', round.team1.canastaBonus);
+    setText('row-bonus-1',   round.team1.goOutBonus);
+    setText('row-deduct-1',  round.team1.deductions);
+    setText('row-total-1',   round.team1.total);
+
+    // 6. Populate Team 2 Column
+    setText('row-base-2',    round.team2.basePoints);
+    setText('row-red3-2',    round.team2.red3Points);
+    setText('row-canasta-2', round.team2.canastaBonus);
+    setText('row-bonus-2',   round.team2.goOutBonus);
+    setText('row-deduct-2',  round.team2.deductions);
+    setText('row-total-2',   round.team2.total);
 }
