@@ -392,10 +392,19 @@ function renderHand(hand) {
     const totalGroups = groups.length;
     let groupOverlap = 5; 
 
+    // Calculate overlap to squeeze cards if they exceed container width
     if (totalGroups > 1) {
         const calculated = ((containerWidth - groupWidth) / (totalGroups - 1)) - groupWidth;
-        const minOverlap = isDesktop ? -50 : -30;
-        groupOverlap = Math.min(15, Math.max(minOverlap, calculated));
+        
+        // 1. Define Squeeze Limits (How tight can they get?)
+        const minOverlap = isDesktop ? -60 : -30; 
+
+        // 2. Define Spread Limits (How far apart can they be?)
+        // Desktop: Force overlap of -40px (leaving ~35px visible per card) even if there is plenty of space.
+        // Mobile: Allow them to spread with a gap (15px) if few cards.
+        const maxSpacing = isDesktop ? -40 : 15; 
+        
+        groupOverlap = Math.min(maxSpacing, Math.max(minOverlap, calculated));
     }
 
     groups.forEach((grp, gIndex) => {
