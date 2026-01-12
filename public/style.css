@@ -161,13 +161,63 @@ body {
 /* ========================================= */
 /* === CARDS & TABLE ELEMENTS === */
 /* ========================================= */
-    
+
 /* Push Left Opponent further Left */
 #hand-left { transform: translateX(-20px); }
 /* Push Right Opponent further Right */
 #hand-right { transform: translateX(20px); }
 
-.vert-hand-container { display: flex; flex-direction: column; justify-content: center; height: 100%; overflow: hidden }
+/* style.css */
+
+/* 1. ALLOW VISUAL OVERFLOW */
+/* This ensures the "top" of the cards isn't chopped off by the container box */
+.vert-hand-container { 
+    display: flex; 
+    flex-direction: column; 
+    justify-content: center; 
+    height: 100%; 
+    width: 100%;
+    
+    /* CHANGE: Allow cards to stick out horizontally so we see the full card */
+    overflow: visible !important; 
+    
+    position: relative;
+}
+
+/* DESKTOP OVERRIDES */
+@media (min-width: 800px) {
+
+    /* 2. LEFT PLAYER (P4) */
+    #hand-left {
+        /* Align to the Screen Edge (Left) */
+        align-items: flex-start !important; 
+        
+        /* Remove old padding that might push cards 'in' too much */
+        padding: 20px 0; 
+        
+        /* OPTIONAL: Nudge them slightly 'out' so the screen cuts the bottom, 
+           but the 'top' (table-facing side) is fully visible. 
+           (10px margin ensures we see the card pattern clearly) */
+        margin-left: 5px !important;
+    }
+
+    /* 3. RIGHT PLAYER (P2) */
+    #hand-right {
+        /* Align to the Screen Edge (Right) */
+        align-items: flex-end !important; 
+        
+        padding: 20px 0;
+        
+        /* Nudge slightly 'out' from the right wall */
+        margin-right: 5px !important; 
+    }
+    
+    /* Ensure the Side Zones don't clip either */
+    .side-zone {
+        overflow: visible !important;
+    }
+}
+
 .horiz-hand-container { display: flex; flex-direction: row; align-items: center; justify-content: center; }
     /* 2. Left Player (P4): Align to Left Edge (Screen Side) */
 #hand-left {
