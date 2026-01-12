@@ -668,7 +668,7 @@ body {
     /* Adjust Card rotation overlap for vertical columns */
     .side-card { margin-top: -50px; }
     /* FORCE TRANSPARENT BACKGROUNDS FOR ALL BOTS */
-    #hud-left, #hud-right, #hud-partner {
+    #hud-left, #hud-right {
         background: transparent !important;
         border: none !important;
         box-shadow: none !important;
