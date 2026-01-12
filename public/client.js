@@ -621,8 +621,21 @@ window.doUserSearch = () => {
     if (q.length > 2) state.socket.emit('social_search', q);
 };
 
-window.addFriend = (name) => state.socket.emit('social_add_friend', name);
+window.addFriend = (name, btn) => {
+    state.socket.emit('social_add_friend', name);
+    
+    // VISUAL FEEDBACK
+    if (btn) {
+        btn.innerText = "✔";       // Change to Checkmark
+        btn.style.background = "#7f8c8d"; // Change to grey to indicate 'disabled/done'
+        btn.disabled = true;       // Prevent double-clicking
+        btn.onclick = null;        // Remove click handler
+    }
+};
+
 window.blockUser = (name) => state.socket.emit('social_block_user', name);
+
+// client.js
 
 function renderUserList(names, mode) {
     const div = document.getElementById('friend-content');
@@ -638,7 +651,8 @@ function renderUserList(names, mode) {
         
         let actions = "";
         if (mode === 'search') {
-            actions = `<button onclick="addFriend('${name}')" style="background:#2ecc71; border:none; border-radius:4px; cursor:pointer;">+</button>`;
+            // CHANGE: Added 'this' to the onclick handler
+            actions = `<button onclick="addFriend('${name}', this)" style="background:#2ecc71; border:none; border-radius:4px; cursor:pointer; width:30px; color:#2c3e50; font-weight:bold;">+</button>`;
         } else if (mode === 'list') {
             actions = `<button onclick="blockUser('${name}')" style="background:#e74c3c; color:white; border:none; border-radius:4px; font-size:10px; padding:2px 5px; cursor:pointer;">BLOCK</button>`;
         } else if (mode === 'blocked') {

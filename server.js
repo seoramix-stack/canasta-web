@@ -6,7 +6,7 @@ const { Server } = require('socket.io');
 const mongoose = require('mongoose'); 
 const { CanastaGame } = require('./game'); 
 const { CanastaBot } = require('./bot');
-
+const { calculateEloChange } = require('./elo');
 const app = express();
 app.use(express.json());
 const server = http.createServer(app);
@@ -493,6 +493,7 @@ function joinGlobalGame(socket) {
         
         games[gameId] = new CanastaGame();
         games[gameId].resetMatch();
+        games[gameId].isRated = true;
         games[gameId].readySeats = new Set();
         games[gameId].currentPlayer = -1;
         games[gameId].names = ["Player 1", "Player 2", "Player 3", "Player 4"];
@@ -665,30 +666,76 @@ async function handleRoundEnd(gameId, io) {
     if (result.isMatchOver) {
         console.log(`[MATCH END] Game ${gameId} won by ${result.winner}`);
 
-        // Update DB Stats (if not dev mode)
+        // --- RATING & STATS UPDATE START ---
         if (!DEV_MODE) {
-            const winnerTeam = (result.winner === 'team1') ? 0 : 1;
-            const sockets = await io.in(gameId).fetchSockets();
-            
-            for (const s of sockets) {
-                const seat = s.data.seat;
-                const token = s.handshake.auth.token;
-                if (!token) continue;
+            try {
+                // A. Fetch all sockets to get tokens
+                const sockets = await io.in(gameId).fetchSockets();
+                const players = {}; // Map seat -> User Document
 
-                const isTeam1 = (seat === 0 || seat === 2);
-                const playerWon = (winnerTeam === 0 && isTeam1) || (winnerTeam === 1 && !isTeam1);
+                // B. Fetch User Docs from DB
+                for (const s of sockets) {
+                    const seat = s.data.seat;
+                    const token = s.handshake.auth.token;
+                    if (token) {
+                        const userDoc = await User.findOne({ token: token });
+                        if (userDoc) players[seat] = userDoc;
+                    }
+                }
 
-                try {
-                    const updateField = playerWon ? "stats.wins" : "stats.losses";
-                    await User.updateOne({ token: token }, { $inc: { [updateField]: 1 } });
-                } catch (e) { console.error("Stats update failed", e); }
+                // C. Ensure we have all 4 players for a fair calculation
+                // (If someone disconnected mid-game, we might skip rating or penalize leaver - simple version here)
+                if (Object.keys(players).length === 4 && game.isRated) {
+                    
+                    // 1. Calculate Average Ratings
+                    const team1Rating = (players[0].stats.rating + players[2].stats.rating) / 2;
+                    const team2Rating = (players[1].stats.rating + players[3].stats.rating) / 2;
+
+                    // 2. Get Scores
+                    const s1 = game.cumulativeScores.team1;
+                    const s2 = game.cumulativeScores.team2;
+
+                    // 3. Calculate Delta using our new Elo module
+                    const delta = calculateEloChange(team1Rating, team2Rating, s1, s2);
+                    
+                    console.log(`[ELO] T1(${team1Rating}) vs T2(${team2Rating}) | Score ${s1}-${s2} | Delta: ${delta}`);
+
+                    // 4. Apply Updates
+                    // Team 1 (Seats 0, 2)
+                    players[0].stats.rating += delta;
+                    players[2].stats.rating += delta;
+                    // Team 2 (Seats 1, 3) gets the opposite
+                    players[1].stats.rating -= delta;
+                    players[3].stats.rating -= delta;
+
+                    // Update Wins/Losses
+                    const winnerTeam = (result.winner === 'team1') ? 0 : 1;
+                    [0, 1, 2, 3].forEach(seat => {
+                        const isTeam1 = (seat === 0 || seat === 2);
+                        const won = (winnerTeam === 0 && isTeam1) || (winnerTeam === 1 && !isTeam1);
+                        if (won) players[seat].stats.wins++;
+                        else players[seat].stats.losses++;
+                    });
+
+                    // 5. Save to DB
+                    await Promise.all([
+                        players[0].save(), players[1].save(), players[2].save(), players[3].save()
+                    ]);
+                } else if (!game.isRated) {
+                    // Just update wins/losses for unrated/bot games if needed, or skip
+                    console.log("Game unrated or missing players, skipping Elo.");
+                }
+
+            } catch (e) {
+                console.error("Stats/Elo update failed:", e);
             }
         }
+        // --- RATING & STATS UPDATE END ---
 
-        // Emit MATCH_OVER immediately (Skips Round End Popup)
+        // Emit MATCH_OVER immediately
         io.to(gameId).emit('match_over', {
             winner: result.winner,
-            scores: game.cumulativeScores, // Send FINAL cumulative scores
+            scores: game.cumulativeScores,
             reason: "score_limit"
         });
 
@@ -701,8 +748,6 @@ async function handleRoundEnd(gameId, io) {
     } 
     // 3. CASE B: JUST A ROUND END
     else {
-        // Emit standard update (Client triggers Round End Popup)
-        // We pass the "round" scores via update_game's standard payload
         broadcastAll(gameId); 
     }
 }
