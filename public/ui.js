@@ -25,10 +25,8 @@ export function updateUI(data) {
 
     const readyModal = document.getElementById('ready-modal');
     if (data.currentPlayer === -1 && data.phase !== 'game_over') {
-        // Game hasn't started -> SHOW Ready Modal
         if(readyModal) readyModal.style.display = 'flex';
     } else {
-        // Game is running -> HIDE Ready Modal
         if(readyModal) readyModal.style.display = 'none';
     }
     document.getElementById('game-ui').style.display = 'block';
@@ -56,8 +54,6 @@ export function updateUI(data) {
     document.getElementById('live-s2').innerText = data.cumulativeScores.team2;
     if (data.deckSize !== undefined) document.getElementById('deck-count').innerText = data.deckSize;
 
-    
-
     // Names
     if (data.names) {
         document.getElementById('name-me').innerText = data.names[s];
@@ -76,9 +72,9 @@ export function updateUI(data) {
         const el = document.getElementById(mapping.id);
         if (el) {
             if (mapping.seatIndex === data.currentPlayer) {
-                el.classList.add('active'); // Turns GREEN
+                el.classList.add('active'); 
             } else {
-                el.classList.remove('active'); // Turns RED
+                el.classList.remove('active'); 
             }
         }
     });
@@ -210,7 +206,6 @@ function renderOtherHand(elementId, count, orientation) {
     for (let i = 0; i < count; i++) {
         const card = document.createElement("div");
         card.className = (orientation === 'vert') ? "side-card" : "partner-card";
-        // Simple margin logic
         if (i > 0) {
             if (orientation === 'vert') card.style.marginTop = "-35px";
             else card.style.marginLeft = "-35px";
@@ -219,7 +214,83 @@ function renderOtherHand(elementId, count, orientation) {
     }
 }
 
+// --- MISSING FUNCTION ADDED HERE ---
+function renderHand(hand) {
+    const div = document.getElementById('my-hand');
+    if(!div) return;
+    div.innerHTML = "";
+    if (!hand || hand.length === 0) return;
+
+    const isDesktop = window.innerWidth > 800;
+    const cardHeight = isDesktop ? 105 : 70;
+    const groupWidth = isDesktop ? 75 : 50;
+    const containerLimit = isDesktop ? 180 : 110; 
+    const buffer = 5; 
+    const defaultVisibleStrip = isDesktop ? 40 : 25; 
+
+    const groups = [];
+    let currentGroup = [];
+    hand.forEach((card, index) => {
+        if (currentGroup.length === 0) {
+            currentGroup.push({card, index});
+        } else {
+            if (currentGroup[0].card.rank === card.rank) {
+                currentGroup.push({card, index});
+            } else { 
+                groups.push(currentGroup); 
+                currentGroup = [{card, index}]; 
+            }
+        }
+    });
+    if (currentGroup.length > 0) groups.push(currentGroup);
+
+    const safeWidth = div.clientWidth || window.innerWidth;
+    const containerWidth = safeWidth - 20; 
+    const totalGroups = groups.length;
+    let groupOverlap = 5; 
+
+    if (totalGroups > 1) {
+        const calculated = ((containerWidth - groupWidth) / (totalGroups - 1)) - groupWidth;
+        groupOverlap = Math.min(15, Math.max(-30, calculated));
+    }
+
+    groups.forEach((grp, gIndex) => {
+        const groupDiv = document.createElement("div");
+        groupDiv.className = "hand-group";
+        if (gIndex < totalGroups - 1) {
+            groupDiv.style.marginRight = `${groupOverlap}px`;
+        }
+        
+        const availableSpine = containerLimit - cardHeight - buffer;
+        let stepSize = defaultVisibleStrip;
+
+        if (grp.length > 1) {
+            const neededSpine = (grp.length - 1) * defaultVisibleStrip;
+            if (neededSpine > availableSpine) {
+                stepSize = availableSpine / (grp.length - 1);
+            }
+        }
+
+        const negMargin = -(cardHeight - stepSize);
+        
+        grp.forEach((item, cIdx) => {
+            const wrapper = document.createElement("div");
+            wrapper.className = "hand-card-wrap";
+            if (cIdx > 0) wrapper.style.marginTop = `${negMargin}px`;
+            
+            if (state.selectedIndices.includes(item.index)) {
+                wrapper.classList.add("selected");
+            }
+            const img = document.createElement("img");
+            img.src = getCardImage(item.card);
+            wrapper.onclick = function() { window.toggleSelect(item.index); };
+            wrapper.appendChild(img);
+            groupDiv.appendChild(wrapper);
+        });
+        div.appendChild(groupDiv);
+    });
+}
+
 function showScoreModal(round, match) {
     document.getElementById('score-modal').style.display = 'flex';
-    // ... (Your existing Score Modal logic)
 }
