@@ -318,11 +318,19 @@ io.on('connection', async (socket) => {
             delete gameBots[gameId];
         }, 5000); // Short delay to allow clients to receive the message
     });
-    
+
     socket.on('leave_game', async () => { 
         const gameId = socket.data.gameId;
         const token = socket.handshake.auth.token;
-
+        
+        // Check if player was in the waiting queue
+        const wasInQueue = waitingPlayers.find(s => s.id === socket.id);
+        if (wasInQueue) {
+            waitingPlayers = waitingPlayers.filter(s => s.id !== socket.id);
+            // Notify remaining players
+            waitingPlayers.forEach(p => p.emit('queue_update', { count: waitingPlayers.length }));
+        }
+        
         console.log(`[Leave] User requesting to leave Game ${gameId}`);
         if (token && playerSessions[token]) delete playerSessions[token];
         socket.data.gameId = null;
@@ -373,6 +381,10 @@ async function startBotGame(humanSocket, difficulty) {
 function joinGlobalGame(socket) {
     if (waitingPlayers.find(s => s.id === socket.id)) return;
     waitingPlayers.push(socket);
+
+    waitingPlayers.forEach(p => {
+        p.emit('queue_update', { count: waitingPlayers.length });
+    });
 
     if (waitingPlayers.length === 4) {
         const gameId = generateGameId();

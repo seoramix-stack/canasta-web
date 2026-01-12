@@ -389,6 +389,23 @@ function initSocket(token) {
     });
 
     state.socket.on('connect', () => console.log("Connected"));
+    state.socket.on('ready_status', (data) => {
+        // data.readySeats is an array of seat numbers who clicked start (e.g., [0, 2])
+        if (data.readySeats) {
+            // Loop through all 4 possible seats
+            for (let i = 0; i < 4; i++) {
+                const el = document.getElementById(`ind-${i}`);
+                if (el) {
+                    // If seat 'i' is in the list, make it green. Otherwise, keep it gray.
+                    if (data.readySeats.includes(i)) {
+                        el.classList.add('ready');
+                    } else {
+                        el.classList.remove('ready');
+                    }
+                }
+            }
+        }
+    });
 
     state.socket.on('deal_hand', (data) => {
         state.mySeat = data.seat;

@@ -132,6 +132,22 @@
         </div>
     <div id="screen-game" class="app-screen game-bg">
         <div id="status" class="game-status">Connecting...</div>
+        <div id="queue-modal" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:2000; flex-direction:column; align-items:center; justify-content:center;">
+            <div class="ready-box">
+                <div class="ready-title" style="color:#3498db">SEARCHING...</div>
+                <div class="ready-sub" style="margin:10px 0;">Looking for opponents...</div>
+                
+                <div style="display:flex; gap:15px; margin-bottom:20px;">
+                    <div class="p-indicator" id="q-ind-0">1</div>
+                    <div class="p-indicator" id="q-ind-1">2</div>
+                    <div class="p-indicator" id="q-ind-2">3</div>
+                    <div class="p-indicator" id="q-ind-3">4</div>
+                </div>
+
+                <div style="width: 30px; height: 30px; border: 4px solid #444; border-top: 4px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                <button class="menu-btn text-only" onclick="leaveGame()" style="margin-top:20px;">CANCEL</button>
+            </div>
+        </div>
         
         <div id="ready-modal">
             <div class="ready-box">
