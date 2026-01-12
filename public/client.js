@@ -78,8 +78,10 @@ window.togglePass = (inputId, iconEl) => {
 };
 
 window.connectToGame = (mode) => {
-    UI.navTo('screen-game');
-    document.getElementById('status').style.display = 'block';
+    UI.navTo('screen-queue');
+    const el = document.getElementById('queue-msg');
+    if(el) el.innerText = "Connecting...";
+
     state.socket.emit('request_join', { mode: mode, difficulty: state.currentBotDiff });
 };
 
@@ -407,6 +409,16 @@ function initSocket(token) {
         }
     });
 
+    // --- QUEUE UPDATE HANDLER (Updated) ---
+    state.socket.on('queue_update', (data) => {
+        // 1. Ensure we stay on the blank searching screen
+        UI.navTo('screen-queue');
+
+        // 2. Update the text count (e.g. "2 / 4 Players Found")
+        const el = document.getElementById('queue-msg');
+        if (el) el.innerText = `${data.count} / 4 Players Found`;
+    });
+    
     state.socket.on('deal_hand', (data) => {
         state.mySeat = data.seat;
         UI.navTo('screen-game');

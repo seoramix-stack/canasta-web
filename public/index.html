@@ -95,6 +95,22 @@
         <button class="menu-btn text-only" onclick="navTo('screen-home')">BACK</button>
     </div>
 
+    <div id="screen-queue" class="app-screen">
+        <div style="font-size: 60px; margin-bottom: 20px;">🔍</div>
+        <h2>SEARCHING...</h2>
+        <p>Searching for more players...</p>
+        
+        <div id="queue-msg" style="color: #f1c40f; font-weight: bold; margin-top: 10px; font-size: 18px;">
+            1 / 4 Players Ready
+        </div>
+        
+        <br><br>
+        <div style="width: 40px; height: 40px; border: 4px solid #444; border-top: 4px solid #f1c40f; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+        
+        <br><br>
+        <button class="menu-btn text-only" onclick="leaveGame()">CANCEL</button>
+    </div>
+
     <div id="screen-profile" class="app-screen">
         <h2>MY PROFILE</h2>
         <div class="profile-card">
