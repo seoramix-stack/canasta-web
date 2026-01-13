@@ -648,18 +648,23 @@ function checkBotTurn(gameId) {
         const delay = (game.turnPhase === 'draw') ? 1000 : 0;
 
         setTimeout(() => {
-            // Pass a callback that runs after every bot action (Draw, Meld, Discard)
+            // Add .catch to handle errors gracefully
             bot.executeTurn(game, (updatedSeat) => {
-                
-                // --- FIX: CHECK IF BOT ENDED THE ROUND ---
                 if (game.turnPhase === 'game_over') {
                     console.log(`[BOT] Player ${updatedSeat} ended the round.`);
-                    game.processingTurnFor = null; // Release lock
-                    handleRoundEnd(gameId, io);    // Trigger Score Calculation & Events
+                    game.processingTurnFor = null; 
+                    handleRoundEnd(gameId, io);    
                 } else {
-                    // Normal turn update
                     broadcastAll(gameId, updatedSeat); 
                 }
+            }).catch(err => {
+                console.error(`[BOT ERROR] Seat ${curr} crashed:`, err);
+                // CRITICAL FIX: Release the lock so the game doesn't freeze
+                game.processingTurnFor = null; 
+                
+                // Optional: Force a random discard to keep game moving
+                // game.discardFromHand(curr, 0);
+                // broadcastAll(gameId, curr);
             });
         }, delay);
 

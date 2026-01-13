@@ -122,17 +122,14 @@ class CanastaBot {
         await delay(800);
 
         // 3. DECIDE DISCARD
-        // FIX: Only try to discard if we actually have cards!
-        // (If we melded everything, we "Went Out" or are "Floating", so no discard is possible)
         if (game.players[this.seat].length > 0) {
-            let discardIndex = this.pickSafeDiscard(game);
+            // FIX: Changed 'pickSafeDiscard' to 'pickDiscard' to match the method definition below
+            let discardIndex = this.pickDiscard(game); 
+            
             game.discardFromHand(this.seat, discardIndex);
             broadcastFunc(this.seat); 
         } else {
-            // Hand is empty. 
-            // If the game rules require a discard to go out, the game logic handles that check.
-            // If we are here with 0 cards, we simply end the function without discarding.
-            console.log(`[BOT] Seat ${this.seat} has empty hand (Went Out or Floating). Skipping discard.`);
+            console.log(`[BOT] Seat ${this.seat} has empty hand. Skipping discard.`);
         }
     }
 
