@@ -162,7 +162,7 @@
     </div>
 
     <div class="form-group">
-        <input type="number" id="create-pin" class="form-input" placeholder="PIN (4 digits)" maxlength="4" style="font-size: 24px; letter-spacing: 5px; width: 150px;">
+        <input type="number" id="create-pin" class="form-input" placeholder="PIN" maxlength="4" style="font-size: 24px; letter-spacing: 5px; width: 150px;">
     </div>
 
     <div style="margin: 15px 0;">
@@ -172,7 +172,17 @@
             <button class="diff-btn p-count-btn selected" onclick="selectPlayerCount(4, this)">4 PLAYERS</button>
         </div>
     </div>
-
+    <div style="margin: 15px 0;">
+        <div style="color: #bdc3c7; font-size: 14px; margin-bottom: 5px;">GAME RULES</div>
+        <div class="diff-grid">
+            <button class="diff-btn rules-btn selected" onclick="selectRuleset('standard', this)" style="font-size: 12px; padding: 10px;">
+                DRAW 2<br>2 OUT
+            </button>
+            <button class="diff-btn rules-btn" onclick="selectRuleset('easy', this)" style="font-size: 12px; padding: 10px;">
+                DRAW 1<br>1 OUT
+            </button>
+        </div>
+    </div>
     <br>
     <button class="menu-btn success" onclick="doCreateRoom()">CREATE & JOIN</button>
     <button class="menu-btn text-only" onclick="navTo('screen-private-menu')">CANCEL</button>

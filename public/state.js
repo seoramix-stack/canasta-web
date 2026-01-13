@@ -5,6 +5,7 @@ export const state = {
     playerUsername: localStorage.getItem("canasta_user"),
     currentBotDiff: 'medium',
     currentPlayerCount: 4,
+    currentRuleset: 'standard',
     mySeat: -1,
     selectedIndices: [],
     activeData: null,

@@ -169,9 +169,8 @@ io.on('connection', async (socket) => {
         // 1. Validate Input
         const requestedId = data.gameId.trim();
         const pin = data.pin;
-        
-        // --- DEFINE pCount HERE ---
         const pCount = data.playerCount || 4; 
+        const ruleset = data.ruleset || 'standard'; // <--- Get Ruleset
 
         if (!requestedId || !pin) return socket.emit('error_message', "Invalid data.");
         
@@ -181,19 +180,30 @@ io.on('connection', async (socket) => {
 
         const gameId = requestedId; 
         
-        // --- USE pCount HERE ---
-        const gameConfig = (pCount === 2) 
+        // 2. Determine Base Config (Hand Size)
+        let config = (pCount === 2) 
             ? { PLAYER_COUNT: 2, HAND_SIZE: 15 } 
             : { PLAYER_COUNT: 4, HAND_SIZE: 11 };
 
-        games[gameId] = new CanastaGame(gameConfig);
+        // 3. Apply Ruleset Overrides
+        if (ruleset === 'easy') {
+            // Easy Mode: Draw 1, Need 1 Canasta to go out
+            config.DRAW_COUNT = 1;
+            config.MIN_CANASTAS_OUT = 1;
+        } else {
+            // Standard Mode: Draw 2, Need 2 Canastas to go out
+            config.DRAW_COUNT = 2;
+            config.MIN_CANASTAS_OUT = 2;
+        }
+
+        // 4. Initialize Game
+        games[gameId] = new CanastaGame(config);
         games[gameId].resetMatch();
         games[gameId].isPrivate = true;
         games[gameId].pin = pin;
         games[gameId].host = socket.id;
         games[gameId].readySeats = new Set();
         
-        // --- Initialize Name Array ---
         games[gameId].names = Array(pCount).fill("Waiting...");
         games[gameId].names[0] = socket.handshake.auth.username || "Host";
         

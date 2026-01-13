@@ -360,6 +360,15 @@ window.selectPlayerCount = (count, btn) => {
     btn.classList.add('selected');
 };
 
+window.selectRuleset = (mode, btn) => {
+    // mode can be 'standard' (2/2) or 'easy' (1/1)
+    state.currentRuleset = mode;
+    
+    // Visual Feedback
+    document.querySelectorAll('.rules-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+};
+
 // --- PICKUP LOGIC ---
 function handlePickupClick() {
     // If we have opened, try standard pickup
@@ -619,7 +628,8 @@ window.doCreateRoom = () => {
     state.socket.emit('request_create_private', { 
         gameId: roomName, 
         pin: pin,
-        playerCount: state.currentPlayerCount || 4 
+        playerCount: state.currentPlayerCount || 4, 
+        ruleset: state.currentRuleset || 'standard'
     });
 };
 
