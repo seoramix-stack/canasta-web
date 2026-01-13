@@ -1,8 +1,18 @@
-// game.js - v12.0: Robust Multi-Round Logic
+// game.js - v12.1: Configurable Rules & Refactored
 const { createCanastaDeck, shuffle } = require('./deck');
 
 class CanastaGame {
-    constructor() {
+    constructor(customConfig = {}) {
+        // --- CONFIGURATION ENGINE (Phase 1 & 2 Complete) ---
+        this.config = {
+            WIN_SCORE: 5000,           // Points to win match
+            MIN_CANASTAS_OUT: 2,       // User requested default: 2 Canastas to go out
+            DRAW_COUNT: 2,             // Standard: Draw 2 cards
+            HAND_SIZE: 11,             // Standard 4P: 11 Cards
+            ...customConfig            // Allows overriding rules later
+        };
+
+        // --- GAME STATE ---
         this.deck = [];
         this.discardPile = [];
         this.players = [[], [], [], []]; 
@@ -11,28 +21,34 @@ class CanastaGame {
         this.team1Red3s = [];
         this.team2Red3s = [];
         
-        // GAME STATE
         this.roundStarter = 0; 
         this.currentPlayer = 0; 
         this.turnPhase = "draw"; 
         
-        // SCORING
         this.finalScores = null;
         this.cumulativeScores = { team1: 0, team2: 0 }; 
+
+        // STATIC DATA (Moved here for performance)
+        this.RANK_VALUES = {
+            "Joker": 50, "2": 20, "A": 20,
+            "K": 10, "Q": 10, "J": 10, "10": 10, "9": 10, "8": 10,
+            "7": 5, "6": 5, "5": 5, "4": 5, "3": 5 // Black 3 is 5
+        };
+        
+        this.RANK_ORDER = { 
+            "3": 0, "4": 1, "5": 2, "6": 3, "7": 4, "8": 5, "9": 6, 
+            "10": 7, "J": 8, "Q": 9, "K": 10, "A": 11, "2": 12, "Joker": 13 
+        };
     }
 
-    // --- ADD THIS HELPER FUNCTION ---
+    // --- HELPERS ---
     getCardValue(rank) {
-        if (rank === "Joker") return 50;
-        if (rank === "2" || rank === "A") return 20;
-        if (["8","9","10","J","Q","K"].includes(rank)) return 10;
-        return 5;
+        return this.RANK_VALUES[rank] || 0;
     }
     
     sortHand(playerIndex) {
-        const rankOrder = { "3": 0, "4": 1, "5": 2, "6": 3, "7": 4, "8": 5, "9": 6, "10": 7, "J": 8, "Q": 9, "K": 10, "A": 11, "2": 12, "Joker": 13 };
         this.players[playerIndex].sort((a, b) => {
-            let diff = rankOrder[b.rank] - rankOrder[a.rank];
+            let diff = this.RANK_ORDER[b.rank] - this.RANK_ORDER[a.rank];
             if (diff !== 0) return diff;
             return (a.suit < b.suit) ? -1 : 1;
         });
@@ -53,27 +69,33 @@ class CanastaGame {
         this.sortHand(playerIndex);
     }
 
+    getOpeningReq(score) {
+        if (score < 0) return 15;
+        if (score < 1500) return 50;
+        if (score < 3000) return 90;
+        return 120;
+    }
+
+    // --- MATCH MANAGEMENT ---
+
     resetMatch() {
         this.cumulativeScores = { team1: 0, team2: 0 };
         this.roundStarter = 0;
         this.setupRound();
-        console.log("NEW MATCH STARTED");
+        console.log(`NEW MATCH STARTED (Rules: ${this.config.MIN_CANASTAS_OUT} Canastas to Out)`);
     }
 
     resolveMatchStatus() {
-        // A. Commit the scores to the cumulative total NOW
         if (this.finalScores) {
             this.cumulativeScores.team1 += this.finalScores.team1.total;
             this.cumulativeScores.team2 += this.finalScores.team2.total;
         }
 
-        // B. Check Win Threshold (5000)
-        const WIN_THRESHOLD = 5000;
+        const WIN = this.config.WIN_SCORE;
         let s1 = this.cumulativeScores.team1;
         let s2 = this.cumulativeScores.team2;
 
-        if (s1 >= WIN_THRESHOLD || s2 >= WIN_THRESHOLD) {
-            // Determine Winner
+        if (s1 >= WIN || s2 >= WIN) {
             if (s1 > s2) return { isMatchOver: true, winner: 'team1' };
             if (s2 > s1) return { isMatchOver: true, winner: 'team2' };
             return { isMatchOver: true, winner: 'draw' };
@@ -83,17 +105,11 @@ class CanastaGame {
     }
     
     startNextRound() {
-        // NOTE: Score accumulation moved to resolveMatchStatus()
-        
-        // 1. Check if we accidentally called this on a finished game
-        // (Should be handled by server, but safety first)
-        const WIN_THRESHOLD = 5000;
-        if (this.cumulativeScores.team1 >= WIN_THRESHOLD || 
-            this.cumulativeScores.team2 >= WIN_THRESHOLD) {
+        const WIN = this.config.WIN_SCORE;
+        if (this.cumulativeScores.team1 >= WIN || this.cumulativeScores.team2 >= WIN) {
             return 'game_already_over'; 
         }
 
-        // 2. Setup the next round normally
         this.roundStarter = (this.roundStarter + 1) % 4;
         this.setupRound();
         console.log(`NEXT ROUND STARTED. Starter: Player ${this.roundStarter}`);
@@ -101,7 +117,6 @@ class CanastaGame {
     }
 
     setupRound() {
-        // Reset State
         this.deck = shuffle(createCanastaDeck());
         this.discardPile = [];
         this.players = [[], [], [], []];
@@ -112,17 +127,16 @@ class CanastaGame {
         this.currentPlayer = this.roundStarter;
         this.turnPhase = "draw";
 
-        // Deal
+        // Deal (Using Config)
         for (let i = 0; i < 4; i++) {
-            this.players[i] = this.deck.splice(0, 11);
+            this.players[i] = this.deck.splice(0, this.config.HAND_SIZE);
             this.checkRed3s(i);
         }
 
-        // Setup Discard (CRASH FIX: Check if deck exists)
+        // Setup Discard
         if (this.deck.length > 0) {
             this.discardPile.push(this.deck.shift());
-            
-            // Safe loop: ensure we don't crash if deck runs out while looking for natural
+            // Prevent Wild/Red3 as initial top card
             while (this.discardPile.length > 0 && 
                    this.deck.length > 0 && 
                    (this.discardPile[0].isRed3 || this.discardPile[0].isWild)) {
@@ -132,28 +146,22 @@ class CanastaGame {
         }
     }
 
-    drawFromDeck(playerIndex) {
-        // 1. Check if it's the right player
-        if (playerIndex !== this.currentPlayer) {
-            const who = (this.currentPlayer === -1) ? "Game not started (Waiting for Ready)" : `Player ${this.currentPlayer}`;
-            return { success: false, message: `Not your turn! It is ${who}'s turn.` };
-        }
+    // --- GAME ACTIONS ---
 
-        // 2. Check phase
-        if (this.turnPhase !== "draw") {
-            return { success: false, message: "Wrong phase! You must " + this.turnPhase };
-        }
+    drawFromDeck(playerIndex) {
+        if (playerIndex !== this.currentPlayer) return { success: false, message: "Not your turn!" };
+        if (this.turnPhase !== "draw") return { success: false, message: "Wrong phase!" };
         
-        // DECK EXHAUSTED LOGIC
         if (this.deck.length === 0) {
             this.turnPhase = "game_over";
             this.finalScores = this.calculateScores(); 
-            console.log("ROUND OVER: Deck Exhausted.");
             return { success: true, message: "GAME_OVER_DECK_EMPTY" }; 
         }
 
         let teamRed3s = (playerIndex % 2 === 0) ? this.team1Red3s : this.team2Red3s;
-        let cardsNeeded = 2;
+        
+        // Draw Count from Config (Standard: 2)
+        let cardsNeeded = this.config.DRAW_COUNT;
         
         while (cardsNeeded > 0 && this.deck.length > 0) {
             let card = this.deck.shift();
@@ -181,16 +189,12 @@ class CanastaGame {
         let teamMelds = (playerIndex % 2 === 0) ? this.team1Melds : this.team2Melds;
         let rank = topCard.rank;
 
-        // 1. Block Wilds/3s
         if (topCard.isWild || rank === "3") return { success: false, message: "Cannot pick up Wild or 3." };
 
-        // 2. Define Frozen State
-        // Frozen if: Team hasn't opened OR Pile contains a Wild
         let hasOpened = (Object.keys(teamMelds).length > 0);
         let containsWild = this.discardPile.some(c => c.isWild);
         let isFrozen = !hasOpened || containsWild;
 
-        // 3. Identify Matching Cards in Hand
         let naturalMatches = [];
         let wildMatches = [];
         hand.forEach((c, idx) => {
@@ -198,24 +202,13 @@ class CanastaGame {
             else if (c.isWild) wildMatches.push(idx);
         });
 
-        // 4. Determine Valid Pickup Method
-        let method = null; // 'table', 'natural', 'mixed'
+        let method = null; 
 
-        // Method A: Table Meld
-        // Allowed only if pile is NOT frozen (no wild in pile) AND we have a meld
-        // Note: If !hasOpened, teamMelds is empty, so this naturally fails as required.
         if (teamMelds[rank] && !containsWild) {
             method = 'table';
-        }
-        // Method B: Natural Pair (Standard Defrost)
-        // Always allowed (Frozen or Not) if you have 2 naturals
-        else if (naturalMatches.length >= 2) {
+        } else if (naturalMatches.length >= 2) {
             method = 'natural';
-        }
-        // Method C: Mixed (Natural + Wild)
-        // Only allowed if NOT frozen.
-        // (If !hasOpened, isFrozen is true, so this is blocked correctly)
-        else if (!isFrozen && naturalMatches.length >= 1 && wildMatches.length >= 1) {
+        } else if (!isFrozen && naturalMatches.length >= 1 && wildMatches.length >= 1) {
             method = 'mixed';
         }
 
@@ -224,27 +217,19 @@ class CanastaGame {
             return { success: false, message: "Need pair, matching meld, or Natural+Wild." };
         }
 
-        // 5. Opening Score Check (If strictly opening via this single action)
         if (!hasOpened) {
-            // Calculate points of the potential meld (Top + Hand Cards)
             let score = this.getCardValue(topCard.rank);
-if (method === 'natural') {
-     score += this.getCardValue(hand[naturalMatches[0]].rank) + this.getCardValue(hand[naturalMatches[1]].rank);
-}
-
-            let req = this.getOpeningReq((playerIndex % 2 === 0) ? this.cumulativeScores.team1 : this.cumulativeScores.team2);
-            
-            if (score < req) {
-                return { success: false, message: `Points (${score}) < Req (${req}). Use 'Staging' to combine melds.` };
+            if (method === 'natural') {
+                 score += this.getCardValue(hand[naturalMatches[0]].rank) + this.getCardValue(hand[naturalMatches[1]].rank);
             }
+            let req = this.getOpeningReq((playerIndex % 2 === 0) ? this.cumulativeScores.team1 : this.cumulativeScores.team2);
+            if (score < req) return { success: false, message: `Points (${score}) < Req (${req}). Use 'Staging'.` };
         }
 
-        // 6. Execute Pickup
         let pile = this.discardPile.splice(0, this.discardPile.length);
-        let pickupCard = pile.pop(); // Remove top card (it goes to meld)
+        let pickupCard = pile.pop(); 
         if (!teamMelds[rank]) teamMelds[rank] = [];
 
-        // Move cards from Hand -> Meld
         let indicesToRemove = [];
         if (method === 'table') {
             teamMelds[rank].push(pickupCard);
@@ -256,16 +241,11 @@ if (method === 'natural') {
             teamMelds[rank].push(hand[naturalMatches[0]], hand[wildMatches[0]], pickupCard);
         }
 
-        // Remove from hand (sort desc to avoid index shift)
         indicesToRemove.sort((a,b) => b-a).forEach(i => hand.splice(i, 1));
-
-        // Add rest of pile to hand
         if (pile.length > 0) hand.push(...pile);
         
         this.sortHand(playerIndex);
         this.turnPhase = "playing";
-        
-        // Return extra info so UI can animate or log
         return { success: true, method: method };
     }
 
@@ -279,7 +259,6 @@ if (method === 'natural') {
         let cards = cardIndices.map(i => hand[i]);
         if (cards.length === 0) return { success: false, message: "No cards selected." };
 
-        // 1. Determine Rank
         let rank = targetRank || null;
         if (!rank) {
             let natural = cards.find(c => !c.isWild);
@@ -293,44 +272,38 @@ if (method === 'natural') {
         let teamMelds = (playerIndex % 2 === 0) ? this.team1Melds : this.team2Melds;
         let existingMeld = teamMelds[rank];
 
-        // --- NEW: BLACK 3 RULES ---
         if (rank === "3") {
-            // Rule A: Cannot use Wilds with Black 3s
             if (cards.some(c => c.isWild)) return { success: false, message: "Cannot use Wilds with Black 3s." };
-            
-            // Rule B: Must be Going Out
-            // We calculate if this meld consumes the LAST cards in hand
             let remaining = hand.length - cards.length;
             if (remaining > 0) return { success: false, message: "Black 3s can only be melded when going out." };
         }
-        // --------------------------
 
-        // 2. Validate Meld Size
         if (!existingMeld && cards.length < 3) {
             return { success: false, message: "New melds need 3+ cards." };
         }
 
-        // 3. Validate Ranks & Wilds
-        let wildCount = 0;
         for (let c of cards) {
             if (c.rank !== rank && !c.isWild) return { success: false, message: "Mixed ranks!" };
-            if (c.isWild) wildCount++;
         }
         
-        // 4. CANASTA SAFETY CHECK (Illegal Go-Out Prevention)
+        // --- PHASE 2 UPDATE: Check Config for Canastas Needed ---
         let cardsRemaining = hand.length - cards.length;
         
-        let hasCanasta = Object.values(teamMelds).some(pile => pile.length >= 7);
+        // Count how many canastas we have
+        let currentCanastas = Object.values(teamMelds).filter(pile => pile.length >= 7).length;
+        
+        // Check if this specific meld CREATES a new canasta
         let currentPileSize = existingMeld ? existingMeld.length : 0;
-        if (currentPileSize + cards.length >= 7) hasCanasta = true;
+        if (currentPileSize + cards.length >= 7 && currentPileSize < 7) {
+            currentCanastas++;
+        }
 
-        if (!hasCanasta) {
-            if (cardsRemaining === 0) { 
-                return { success: false, message: "Cannot go out without a Canasta!" };
+        if (cardsRemaining === 0) { 
+            if (currentCanastas < this.config.MIN_CANASTAS_OUT) {
+                return { success: false, message: `Need ${this.config.MIN_CANASTAS_OUT} Canastas to go out!` };
             }
         }
 
-        // 5. Check Opening Requirements (standard logic...)
         let isOpening = (Object.keys(teamMelds).length === 0);
         if (isOpening) {
              let teamScore = (playerIndex % 2 === 0) ? this.cumulativeScores.team1 : this.cumulativeScores.team2;
@@ -339,7 +312,6 @@ if (method === 'natural') {
              if (meldPoints < req) return { success: false, message: `Opening meld too low! Need ${req} pts.` };
         }
 
-        // 6. Execute Meld
         cardIndices.forEach(i => hand.splice(i, 1)); 
         if (!teamMelds[rank]) teamMelds[rank] = [];
         teamMelds[rank].push(...cards); 
@@ -349,45 +321,66 @@ if (method === 'natural') {
         if (this.players[playerIndex].length === 0) {
             this.turnPhase = "game_over";
             this.finalScores = this.calculateScores(playerIndex); 
-            console.log(`ROUND OVER: Player ${playerIndex} went out by melding (Floating).`);
+            console.log(`ROUND OVER: Player ${playerIndex} went out (Floating).`);
             return { success: true, message: "GAME_OVER" };
         }
 
         return { success: true };
     }
 
-    // Updated Calculate Scores to support Concealed Bonus
+    discardFromHand(playerIndex, cardIndex) {
+        if (playerIndex !== this.currentPlayer || this.turnPhase !== "playing") return { success: false, message: "Draw first!" };
+
+        let hand = this.players[playerIndex];
+        let card = hand[cardIndex];
+        let teamMelds = (playerIndex % 2 === 0) ? this.team1Melds : this.team2Melds;
+
+        // --- PHASE 2 UPDATE: Check Config for Canastas Needed ---
+        let canastaCount = Object.values(teamMelds).filter(pile => pile.length >= 7).length;
+
+        if (hand.length === 1) {
+            if (canastaCount < this.config.MIN_CANASTAS_OUT) {
+                return { success: false, message: `Need ${this.config.MIN_CANASTAS_OUT} Canastas to go out.` };
+            }
+            
+            hand.splice(cardIndex, 1);
+            this.discardPile.push(card);
+            
+            this.turnPhase = "game_over"; 
+            this.finalScores = this.calculateScores(playerIndex); 
+            console.log(`ROUND OVER: Player ${playerIndex} went out.`);
+            return { success: true, message: "GAME_OVER" };
+        }
+
+        hand.splice(cardIndex, 1);
+        this.discardPile.push(card);
+        this.turnPhase = "draw";
+        this.currentPlayer = (this.currentPlayer + 1) % 4;
+        return { success: true };
+    }
+
     calculateScores(winnerSeat = -1, isConcealed = false) {
         const calcTeam = (melds, red3s, pIndices) => {
-            let details = {
-                basePoints: 0, canastaBonus: 0, red3Points: 0, deductions: 0, goOutBonus: 0, total: 0
-            };
+            let details = { basePoints: 0, canastaBonus: 0, red3Points: 0, deductions: 0, goOutBonus: 0, total: 0 };
+            let hasMelded = Object.keys(melds).length > 0;
 
-            let hasMelded = false;
             for (let rank in melds) {
                 let pile = melds[rank];
-                if (pile.length > 0) hasMelded = true;
                 details.basePoints += pile.reduce((sum, c) => sum + this.getCardValue(c.rank), 0);
-                
                 if (pile.length >= 7) {
                     let isNatural = pile.every(c => !c.isWild);
                     details.canastaBonus += (isNatural ? 500 : 300);
                 }
             }
 
-            // Red 3s
             let r3Val = (red3s.length === 4) ? 800 : (red3s.length * 100);
             details.red3Points = hasMelded ? r3Val : -r3Val;
 
-            // Deductions
             pIndices.forEach(idx => {
                 let handPoints = this.players[idx].reduce((sum, c) => sum + this.getCardValue(c.rank), 0);
                 details.deductions -= handPoints; 
-                
                 if (idx === winnerSeat) {
-                    // Standard Go Out Bonus
                     details.goOutBonus = 100; 
-                    // Concealed Bonus (Extra 100)
                     if (isConcealed) details.goOutBonus += 100; 
                 }
             });
@@ -402,47 +395,6 @@ if (method === 'natural') {
         };
     }
 
-    discardFromHand(playerIndex, cardIndex) {
-        if (playerIndex !== this.currentPlayer || this.turnPhase !== "playing") return { success: false, message: "Draw first!" };
-
-        let hand = this.players[playerIndex];
-        let card = hand[cardIndex];
-        let teamMelds = (playerIndex % 2 === 0) ? this.team1Melds : this.team2Melds;
-
-        // 1. Check Team Canasta Status
-        let hasCanasta = Object.values(teamMelds).some(pile => pile.length >= 7);
-
-        // GOING OUT LOGIC (Discarding the last card)
-        if (hand.length === 1) {
-            // Check for Canasta (Required to go out)
-            if (!hasCanasta) return { success: false, message: "Need Canasta to go out." };
-            
-            // Process the "Go Out"
-            hand.splice(cardIndex, 1);
-            this.discardPile.push(card);
-            
-            this.turnPhase = "game_over"; 
-            // Calculate detailed scores passing the player who went out
-            this.finalScores = this.calculateScores(playerIndex); 
-            console.log(`ROUND OVER: Player ${playerIndex} went out.`);
-            return { success: true, message: "GAME_OVER" };
-        }
-
-        // Normal Discard
-        hand.splice(cardIndex, 1);
-        this.discardPile.push(card);
-        this.turnPhase = "draw";
-        this.currentPlayer = (this.currentPlayer + 1) % 4;
-        return { success: true };
-    }
-
-getOpeningReq(score) {
-        if (score < 0) return 15;
-        if (score < 1500) return 50;
-        if (score < 3000) return 90;
-        return 120;
-    }
-// New Method: Handles the "Atomic" opening logic
     processOpening(seat, meldsData, wantPickup) {
         const requiredPhase = wantPickup ? "draw" : "playing";
         if (seat !== this.currentPlayer || this.turnPhase !== requiredPhase) 
@@ -453,99 +405,80 @@ getOpeningReq(score) {
         let totalPoints = 0;
         let usedIndices = new Set();
         
-        // 1. Validation Logic
         if (wantPickup) {
-        if (!topCard) return { success: false, message: "Pile is empty." };
-        if (topCard.rank === "3") return { success: false, message: "Cannot pick up pile with Black 3s." };
-        let keyMeld = meldsData[0]; 
-        let keyCards = keyMeld.indices.map(i => hand[i]);
+            if (!topCard) return { success: false, message: "Pile is empty." };
+            if (topCard.rank === "3") return { success: false, message: "Cannot pick up pile with Black 3s." };
+            
+            let keyMeld = meldsData[0]; 
+            let keyCards = keyMeld.indices.map(i => hand[i]);
 
-        // --- FIX START: Allow Wilds, but enforce 2 Naturals ---
-        let naturalCount = 0;
-        for (let c of keyCards) {
-            // Check for illegal cards (wrong rank AND not wild)
-            if (!c.isWild && c.rank !== topCard.rank) {
-                return { success: false, message: "Pickup meld contains mismatched natural cards." };
+            let naturalCount = 0;
+            for (let c of keyCards) {
+                if (!c.isWild && c.rank !== topCard.rank) return { success: false, message: "Pickup meld contains mismatched natural cards." };
+                if (!c.isWild && c.rank === topCard.rank) naturalCount++;
             }
-            // Count matching naturals
-            if (!c.isWild && c.rank === topCard.rank) {
-                naturalCount++;
-            }
+            
+            if (naturalCount < 2) return { success: false, message: "Must use at least 2 NATURAL cards matching top card." };
+            totalPoints += this.getCardValue(topCard.rank);
         }
-        
-        if (naturalCount < 2) {
-            return { success: false, message: "Must use at least 2 NATURAL cards matching top card." };
-        }
-        // --- FIX END ---
-
-        totalPoints += this.getCardValue(topCard.rank);
-    }
 
         for (let index = 0; index < meldsData.length; index++) {
-        let m = meldsData[index];
-        let cards = m.indices.map(i => hand[i]);
-        
-        // Check for duplicate card usage
-        for(let i of m.indices) {
-            if (usedIndices.has(i)) return { success: false, message: "Cannot use same card twice." };
-            usedIndices.add(i);
-        }
-
-        let meldRank = m.rank; 
-        if (meldRank === "3") {
-                if (cards.some(c => c.isWild)) return { success: false, message: "Black 3s cannot contain Wilds." };
-                let remainingAfterOpen = hand.length - totalCardsUsing;
-                if (remainingAfterOpen !== 0) return { success: false, message: "Black 3s allowed only when going out." };
+            let m = meldsData[index];
+            let cards = m.indices.map(i => hand[i]);
+            
+            for(let i of m.indices) {
+                if (usedIndices.has(i)) return { success: false, message: "Cannot use same card twice." };
+                usedIndices.add(i);
             }
-        let wildCount = 0;
-        for (let c of cards) {
-            if (!c.isWild && c.rank !== meldRank) return { success: false, message: "Mixed ranks in " + meldRank };
-            if (c.isWild) wildCount++;
-        }
-        
-        if (wildCount > cards.length - 2) return { success: false, message: "Too many wilds in " + meldRank + "s." };
 
-        // FIX: THE "GHOST CARD" EXCEPTION
-        // If we are picking up, the first meld (index 0) gets a "free pass" on the count
-        // because we know the top discard card will be added to it shortly.
-        let minRequired = 3;
-        if (wantPickup && index === 0) {
-            minRequired = 2;
-        }
+            let meldRank = m.rank; 
+            if (meldRank === "3") {
+                if (cards.some(c => c.isWild)) return { success: false, message: "Black 3s cannot contain Wilds." };
+                if ((hand.length - usedIndices.size) !== 0) return { success: false, message: "Black 3s allowed only when going out." };
+            }
 
-        if (cards.length < minRequired) {
-            return { success: false, message: "Meld " + meldRank + "s must have " + minRequired + "+ cards." };
-        }
+            let wildCount = 0;
+            for (let c of cards) {
+                if (!c.isWild && c.rank !== meldRank) return { success: false, message: "Mixed ranks in " + meldRank };
+                if (c.isWild) wildCount++;
+            }
+            
+            if (wildCount > cards.length - 2) return { success: false, message: "Too many wilds in " + meldRank + "s." };
 
-        totalPoints += cards.reduce((sum, c) => sum + this.getCardValue(c.rank), 0);
-    }
+            let minRequired = 3;
+            // Ghost Card logic preserved
+            if (wantPickup && index === 0) minRequired = 2;
+
+            if (cards.length < minRequired) return { success: false, message: "Meld " + meldRank + "s must have " + minRequired + "+ cards." };
+
+            totalPoints += cards.reduce((sum, c) => sum + this.getCardValue(c.rank), 0);
+        }
 
         let teamScore = (seat % 2 === 0) ? this.cumulativeScores.team1 : this.cumulativeScores.team2;
         let required = this.getOpeningReq(teamScore);
         if (totalPoints < required) return { success: false, message: "Need " + required + " points. You have " + totalPoints + "." };
 
-        // --- NEW: ILLEGAL GO-OUT CHECK ---
-        let cardsInHand = hand.length;
-        let cardsUsed = usedIndices.size;
-        let cardsRemaining = cardsInHand - cardsUsed;
+        // --- PHASE 2 UPDATE: Canasta Check for Going Out ---
+        let cardsRemaining = hand.length - usedIndices.size;
         
-        // Predict Canasta Creation
         let teamMelds = (seat % 2 === 0) ? this.team1Melds : this.team2Melds;
-        let willHaveCanasta = Object.values(teamMelds).some(p => p.length >= 7); 
-        
-        // Check new melds for Canasta
+        let canastaCount = Object.values(teamMelds).filter(p => p.length >= 7).length;
+
+        // Predict new Canastas
         meldsData.forEach(m => {
             let existingLen = teamMelds[m.rank] ? teamMelds[m.rank].length : 0;
             let addedLen = m.indices.length;
             if (wantPickup && m === meldsData[0]) addedLen++; 
-            if (existingLen + addedLen >= 7) willHaveCanasta = true;
+            if (existingLen + addedLen >= 7 && existingLen < 7) canastaCount++;
         });
 
-        if (cardsRemaining === 0 && !willHaveCanasta) {
-             return { success: false, message: "Cannot go out without a Canasta!" };
+        if (cardsRemaining === 0) {
+             if (canastaCount < this.config.MIN_CANASTAS_OUT) {
+                 return { success: false, message: `Need ${this.config.MIN_CANASTAS_OUT} Canastas to go out!` };
+             }
         }
 
-        // --- EXECUTION PHASE ---
+        // --- EXECUTION ---
         if (wantPickup) {
             let pile = this.discardPile.splice(0, this.discardPile.length);
             this.players[seat].push(...pile);
@@ -559,7 +492,6 @@ getOpeningReq(score) {
             if (wantPickup && index === 0) teamMelds[meldRank].push(topCard);
         });
 
-        // Remove used cards
         let allUsedIndices = [];
         meldsData.forEach(m => allUsedIndices.push(...m.indices));
         allUsedIndices.sort((a,b) => b-a);
@@ -567,10 +499,8 @@ getOpeningReq(score) {
 
         this.sortHand(seat);
 
-        // --- NEW: CONCEALED CANASTA / INSTANT WIN CHECK ---
         if (this.players[seat].length === 0) {
             this.turnPhase = "game_over";
-            // Passed 'true' for isConcealed
             this.finalScores = this.calculateScores(seat, true); 
             console.log(`ROUND OVER: Player ${seat} went out Concealed!`);
             return { success: true, message: "GAME_OVER" };
@@ -580,4 +510,5 @@ getOpeningReq(score) {
         return { success: true };
     }
 }
+
 module.exports = { CanastaGame };
