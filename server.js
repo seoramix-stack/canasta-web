@@ -152,7 +152,9 @@ io.on('connection', async (socket) => {
         }
 
         if (data.mode === 'bot') {
-            await startBotGame(socket, data.difficulty || 'medium'); 
+            // Default to 4 if not specified
+            const pCount = data.playerCount || 4;
+            await startBotGame(socket, data.difficulty || 'medium', pCount); 
         } else {
             joinGlobalGame(socket);
         }
@@ -477,13 +479,39 @@ function generateGameId() {
     return 'game_' + Math.random().toString(36).substr(2, 9);
 }
 
-async function startBotGame(humanSocket, difficulty) {
+async function startBotGame(humanSocket, difficulty, playerCount = 4) {
     const gameId = generateGameId();
-    games[gameId] = new CanastaGame();
+    
+    // --- PHASE 3: DYNAMIC CONFIG ---
+    // 2-Player Standard: 15 Cards, 2 to Draw (Draw count handled by default config)
+    // 4-Player Standard: 11 Cards
+    const gameConfig = (playerCount === 2) 
+        ? { PLAYER_COUNT: 2, HAND_SIZE: 15 } 
+        : { PLAYER_COUNT: 4, HAND_SIZE: 11 };
+
+    games[gameId] = new CanastaGame(gameConfig);
     games[gameId].resetMatch();
+    
     const userName = humanSocket.handshake.auth.username || "Player";
-    games[gameId].names = [userName, "Bot 1", "Bot 2", "Bot 3"];
     gameBots[gameId] = {};
+
+    // --- SETUP BOTS & NAMES BASED ON COUNT ---
+    if (playerCount === 2) {
+        // 2P: Human (Seat 0) vs Bot (Seat 1)
+        games[gameId].names = [userName, "Bot 1"];
+        
+        // Spawn 1 Bot at Seat 1
+        gameBots[gameId][1] = new CanastaBot(1, difficulty);
+        
+    } else {
+        // 4P: Human (Seat 0) vs Bots (Seats 1, 2, 3)
+        games[gameId].names = [userName, "Bot 1", "Bot 2", "Bot 3"];
+        
+        // Spawn 3 Bots
+        for (let i = 1; i <= 3; i++) {
+            gameBots[gameId][i] = new CanastaBot(i, difficulty);
+        }
+    }
 
     await humanSocket.join(gameId); 
     humanSocket.data.seat = 0;
@@ -494,8 +522,6 @@ async function startBotGame(humanSocket, difficulty) {
         const existingName = playerSessions[token] ? playerSessions[token].username : "Player";
         playerSessions[token] = { gameId: gameId, seat: 0, username: existingName };
     }
-
-    for (let i = 1; i <= 3; i++) gameBots[gameId][i] = new CanastaBot(i, difficulty);
 
     games[gameId].currentPlayer = 0;
     games[gameId].roundStarter = 0;
