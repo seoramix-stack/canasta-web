@@ -106,7 +106,12 @@ app.post('/api/login', async (req, res) => {
 const games = {};      
 const gameBots = {};   
 const playerSessions = {};
-let waitingPlayers = []; 
+const matchmakingQueues = {
+    'rated_2': [],
+    'rated_4': [],
+    'casual_2': [],
+    'casual_4': []
+};
 
 // --- SOCKET CONNECTION ---
 io.on('connection', async (socket) => {
@@ -156,7 +161,7 @@ io.on('connection', async (socket) => {
             const pCount = data.playerCount || 4;
             await startBotGame(socket, data.difficulty || 'medium', pCount); 
         } else {
-            joinGlobalGame(socket);
+            joinGlobalGame(socket, data);
         }
     });
 
@@ -164,31 +169,39 @@ io.on('connection', async (socket) => {
         // 1. Validate Input
         const requestedId = data.gameId.trim();
         const pin = data.pin;
+        
+        // --- DEFINE pCount HERE ---
+        const pCount = data.playerCount || 4; 
 
         if (!requestedId || !pin) return socket.emit('error_message', "Invalid data.");
         
-        // 2. Check if name is taken
         if (games[requestedId]) {
             return socket.emit('error_message', "Room name already exists. Choose another.");
         }
 
-        // 3. Create Game with Custom ID
-        const gameId = requestedId; // Use the user's string directly
+        const gameId = requestedId; 
         
-        games[gameId] = new CanastaGame();
+        // --- USE pCount HERE ---
+        const gameConfig = (pCount === 2) 
+            ? { PLAYER_COUNT: 2, HAND_SIZE: 15 } 
+            : { PLAYER_COUNT: 4, HAND_SIZE: 11 };
+
+        games[gameId] = new CanastaGame(gameConfig);
         games[gameId].resetMatch();
         games[gameId].isPrivate = true;
         games[gameId].pin = pin;
         games[gameId].host = socket.id;
         games[gameId].readySeats = new Set();
-        games[gameId].names = [socket.handshake.auth.username || "Host", "Waiting...", "Waiting...", "Waiting..."];
         
-        // 4. Join Host
+        // --- Initialize Name Array ---
+        games[gameId].names = Array(pCount).fill("Waiting...");
+        games[gameId].names[0] = socket.handshake.auth.username || "Host";
+        
+        // Join Host
         socket.join(gameId);
         socket.data.gameId = gameId;
-        socket.data.seat = 0; // Host is seat 0
+        socket.data.seat = 0; 
         
-        // 5. Notify Client
         socket.emit('private_created', { gameId: gameId, pin: pin });
         sendUpdate(gameId, socket.id, 0);
     });
@@ -203,12 +216,15 @@ io.on('connection', async (socket) => {
         
         // Find empty seat
         let seat = -1;
-        // Simple logic: Seat 0 is host. Check 1, 2, 3.
-        // (In a real app, you'd track occupied seats more robustly)
         const socketsInRoom = io.sockets.adapter.rooms.get(gameId);
         const playerCount = socketsInRoom ? socketsInRoom.size : 0;
         
-        if (playerCount >= 4) return socket.emit('error_message', "Room is full.");
+        // --- UPDATE: Check against Game Configuration ---
+        const maxPlayers = game.config.PLAYER_COUNT; // Uses the game's internal config
+
+        if (currentCount >= maxPlayers) {
+            return socket.emit('error_message', "Room is full.");
+        }
 
         seat = playerCount; // 0 is taken, so 1, 2, 3...
 
@@ -449,27 +465,45 @@ io.on('connection', async (socket) => {
         const gameId = socket.data.gameId;
         const token = socket.handshake.auth.token;
         
-        // Check if player was in the waiting queue
-        const wasInQueue = waitingPlayers.find(s => s.id === socket.id);
-        if (wasInQueue) {
-            waitingPlayers = waitingPlayers.filter(s => s.id !== socket.id);
-            // Notify remaining players
-            waitingPlayers.forEach(p => p.emit('queue_update', { count: waitingPlayers.length }));
-        }
+        // --- NEW CLEANUP LOGIC ---
+        // Loop through all queue keys ('rated_2', 'rated_4', 'casual_2', etc.)
+        Object.keys(matchmakingQueues).forEach(key => {
+            const q = matchmakingQueues[key];
+            const idx = q.findIndex(s => s.id === socket.id);
+            if (idx !== -1) {
+                q.splice(idx, 1);
+                
+                // Parse the needed count from the key (e.g. 'rated_4' -> 4)
+                const needed = parseInt(key.split('_')[1]);
+                
+                // Notify remaining players in THAT queue
+                q.forEach(p => p.emit('queue_update', { count: q.length, needed: needed }));
+            }
+        });
 
         console.log(`[Leave] User requesting to leave Game ${gameId}`);
+        
+        // Remove from session tracking
         if (token && playerSessions[token]) delete playerSessions[token];
         socket.data.gameId = null;
         socket.data.seat = null;
         
+        // Leave the socket room
         if (gameId) {
             await socket.leave(gameId); 
-            waitingPlayers = waitingPlayers.filter(s => s.id !== socket.id);
         }
     });
     
     socket.on('disconnect', () => {
-        waitingPlayers = waitingPlayers.filter(s => s.id !== socket.id);
+        // --- NEW CLEANUP LOGIC ---
+        Object.keys(matchmakingQueues).forEach(key => {
+            const q = matchmakingQueues[key];
+            const idx = q.findIndex(s => s.id === socket.id);
+            if (idx !== -1) {
+                q.splice(idx, 1);
+                // No need to emit update here usually, but you can if you want real-time queue counts for others
+            }
+        });
     });
 });
 
@@ -528,25 +562,47 @@ async function startBotGame(humanSocket, difficulty, playerCount = 4) {
     sendUpdate(gameId, humanSocket.id, 0);
 }
 
-function joinGlobalGame(socket) {
-    if (waitingPlayers.find(s => s.id === socket.id)) return;
-    waitingPlayers.push(socket);
+function joinGlobalGame(socket, data) {
+    // 1. Determine Details
+    const pCount = (data && data.playerCount === 2) ? 2 : 4;
+    const mode = (data && data.mode === 'rated') ? 'rated' : 'casual';
+    
+    // 2. Generate Queue Key (e.g. 'rated_4' or 'casual_2')
+    const queueKey = `${mode}_${pCount}`;
+    const queue = matchmakingQueues[queueKey];
 
-    waitingPlayers.forEach(p => {
-        p.emit('queue_update', { count: waitingPlayers.length });
+    // 3. Avoid duplicates
+    if (queue.find(s => s.id === socket.id)) return;
+
+    // 4. Add to specific queue
+    queue.push(socket);
+
+    // 5. Notify players in THIS queue
+    queue.forEach(p => {
+        p.emit('queue_update', { count: queue.length, needed: pCount });
     });
 
-    if (waitingPlayers.length === 4) {
+    // 6. Check if Full
+    if (queue.length >= pCount) {
+        const players = queue.splice(0, pCount);
         const gameId = generateGameId();
         
-        games[gameId] = new CanastaGame();
+        // --- CONFIGURATION ---
+        const gameConfig = (pCount === 2) 
+            ? { PLAYER_COUNT: 2, HAND_SIZE: 15 } 
+            : { PLAYER_COUNT: 4, HAND_SIZE: 11 };
+
+        games[gameId] = new CanastaGame(gameConfig);
         games[gameId].resetMatch();
-        games[gameId].isRated = true;
+        
+        // --- CRITICAL FIX: Only set isRated for Rated Mode ---
+        games[gameId].isRated = (mode === 'rated'); 
+        
         games[gameId].readySeats = new Set();
         games[gameId].currentPlayer = -1;
-        games[gameId].names = ["Player 1", "Player 2", "Player 3", "Player 4"];
-        
-        waitingPlayers.forEach((p, i) => {
+        games[gameId].names = Array(pCount).fill("Player");
+
+        players.forEach((p, i) => {
             p.join(gameId); 
             p.data.seat = i;
             p.data.gameId = gameId;
@@ -565,7 +621,8 @@ function joinGlobalGame(socket) {
             }
             sendUpdate(gameId, p.id, i);
         });
-        waitingPlayers = []; 
+        
+        console.log(`[MATCH] Started ${pCount}-Player ${mode.toUpperCase()} Game ${gameId}`);
     }
 }
 

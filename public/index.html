@@ -121,7 +121,15 @@
 <div id="screen-online" class="app-screen">
     <h2>PLAY ONLINE</h2>
     
-    <button class="menu-btn primary" onclick="connectToGame('rated')">🏆 RATED (4P)</button>
+    <div style="margin-bottom: 15px;">
+        <div style="color: #bdc3c7; font-size: 14px; margin-bottom: 5px;">FORMAT</div>
+        <div class="diff-grid">
+            <button class="diff-btn p-count-btn" onclick="selectPlayerCount(2, this)">2 PLAYERS</button>
+            <button class="diff-btn p-count-btn selected" onclick="selectPlayerCount(4, this)">4 PLAYERS</button>
+        </div>
+    </div>
+
+    <button class="menu-btn primary" onclick="connectToGame('rated')">🏆 FIND MATCH</button>
     <div class="info-text">Ranked matches. Auto-match.</div>
     
     <hr style="width: 50%; border-color: #555; margin: 15px 0;">
@@ -155,6 +163,14 @@
 
     <div class="form-group">
         <input type="number" id="create-pin" class="form-input" placeholder="PIN (4 digits)" maxlength="4" style="font-size: 24px; letter-spacing: 5px; width: 150px;">
+    </div>
+
+    <div style="margin: 15px 0;">
+        <div style="color: #bdc3c7; font-size: 14px; margin-bottom: 5px;">MAX PLAYERS</div>
+        <div class="diff-grid">
+            <button class="diff-btn p-count-btn" onclick="selectPlayerCount(2, this)">2 PLAYERS</button>
+            <button class="diff-btn p-count-btn selected" onclick="selectPlayerCount(4, this)">4 PLAYERS</button>
+        </div>
     </div>
 
     <br>

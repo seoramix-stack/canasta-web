@@ -436,12 +436,13 @@ function initSocket(token) {
 
     // --- QUEUE UPDATE HANDLER (Updated) ---
     state.socket.on('queue_update', (data) => {
-        // 1. Ensure we stay on the blank searching screen
         UI.navTo('screen-queue');
-
-        // 2. Update the text count (e.g. "2 / 4 Players Found")
         const el = document.getElementById('queue-msg');
-        if (el) el.innerText = `${data.count} / 4 Players Found`;
+        
+        // Support old format (just count) or new format (count + needed)
+        const needed = data.needed || 4; 
+        
+        if (el) el.innerText = `${data.count} / ${needed} Players Found`;
     });
 
     state.socket.on('deal_hand', (data) => {
@@ -613,8 +614,13 @@ window.doCreateRoom = () => {
     if (!roomName) return alert("Please enter a Room Name");
     if (!pin || pin.length !== 4) return alert("Enter a 4-digit PIN");
     
-    // Send both Name (as gameId) and PIN
-    state.socket.emit('request_create_private', { gameId: roomName, pin: pin });
+    // --- UPDATE: Send playerCount from state ---
+    // (We reuse the state.currentPlayerCount set by the button click)
+    state.socket.emit('request_create_private', { 
+        gameId: roomName, 
+        pin: pin,
+        playerCount: state.currentPlayerCount || 4 
+    });
 };
 
 window.doJoinPrivate = () => {

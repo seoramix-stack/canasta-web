@@ -269,18 +269,31 @@ class CanastaBot {
         }
     }
 
+    // bot.js
+
     pickDiscard(game) {
         let hand = game.players[this.seat];
         
+        // --- DIFFICULTY CHECK ---
         // EASY: 20% Chance to pick a totally random card (blunder)
         if (this.difficulty === 'easy' && Math.random() < 0.2) {
             return Math.floor(Math.random() * hand.length);
         }
 
-        // HARD/MEDIUM: Calculate "Safety Score"
-        let nextPlayerSeat = (this.seat + 1) % 4;
-        let enemyMelds = (nextPlayerSeat % 2 === 0) ? game.team1Melds : game.team2Melds;
+        // --- HARD/MEDIUM STRATEGY ---
+        
+        // 1. Determine Enemy Melds
+        // We need to know who the next player is to avoid feeding them.
+        // Use the game config to determine rotation size
+        const pCount = game.config ? game.config.PLAYER_COUNT : 4;
+        const nextPlayerSeat = (this.seat + 1) % pCount;
+        
+        // Identify which melds belong to the enemy
+        // In 2P (pCount=2): Seat 0 vs Seat 1. If I am 1, Next is 0 (Team 1).
+        // In 4P (pCount=4): If I am 1, Next is 2 (Team 1).
+        const enemyMelds = (nextPlayerSeat % 2 === 0) ? game.team1Melds : game.team2Melds;
 
+        // 2. Evaluate Candidates
         let candidates = hand.map((card, index) => {
             let score = 0;
             
@@ -288,13 +301,14 @@ class CanastaBot {
             if (card.isWild) score += 1000;
             if (card.isRed3) score += 2000; 
             
-            // HUGE Penalty for feeding the enemy a card they have melded
+            // CRITICAL: Do NOT feed the enemy a card they have melded
             if (enemyMelds[card.rank]) {
                 if (this.difficulty === 'hard') score += 5000; // Hard bot NEVER feeds
                 else score += 500; // Medium bot tries not to
             }
 
             // Bonus for discarding singles (safe to throw)
+            // (We want to discard cards we don't have pairs of)
             let matches = hand.filter(c => c.rank === card.rank).length;
             if (matches === 1) score -= 50; 
             
@@ -308,7 +322,7 @@ class CanastaBot {
             return { index, score };
         });
 
-        // Sort by lowest score (safest discard)
+        // 3. Sort by lowest score (safest discard)
         candidates.sort((a, b) => a.score - b.score);
         return candidates[0].index;
     }
