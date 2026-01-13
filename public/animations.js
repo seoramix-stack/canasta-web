@@ -1,7 +1,8 @@
 // animations.js
 import { state } from './state.js';
 
-export function flyCard(sourceRect, destRect, imageSrc, delay = 0, onComplete = null) {
+// Added 'fadeOut' parameter (default false)
+export function flyCard(sourceRect, destRect, imageSrc, delay = 0, onComplete = null, fadeOut = false) {
     // Safety Check: If destination is missing (e.g. game ended), abort
     if (!destRect || destRect.width === 0) return;
 
@@ -22,6 +23,9 @@ export function flyCard(sourceRect, destRect, imageSrc, delay = 0, onComplete = 
         flyer.style.left = (srcCenterX - stdW / 2) + "px";
         flyer.style.top = (srcCenterY - stdH / 2) + "px";
         
+        // Ensure starting opacity is 1
+        flyer.style.opacity = "1";
+        
         document.body.appendChild(flyer);
         // Force reflow
         flyer.getBoundingClientRect(); 
@@ -33,10 +37,15 @@ export function flyCard(sourceRect, destRect, imageSrc, delay = 0, onComplete = 
         
         flyer.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
         
+        // --- NEW: FADE OUT LOGIC ---
+        if (fadeOut) {
+            flyer.style.opacity = "0"; 
+        }
+
         setTimeout(() => {
             flyer.remove();
             if (onComplete) onComplete();
-        }, 500);
+        }, 500); // Duration matches CSS .flying-card transition
     }, delay);
 }
 
@@ -51,10 +60,10 @@ export function animatePlayerDiscard(cardIndex, cardData) {
         const srcRect = targetEl.getBoundingClientRect();
         const destRect = discardArea.getBoundingClientRect();
         
-        // 3. Get Image URL
+        // 3. Get Image URL (BackRed masks duplicate glitch)
         const imgUrl = "cards/BackRed.png";
 
-        // --- VISUAL POLISH: Hide the original card so it looks like it "left" your hand ---
+        // Hide original immediately
         targetEl.style.opacity = "0"; 
 
         // 4. Fly!
@@ -62,25 +71,74 @@ export function animatePlayerDiscard(cardIndex, cardData) {
     }
 }
 
+// --- OPTION 2: "THE DISSOLVE" ---
+export function animateMeld(indices, rank) {
+    // 1. Target the General Meld Container
+    const container = document.getElementById('my-melds');
+    if (!container) return;
+
+    const containerRect = container.getBoundingClientRect();
+    
+    // 2. Get Hand Elements to fly
+    const handCards = document.querySelectorAll('#my-hand .hand-card-wrap');
+
+    // 3. Launch Animations
+    indices.forEach(idx => {
+        const cardEl = handCards[idx];
+        if (cardEl) {
+            const srcRect = cardEl.getBoundingClientRect();
+            
+            // Image: Face Up is better for melds so we see what we played
+            const img = cardEl.querySelector('img');
+            const src = img ? img.src : "cards/BackRed.png";
+
+            // Hide the card in hand immediately
+            cardEl.style.opacity = "0";
+
+            // --- CALCULATE MIDPOINT DESTINATION ---
+            // Instead of flying to the exact spot (which might be wrong),
+            // we fly 50% of the way towards the center of the meld area.
+            
+            const srcCx = srcRect.left + srcRect.width/2;
+            const srcCy = srcRect.top + srcRect.height/2;
+            
+            const contCx = containerRect.left + containerRect.width/2;
+            const contCy = containerRect.top + containerRect.height/2;
+
+            // Interpolate 50% (0.5)
+            const midX = srcCx + (contCx - srcCx) * 0.5;
+            const midY = srcCy + (contCy - srcCy) * 0.5;
+
+            // Create a fake rect for the destination
+            const midRect = {
+                left: midX - srcRect.width/2,
+                top: midY - srcRect.height/2,
+                width: srcRect.width,
+                height: srcRect.height
+            };
+
+            // Call flyCard with fadeOut = true
+            flyCard(srcRect, midRect, src, 0, null, true);
+        }
+    });
+}
+
 export function handleServerAnimations(oldData, newData) {
     if (!oldData || !newData) return;
 
     // --- 1. DETECT DISCARDS (Opponents Only) ---
-    // Logic: If the top card of the discard pile changed, the person whose turn it WAS likely discarded it.
     const getSig = (c) => c ? (c.rank + c.suit) : "null";
     const oldTop = oldData.topDiscard;
     const newTop = newData.topDiscard;
 
     if (getSig(oldTop) !== getSig(newTop) && newTop) {
-        const actorSeat = oldData.currentPlayer; // The player who just finished their turn
+        const actorSeat = oldData.currentPlayer; 
 
-        // Only animate if it wasn't ME (I handle my own animations optimistically)
         if (actorSeat !== -1 && actorSeat !== state.mySeat) {
             const actorHandDiv = getHandDiv(actorSeat);
             const discardArea = document.getElementById('discard-area');
 
             if (actorHandDiv && discardArea) {
-                // Fly the card image from their hand to the pile
                 const srcRect = actorHandDiv.getBoundingClientRect();
                 const destRect = discardArea.getBoundingClientRect();
                 const imgUrl = getCardImage(newTop);
@@ -91,30 +149,25 @@ export function handleServerAnimations(oldData, newData) {
     }
 
     // --- 2. DETECT DRAWS (Opponents Only) ---
-    // Logic: Loop through all seats. If a hand grew larger, they drew cards.
     for (let i = 0; i < 4; i++) {
-        if (i === state.mySeat) continue; // Skip me
+        if (i === state.mySeat) continue; 
 
         const oldSize = oldData.handSizes ? oldData.handSizes[i] : 0;
         const newSize = newData.handSizes ? newData.handSizes[i] : 0;
 
         if (newSize > oldSize) {
-            // They gained cards. Determine source (Deck vs Pile).
             const deckDecreased = (newData.deckSize < oldData.deckSize);
             const handDiv = getHandDiv(i);
-            const drawArea = document.getElementById('draw-area');     // Deck
-            const discardArea = document.getElementById('discard-area'); // Pile
+            const drawArea = document.getElementById('draw-area');     
+            const discardArea = document.getElementById('discard-area'); 
 
             if (handDiv) {
                 let srcRect = null;
-                // Opponents usually draw face-down (BackRed), unless picking up the pile
                 const imgUrl = "cards/BackRed.png"; 
 
                 if (deckDecreased && drawArea) {
-                    // Standard Draw
                     srcRect = drawArea.getBoundingClientRect();
                 } else if (discardArea) {
-                    // Pile Pickup (Deck didn't decrease, but hand grew)
                     srcRect = discardArea.getBoundingClientRect();
                 }
 
@@ -126,13 +179,8 @@ export function handleServerAnimations(oldData, newData) {
         }
     }
 
-    // --- 3. LOCAL PLAYER DRAW (Keep existing logic) ---
-    // This handles the visual update for YOUR draw if it wasn't optimistic
+    // --- 3. LOCAL PLAYER DRAW ---
     if (oldData.hand && newData.hand && oldData.hand.length < newData.hand.length) {
-         // ... (Keep your existing Self-Draw logic here if you haven't moved it to optimistic UI) ...
-         // If you have moved completely to optimistic UI for draws, you can remove this block.
-         // Otherwise, ensure it only runs if the animation hasn't played yet.
-         // For safety, the existing logic I saw in your file is good to keep:
          const getCounts = (hand) => {
             const counts = {};
             hand.forEach(c => { const key = c.rank + c.suit; counts[key] = (counts[key] || 0) + 1; });
@@ -174,67 +222,4 @@ export function getHandDiv(seatIndex) {
     if (rel === 2) return document.getElementById('hand-partner');
     if (rel === 3) return document.getElementById('hand-right');
     return null;
-}
-
-
-// ... existing code ...
-
-export function animateMeld(indices, rank) {
-    let destRect;
-    
-    // 1. Try to find the existing pile
-    const existingPileId = `meld-pile-my-${rank}`;
-    const existingEl = document.getElementById(existingPileId);
-
-    if (existingEl) {
-        // CASE A: Add to existing pile -> Fly to that pile
-        destRect = existingEl.getBoundingClientRect();
-    } else {
-        // CASE B: New Meld -> The "Ghost Target" Technique
-        const container = document.getElementById('my-melds');
-        if (!container) return;
-
-        // 1. Create a dummy element that mimics a real meld group
-        const ghost = document.createElement('div');
-        ghost.className = 'meld-group';
-        ghost.style.visibility = 'hidden'; // Invisible
-        ghost.style.position = 'absolute'; // Prevent it from breaking layout permanently
-        // (Note: We use 'absolute' here so we don't cause a visual jump, 
-        // but we position it relative to the container to measure)
-        
-        // Actually, to get the TRUE flexbox position, we should let it flow, 
-        // measure it, and remove it before the browser repaints.
-        ghost.style.position = 'static'; 
-        
-        // Add a dummy card so it has the correct width/height
-        ghost.innerHTML = `<div class='meld-container'><img src="cards/BackRed.png" class="card-img meld-card"></div>`;
-
-        // 2. Append, Measure, Remove (Synchronous -> User won't see a flicker)
-        container.appendChild(ghost);
-        destRect = ghost.getBoundingClientRect();
-        container.removeChild(ghost);
-    }
-
-    if (!destRect) return;
-
-    // 2. Get Hand Elements to fly
-    const handCards = document.querySelectorAll('#my-hand .hand-card-wrap');
-
-    // 3. Launch Animations
-    indices.forEach(idx => {
-        const cardEl = handCards[idx];
-        if (cardEl) {
-            const srcRect = cardEl.getBoundingClientRect();
-            
-            // Get the real image to fly (Face Up is better for melds)
-            const img = cardEl.querySelector('img');
-            const src = img ? img.src : "cards/BackRed.png";
-
-            // Hide the card in hand immediately (prevents "duplicate" look)
-            cardEl.style.opacity = "0";
-
-            // Fly to the calculated Ghost Target
-            flyCard(srcRect, destRect, src, 0);
-        }
-    });
 }

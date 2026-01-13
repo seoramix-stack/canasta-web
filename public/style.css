@@ -1049,3 +1049,15 @@ body {
     padding: 0;
     width: 100%;
 }
+
+/* style.css - Fix for clipped meld cards */
+
+/* FIX: Allow rotated cards to stick out of the central table area */
+#table-zone {
+    overflow: visible !important;
+}
+
+/* Ensure the meld rows themselves don't hide anything either */
+.meld-row {
+    overflow: visible !important;
+}

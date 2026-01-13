@@ -74,7 +74,7 @@ export function updateUI(data) {
         head1.innerText = amITeam1 ? "My Team" : "Opponents";
         head2.innerText = amITeam1 ? "Opponents" : "My Team";
     }
-    
+
     // Names
     if (data.names) {
         document.getElementById('name-me').innerText = data.names[s];
@@ -259,7 +259,7 @@ function renderTable(elementId, meldsObj, red3sArray) {
         groupDiv.id = `meld-pile-${teamSuffix}-${groupData.rank}`;
         
         groupDiv.style.position = "relative";
-        groupDiv.style.zIndex = gIdx + 100;
+        groupDiv.style.zIndex = (openMelds.length - gIdx) + 100;
         
         if (gIdx < openMelds.length - 1) {
             groupDiv.style.marginRight = `${horizMargin}px`;
