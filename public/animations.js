@@ -176,55 +176,65 @@ export function getHandDiv(seatIndex) {
     return null;
 }
 
-// animations.js
 
 // ... existing code ...
 
 export function animateMeld(indices, rank) {
-    // 1. Try to find the specific pile for this rank
-    const specificPileId = `meld-pile-my-${rank}`; // ID pattern from ui.js
-    let destEl = document.getElementById(specificPileId);
-    let useContainerTarget = false;
+    let destRect;
+    
+    // 1. Try to find the existing pile
+    const existingPileId = `meld-pile-my-${rank}`;
+    const existingEl = document.getElementById(existingPileId);
 
-    // 2. If pile doesn't exist (New Meld), aim for the main container
-    if (!destEl) {
-        destEl = document.getElementById('my-melds');
-        useContainerTarget = true;
+    if (existingEl) {
+        // CASE A: Add to existing pile -> Fly to that pile
+        destRect = existingEl.getBoundingClientRect();
+    } else {
+        // CASE B: New Meld -> The "Ghost Target" Technique
+        const container = document.getElementById('my-melds');
+        if (!container) return;
+
+        // 1. Create a dummy element that mimics a real meld group
+        const ghost = document.createElement('div');
+        ghost.className = 'meld-group';
+        ghost.style.visibility = 'hidden'; // Invisible
+        ghost.style.position = 'absolute'; // Prevent it from breaking layout permanently
+        // (Note: We use 'absolute' here so we don't cause a visual jump, 
+        // but we position it relative to the container to measure)
+        
+        // Actually, to get the TRUE flexbox position, we should let it flow, 
+        // measure it, and remove it before the browser repaints.
+        ghost.style.position = 'static'; 
+        
+        // Add a dummy card so it has the correct width/height
+        ghost.innerHTML = `<div class='meld-container'><img src="cards/BackRed.png" class="card-img meld-card"></div>`;
+
+        // 2. Append, Measure, Remove (Synchronous -> User won't see a flicker)
+        container.appendChild(ghost);
+        destRect = ghost.getBoundingClientRect();
+        container.removeChild(ghost);
     }
 
-    if (!destEl) return;
+    if (!destRect) return;
 
-    // 3. Get Hand Elements
+    // 2. Get Hand Elements to fly
     const handCards = document.querySelectorAll('#my-hand .hand-card-wrap');
 
-    // 4. Calculate Destination Rect
-    const destRect = destEl.getBoundingClientRect();
-    
-    // ADJUSTMENT: If aiming for the container (New Meld), aim for the RIGHT side
-    // (Create a fake rect that represents the "end" of the container)
-    let finalDestRect = destRect;
-    if (useContainerTarget) {
-        finalDestRect = {
-            left: destRect.right - 60, // Aim at the end (minus approx card width)
-            top: destRect.top,
-            width: destRect.width,
-            height: destRect.height
-        };
-    }
-
-    // 5. Animate Each Card
+    // 3. Launch Animations
     indices.forEach(idx => {
         const cardEl = handCards[idx];
         if (cardEl) {
             const srcRect = cardEl.getBoundingClientRect();
+            
+            // Get the real image to fly (Face Up is better for melds)
             const img = cardEl.querySelector('img');
             const src = img ? img.src : "cards/BackRed.png";
 
-            // Hide original immediately so it looks like it left your hand
+            // Hide the card in hand immediately (prevents "duplicate" look)
             cardEl.style.opacity = "0";
 
-            // Fly!
-            flyCard(srcRect, finalDestRect, src, 0);
+            // Fly to the calculated Ghost Target
+            flyCard(srcRect, destRect, src, 0);
         }
     });
 }
