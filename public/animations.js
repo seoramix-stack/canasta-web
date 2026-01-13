@@ -51,8 +51,11 @@ export function animatePlayerDiscard(cardIndex, cardData) {
         const srcRect = targetEl.getBoundingClientRect();
         const destRect = discardArea.getBoundingClientRect();
         
-        // 3. Get Image URL (reuse your existing helper)
+        // 3. Get Image URL
         const imgUrl = getCardImage(cardData);
+
+        // --- VISUAL POLISH: Hide the original card so it looks like it "left" your hand ---
+        targetEl.style.opacity = "0"; 
 
         // 4. Fly!
         flyCard(srcRect, destRect, imgUrl, 0);

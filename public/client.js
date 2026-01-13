@@ -117,10 +117,19 @@ window.toggleSelect = (idx) => {
 
 window.handleDiscardClick = () => {
     if (state.selectedIndices.length === 1) {
+        // --- FIX START ---
+        // 1. Get the card data so we can animate it
+        const idx = state.selectedIndices[0];
+        const card = state.activeData.hand[idx];
+
+        // 2. Trigger the optimistic animation immediately
+        Anim.animatePlayerDiscard(idx, card);
+        // --- FIX END ---
+
         state.socket.emit('act_discard', { seat: state.mySeat, index: state.selectedIndices[0] });
         state.selectedIndices = [];
     } else {
-        // If selecting multiple cards, assume they want to pick up the pile (Staging logic)
+        // If selecting multiple cards, assume they want to pick up the pile
         handlePickupClick();
     }
 };
