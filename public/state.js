@@ -4,6 +4,7 @@ export const state = {
     playerToken: localStorage.getItem("canasta_token"),
     playerUsername: localStorage.getItem("canasta_user"),
     currentBotDiff: 'medium',
+    currentPlayerCount: 4,
     mySeat: -1,
     selectedIndices: [],
     activeData: null,

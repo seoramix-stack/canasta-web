@@ -226,10 +226,20 @@ export function getCardImage(card) {
 }
 
 export function getHandDiv(seatIndex) {
+    // 1. MY SEAT
+    if (seatIndex === state.mySeat) return document.getElementById('my-hand');
+
+    // 2. 2-PLAYER MODE OVERRIDE
+    if (state.currentPlayerCount === 2) {
+        // In 2P, the only other player (Opponent) is always mapped to the TOP (Partner) slot.
+        return document.getElementById('hand-partner');
+    }
+
+    // 3. STANDARD 4-PLAYER MAPPING
     const rel = (seatIndex - state.mySeat + 4) % 4;
-    if (rel === 0) return document.getElementById('my-hand');
     if (rel === 1) return document.getElementById('hand-left');
     if (rel === 2) return document.getElementById('hand-partner');
     if (rel === 3) return document.getElementById('hand-right');
+    
     return null;
 }

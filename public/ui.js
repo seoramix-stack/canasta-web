@@ -17,12 +17,15 @@ export function toggleGameMenu() {
 // --- RENDER FUNCTIONS ---
 export { renderHand };
 
+// ui.js
+
 export function updateUI(data) {
     state.activeData = data;
     
-    // Safety check for critical elements
+    // Safety check
     if(!document.getElementById('game-ui')) return;
 
+    // Ready Modal Logic
     const readyModal = document.getElementById('ready-modal');
     if (data.currentPlayer === -1 && data.phase !== 'game_over') {
         if(readyModal) readyModal.style.display = 'flex';
@@ -42,64 +45,90 @@ export function updateUI(data) {
     renderHand(data.hand);
     
     const s = state.mySeat;
+
+    // --- RENDER MELDS (Top = Enemy, Bottom = Me) ---
+    // In 2P, Team 2 is the Enemy, so they go to "enemy-melds" (Top), which is correct.
     renderTable("enemy-melds", (s % 2 === 0) ? data.team2Melds : data.team1Melds, (s % 2 === 0) ? data.team2Red3s : data.team1Red3s);
     renderTable("my-melds", (s % 2 === 0) ? data.team1Melds : data.team2Melds, (s % 2 === 0) ? data.team1Red3s : data.team2Red3s);
     
-    renderOtherHand("hand-partner", data.handSizes[(s + 2) % 4], 'horiz');
-    renderOtherHand("hand-left", data.handSizes[(s + 1) % 4], 'vert');
-    renderOtherHand("hand-right", data.handSizes[(s + 3) % 4], 'vert');
+    // --- SEATING LOGIC UPDATE (2P vs 4P) ---
+    const is2P = (state.currentPlayerCount === 2);
+    
+    if (is2P) {
+        // 2-PLAYER MODE: Opponent sits at Top (Partner Zone)
+        const oppSeat = (s === 0) ? 1 : 0; // If I am 0, Opponent is 1
 
-    // Update Text info
+        renderOtherHand("hand-partner", data.handSizes[oppSeat], 'horiz'); // Top
+        renderOtherHand("hand-left", 0, 'vert');   // Empty
+        renderOtherHand("hand-right", 0, 'vert');  // Empty
+
+        // Update Names & HUD Visibility
+        if (data.names) {
+            document.getElementById('name-me').innerText = data.names[s] || "";
+            document.getElementById('name-partner').innerText = data.names[oppSeat] || ""; // Opponent Name
+            
+            // Hide Side HUDs
+            const hide = (id) => { if(document.getElementById(id)) document.getElementById(id).style.opacity = '0'; };
+            hide('hud-left');
+            hide('hud-right');
+            
+            // Show Top HUD
+            const topHud = document.getElementById('hud-partner');
+            if(topHud) topHud.style.opacity = '1';
+        }
+
+        // Active Turn Light
+        const myLight = document.getElementById('light-me');
+        const oppLight = document.getElementById('light-partner');
+
+        if (myLight) myLight.classList.toggle('active', data.currentPlayer === s);
+        if (oppLight) oppLight.classList.toggle('active', data.currentPlayer === oppSeat);
+
+    } else {
+        // 4-PLAYER MODE (Standard)
+        renderOtherHand("hand-partner", data.handSizes[(s + 2) % 4], 'horiz');
+        renderOtherHand("hand-left", data.handSizes[(s + 1) % 4], 'vert');
+        renderOtherHand("hand-right", data.handSizes[(s + 3) % 4], 'vert');
+
+        if (data.names) {
+            document.getElementById('name-me').innerText = data.names[s];
+            document.getElementById('name-partner').innerText = data.names[(s + 2) % 4];
+            document.getElementById('name-left').innerText = data.names[(s + 1) % 4];
+            document.getElementById('name-right').innerText = data.names[(s + 3) % 4];
+            
+            // Show All HUDs
+            ['hud-left', 'hud-right', 'hud-partner'].forEach(id => {
+                if(document.getElementById(id)) document.getElementById(id).style.opacity = '1';
+            });
+        }
+        
+        // 4P Lights
+        const lightMap = [
+            { id: 'light-me',      seatIndex: s },
+            { id: 'light-left',    seatIndex: (s + 1) % 4 },
+            { id: 'light-partner', seatIndex: (s + 2) % 4 },
+            { id: 'light-right',   seatIndex: (s + 3) % 4 }
+        ];
+        lightMap.forEach(m => {
+            const el = document.getElementById(m.id);
+            if (el) el.classList.toggle('active', m.seatIndex === data.currentPlayer);
+        });
+    }
+
+    // Text updates
     document.getElementById('live-s1').innerText = data.cumulativeScores.team1;
     document.getElementById('live-s2').innerText = data.cumulativeScores.team2;
     if (data.deckSize !== undefined) document.getElementById('deck-count').innerText = data.deckSize;
-    // --- NEW: DYNAMIC TEAM NAMES ---
-    // Determine if I am Team 1 (Seats 0 & 2) or Team 2 (Seats 1 & 3)
-    const amITeam1 = (state.mySeat === 0 || state.mySeat === 2);
     
-    // 1. Update In-Game Scoreboard Labels
+    // Labels
+    const amITeam1 = (state.mySeat === 0 || state.mySeat === 2);
     const lbl1 = document.getElementById('lbl-s1');
     const lbl2 = document.getElementById('lbl-s2');
-    
     if (lbl1 && lbl2) {
         lbl1.innerText = amITeam1 ? "MY TEAM" : "OPPONENTS";
         lbl2.innerText = amITeam1 ? "OPPONENTS" : "MY TEAM";
     }
 
-    // 2. Update Round-End Modal Headers
-    const head1 = document.getElementById('header-col-1');
-    const head2 = document.getElementById('header-col-2');
-    
-    if (head1 && head2) {
-        head1.innerText = amITeam1 ? "My Team" : "Opponents";
-        head2.innerText = amITeam1 ? "Opponents" : "My Team";
-    }
-
-    // Names
-    if (data.names) {
-        document.getElementById('name-me').innerText = data.names[s];
-        document.getElementById('name-partner').innerText = data.names[(s + 2) % 4];
-        document.getElementById('name-left').innerText = data.names[(s + 1) % 4];
-        document.getElementById('name-right').innerText = data.names[(s + 3) % 4];
-    }
-    const lightMap = [
-        { id: 'light-me',      seatIndex: s },
-        { id: 'light-left',    seatIndex: (s + 1) % 4 },
-        { id: 'light-partner', seatIndex: (s + 2) % 4 },
-        { id: 'light-right',   seatIndex: (s + 3) % 4 }
-    ];
-
-    lightMap.forEach(mapping => {
-        const el = document.getElementById(mapping.id);
-        if (el) {
-            if (mapping.seatIndex === data.currentPlayer) {
-                el.classList.add('active'); 
-            } else {
-                el.classList.remove('active'); 
-            }
-        }
-    });
-    // Turn Logic
     state.currentTurnSeat = data.currentPlayer;
     state.gameStarted = true;
 }

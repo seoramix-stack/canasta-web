@@ -60,15 +60,22 @@
 
 <div id="screen-bot" class="app-screen">
     <h2>VS BOTS</h2>
-    <div class="info-text">Practice match with 3 bots</div>
-    
+    <div class="info-text">Practice match</div>
+
+    <div style="margin-bottom: 10px; color: #bdc3c7; font-size: 14px; margin-top: 10px;">PLAYERS</div>
+    <div class="diff-grid">
+        <button class="diff-btn p-count-btn" onclick="selectPlayerCount(2, this)">2 PLAYERS</button>
+        <button class="diff-btn p-count-btn selected" onclick="selectPlayerCount(4, this)">4 PLAYERS</button>
+    </div>
+
+    <div style="margin-bottom: 10px; color: #bdc3c7; font-size: 14px; margin-top: 20px;">DIFFICULTY</div>
     <div class="diff-grid">
         <button class="diff-btn" onclick="selectDiff('easy', this)">EASY</button>
         <button class="diff-btn selected" onclick="selectDiff('medium', this)">MEDIUM</button>
         <button class="diff-btn" onclick="selectDiff('hard', this)">HARD</button>
     </div>
 
-    <button class="menu-btn primary" onclick="connectToGame('bot')">START MATCH</button>
+    <button class="menu-btn primary" onclick="connectToGame('bot')" style="margin-top: 20px;">START MATCH</button>
     <button class="menu-btn text-only" onclick="navTo('screen-home')">BACK</button>
 </div>
 

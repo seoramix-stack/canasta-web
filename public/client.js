@@ -82,7 +82,12 @@ window.connectToGame = (mode) => {
     const el = document.getElementById('queue-msg');
     if(el) el.innerText = "Connecting...";
 
-    state.socket.emit('request_join', { mode: mode, difficulty: state.currentBotDiff });
+    // --- PHASE 3 UPDATE: SEND PLAYER COUNT ---
+    state.socket.emit('request_join', { 
+        mode: mode, 
+        difficulty: state.currentBotDiff,
+        playerCount: state.currentPlayerCount // <--- SENT HERE
+    });
 };
 
 window.leaveGame = () => {
@@ -221,7 +226,7 @@ function handleStandardMeld() {
 
     if (!targetRank) return;
     Anim.animateMeld(state.selectedIndices, targetRank);
-    
+
     state.socket.emit('act_meld', { 
         seat: state.mySeat, 
         indices: state.selectedIndices, 
@@ -344,6 +349,15 @@ window.cancelOpening = () => {
     state.pickupStaged = false;
     document.getElementById('staging-panel').style.display = 'none';
     if(state.activeData) UI.renderHand(state.activeData.hand);
+};
+
+window.selectPlayerCount = (count, btn) => {
+    // 1. Update State
+    state.currentPlayerCount = count;
+    
+    // 2. Visual Feedback
+    document.querySelectorAll('.p-count-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
 };
 
 // --- PICKUP LOGIC ---
