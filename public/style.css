@@ -574,6 +574,7 @@ body {
         /* FIX 5: Align Top on Desktop too */
         align-items: flex-start !important;
         gap: 30px !important; 
+        padding-top: 35px !important;
         padding-bottom: 0px; 
         margin: 0 !important;
         min-height: 0;
@@ -1021,4 +1022,30 @@ body {
     .pile-area {
         transform: translateX(-40px) !important;
     }
+}
+
+/* FIX: Force Side Zones to hug the screen edges on Mobile */
+#hand-left-zone {
+    align-items: flex-start !important; /* Push content to the Left Wall */
+}
+
+#hand-right-zone {
+    align-items: flex-end !important;   /* Push content to the Right Wall */
+}
+
+/* FIX: Refine the Push values */
+#hand-left {
+    align-items: flex-start; 
+    /* Increased push to hide the bottom gap */
+    transform: translateX(-42px); 
+    padding: 0;
+    width: 100%; 
+}
+
+#hand-right {
+    align-items: flex-end;
+    /* Increased push to hide the bottom gap */
+    transform: translateX(42px); 
+    padding: 0;
+    width: 100%;
 }

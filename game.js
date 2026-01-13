@@ -298,9 +298,15 @@ class CanastaGame {
             currentCanastas++;
         }
 
-        if (cardsRemaining === 0) { 
-            if (currentCanastas < this.config.MIN_CANASTAS_OUT) {
-                return { success: false, message: `Need ${this.config.MIN_CANASTAS_OUT} Canastas to go out!` };
+        // --- CRITICAL FIX: PREVENT GETTING STUCK WITH 1 CARD ---
+        // If you don't have the Canastas to win, you MUST keep at least 2 cards:
+        // 1 to discard + 1 to keep holding.
+        if (currentCanastas < this.config.MIN_CANASTAS_OUT) {
+            if (cardsRemaining === 0) {
+                 return { success: false, message: `Need ${this.config.MIN_CANASTAS_OUT} Canastas to Float (go out without discard)!` };
+            }
+            if (cardsRemaining === 1) {
+                 return { success: false, message: `Cannot meld down to 1 card without ${this.config.MIN_CANASTAS_OUT} Canastas!` };
             }
         }
 
