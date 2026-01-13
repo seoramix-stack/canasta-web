@@ -154,6 +154,7 @@ window.handleMeldClick = (event, targetRank) => {
         console.log("Mismatch detected: Redirecting to New Meld logic.");
         meldSelected(); 
     } else {
+        Anim.animateMeld(state.selectedIndices, targetRank);
         // --- ADD TO PILE ---
         // You are holding Kings or Wilds, and you clicked Kings.
         // You intended to add to this pile.
@@ -219,7 +220,8 @@ function handleStandardMeld() {
     }
 
     if (!targetRank) return;
-
+    Anim.animateMeld(state.selectedIndices, targetRank);
+    
     state.socket.emit('act_meld', { 
         seat: state.mySeat, 
         indices: state.selectedIndices, 

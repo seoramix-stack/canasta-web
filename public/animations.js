@@ -52,7 +52,7 @@ export function animatePlayerDiscard(cardIndex, cardData) {
         const destRect = discardArea.getBoundingClientRect();
         
         // 3. Get Image URL
-        const imgUrl = getCardImage(cardData);
+        const imgUrl = "cards/BackRed.png";
 
         // --- VISUAL POLISH: Hide the original card so it looks like it "left" your hand ---
         targetEl.style.opacity = "0"; 
@@ -174,4 +174,57 @@ export function getHandDiv(seatIndex) {
     if (rel === 2) return document.getElementById('hand-partner');
     if (rel === 3) return document.getElementById('hand-right');
     return null;
+}
+
+// animations.js
+
+// ... existing code ...
+
+export function animateMeld(indices, rank) {
+    // 1. Try to find the specific pile for this rank
+    const specificPileId = `meld-pile-my-${rank}`; // ID pattern from ui.js
+    let destEl = document.getElementById(specificPileId);
+    let useContainerTarget = false;
+
+    // 2. If pile doesn't exist (New Meld), aim for the main container
+    if (!destEl) {
+        destEl = document.getElementById('my-melds');
+        useContainerTarget = true;
+    }
+
+    if (!destEl) return;
+
+    // 3. Get Hand Elements
+    const handCards = document.querySelectorAll('#my-hand .hand-card-wrap');
+
+    // 4. Calculate Destination Rect
+    const destRect = destEl.getBoundingClientRect();
+    
+    // ADJUSTMENT: If aiming for the container (New Meld), aim for the RIGHT side
+    // (Create a fake rect that represents the "end" of the container)
+    let finalDestRect = destRect;
+    if (useContainerTarget) {
+        finalDestRect = {
+            left: destRect.right - 60, // Aim at the end (minus approx card width)
+            top: destRect.top,
+            width: destRect.width,
+            height: destRect.height
+        };
+    }
+
+    // 5. Animate Each Card
+    indices.forEach(idx => {
+        const cardEl = handCards[idx];
+        if (cardEl) {
+            const srcRect = cardEl.getBoundingClientRect();
+            const img = cardEl.querySelector('img');
+            const src = img ? img.src : "cards/BackRed.png";
+
+            // Hide original immediately so it looks like it left your hand
+            cardEl.style.opacity = "0";
+
+            // Fly!
+            flyCard(srcRect, finalDestRect, src, 0);
+        }
+    });
 }
