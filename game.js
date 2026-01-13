@@ -9,13 +9,14 @@ class CanastaGame {
             MIN_CANASTAS_OUT: 2,       // User requested default: 2 Canastas to go out
             DRAW_COUNT: 2,             // Standard: Draw 2 cards
             HAND_SIZE: 11,             // Standard 4P: 11 Cards
+            PLAYER_COUNT: 4,
             ...customConfig            // Allows overriding rules later
         };
 
         // --- GAME STATE ---
         this.deck = [];
         this.discardPile = [];
-        this.players = [[], [], [], []]; 
+        this.players = Array.from({ length: this.config.PLAYER_COUNT }, () => []);
         this.team1Melds = {}; 
         this.team2Melds = {};
         this.team1Red3s = [];
@@ -110,7 +111,7 @@ class CanastaGame {
             return 'game_already_over'; 
         }
 
-        this.roundStarter = (this.roundStarter + 1) % 4;
+        this.roundStarter = (this.roundStarter + 1) % this.config.PLAYER_COUNT;
         this.setupRound();
         console.log(`NEXT ROUND STARTED. Starter: Player ${this.roundStarter}`);
         return null; 
@@ -119,7 +120,7 @@ class CanastaGame {
     setupRound() {
         this.deck = shuffle(createCanastaDeck());
         this.discardPile = [];
-        this.players = [[], [], [], []];
+        this.players = Array.from({ length: this.config.PLAYER_COUNT }, () => []);
         this.team1Melds = {}; this.team2Melds = {};
         this.team1Red3s = []; this.team2Red3s = [];
         this.finalScores = null;
@@ -128,10 +129,10 @@ class CanastaGame {
         this.turnPhase = "draw";
 
         // Deal (Using Config)
-        for (let i = 0; i < 4; i++) {
-            this.players[i] = this.deck.splice(0, this.config.HAND_SIZE);
-            this.checkRed3s(i);
-        }
+        for (let i = 0; i < this.config.PLAYER_COUNT; i++) {
+        this.players[i] = this.deck.splice(0, this.config.HAND_SIZE);
+        this.checkRed3s(i);
+    }
 
         // Setup Discard
         if (this.deck.length > 0) {
@@ -361,7 +362,7 @@ class CanastaGame {
         hand.splice(cardIndex, 1);
         this.discardPile.push(card);
         this.turnPhase = "draw";
-        this.currentPlayer = (this.currentPlayer + 1) % 4;
+        this.currentPlayer = (this.currentPlayer + 1) % this.config.PLAYER_COUNT;
         return { success: true };
     }
 
@@ -395,11 +396,19 @@ class CanastaGame {
             return details;
         };
 
-        return {
-            team1: calcTeam(this.team1Melds, this.team1Red3s, [0, 2]),
-            team2: calcTeam(this.team2Melds, this.team2Red3s, [1, 3])
-        };
-    }
+        const pCount = this.config.PLAYER_COUNT;
+    
+    // Dynamic Team Indices:
+    // 2-Player: Team 1 = [0], Team 2 = [1]
+    // 4-Player: Team 1 = [0, 2], Team 2 = [1, 3]
+    const team1Indices = (pCount === 2) ? [0] : [0, 2];
+    const team2Indices = (pCount === 2) ? [1] : [1, 3];
+
+    return {
+        team1: calcTeam(this.team1Melds, this.team1Red3s, team1Indices),
+        team2: calcTeam(this.team2Melds, this.team2Red3s, team2Indices)
+    };
+}
 
     processOpening(seat, meldsData, wantPickup) {
         const requiredPhase = wantPickup ? "draw" : "playing";
