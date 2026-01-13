@@ -163,9 +163,9 @@ body {
 /* ========================================= */
 
 /* Push Left Opponent further Left */
-#hand-left { transform: translateX(-20px); }
+#hand-left { align-items: flex-start; transform: translateX(-20px); }
 /* Push Right Opponent further Right */
-#hand-right { transform: translateX(20px); }
+#hand-right { align-items: flex-start; transform: translateX(20px); }
 
 /* style.css */
 
