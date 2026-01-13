@@ -127,12 +127,20 @@ export function handleServerAnimations(oldData, newData) {
     if (!oldData || !newData) return;
 
     // --- 1. DETECT DISCARDS (Opponents Only) ---
+    // Improved Logic: Check for Phase Transition (Playing -> Draw/GameOver)
+    // This implies the player finished their turn by discarding (or going out).
+    
+    const wasPlaying = oldData.phase === 'playing';
+    const nowDrawOrEnd = (newData.phase === 'draw' || newData.phase === 'game_over');
+    
+    // Also verify the pile top card actually changed (avoids animation if floating out)
     const getSig = (c) => c ? (c.rank + c.suit) : "null";
     const oldTop = oldData.topDiscard;
     const newTop = newData.topDiscard;
+    const pileChanged = getSig(oldTop) !== getSig(newTop);
 
-    if (getSig(oldTop) !== getSig(newTop) && newTop) {
-        const actorSeat = oldData.currentPlayer; 
+    if (wasPlaying && nowDrawOrEnd && newTop && pileChanged) {
+        const actorSeat = oldData.currentPlayer; // The player who just finished their turn
 
         if (actorSeat !== -1 && actorSeat !== state.mySeat) {
             const actorHandDiv = getHandDiv(actorSeat);
@@ -141,6 +149,8 @@ export function handleServerAnimations(oldData, newData) {
             if (actorHandDiv && discardArea) {
                 const srcRect = actorHandDiv.getBoundingClientRect();
                 const destRect = discardArea.getBoundingClientRect();
+                
+                // For opponents, we show the FACE of the card so you see what they threw.
                 const imgUrl = getCardImage(newTop);
 
                 flyCard(srcRect, destRect, imgUrl, 0);

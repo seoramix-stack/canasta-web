@@ -259,7 +259,7 @@ function renderTable(elementId, meldsObj, red3sArray) {
         groupDiv.id = `meld-pile-${teamSuffix}-${groupData.rank}`;
         
         groupDiv.style.position = "relative";
-        groupDiv.style.zIndex = (openMelds.length - gIdx) + 100;
+        groupDiv.style.zIndex = gIdx + 100;
         
         if (gIdx < openMelds.length - 1) {
             groupDiv.style.marginRight = `${horizMargin}px`;
