@@ -159,7 +159,7 @@ window.handleMeldClick = (event, targetRank) => {
         console.log("Mismatch detected: Redirecting to New Meld logic.");
         meldSelected(); 
     } else {
-        Anim.animateMeld(state.selectedIndices, targetRank);
+        Anim.animateMeld(state.selectedIndices, targetRank, UI.updateUI);
         // --- ADD TO PILE ---
         // You are holding Kings or Wilds, and you clicked Kings.
         // You intended to add to this pile.
@@ -225,7 +225,7 @@ function handleStandardMeld() {
     }
 
     if (!targetRank) return;
-    Anim.animateMeld(state.selectedIndices, targetRank);
+    Anim.animateMeld(state.selectedIndices, targetRank, UI.updateUI);
 
     state.socket.emit('act_meld', { 
         seat: state.mySeat, 
@@ -472,12 +472,17 @@ function initSocket(token) {
     });
 
     state.socket.on('update_game', (data) => {
-        // Run animations if we have old data
-        if (state.activeData) {
-            Anim.handleServerAnimations(state.activeData, data, UI.renderDiscardPile);
-        }
-        UI.updateUI(data);
-    });
+    // 1. Define the full update callback
+    const performFullUpdate = () => UI.updateUI(data);
+
+    if (state.activeData) {
+        // 2. Pass the FULL update function to animations
+        Anim.handleServerAnimations(state.activeData, data, performFullUpdate);
+    }
+    
+    // 3. Perform the initial update (unless locked by animation flags)
+    UI.updateUI(data);
+});
 
     state.socket.on('match_over', (data) => {
         // Fix for the Crash: Ensure we don't try to access UI if user left

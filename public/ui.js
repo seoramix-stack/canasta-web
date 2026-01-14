@@ -196,7 +196,7 @@ export function updateUI(data) {
 function renderTable(elementId, meldsObj, red3sArray) {
     const container = document.getElementById(elementId);
     if (!container) return;
-    
+    if (state.meldAnimationActive) return;
     container.innerHTML = "";
 
     // 1. Sort & Separate Data

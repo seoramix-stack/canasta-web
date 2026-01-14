@@ -17,7 +17,8 @@ export const state = {
     timerInterval: null,
     gameStarted: false,
     isTransitioning: false,
-    discardAnimationActive: false
+    discardAnimationActive: false,
+    meldAnimationActive: false
 };
 
 // Helper to save session
