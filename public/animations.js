@@ -49,99 +49,136 @@ export function flyCard(sourceRect, destRect, imageSrc, delay = 0, onComplete = 
     }, delay);
 }
 
-export function animatePlayerDiscard(cardIndex, cardData) {
-    // 1. Find the specific DOM element in the hand
+// REPLACE THIS FUNCTION IN animations.js
+export function animatePlayerDiscard(cardIndex, cardData, renderCallback) {
     const allHandCards = document.querySelectorAll('#my-hand .hand-card-wrap');
     const targetEl = allHandCards[cardIndex];
     const discardArea = document.getElementById('discard-area');
 
     if (targetEl && discardArea) {
-        // 2. Get Coordinates
         const srcRect = targetEl.getBoundingClientRect();
         const destRect = discardArea.getBoundingClientRect();
         
-        // 3. Get Image URL (BackRed masks duplicate glitch)
-        const imgUrl = "cards/BackRed.png";
+        // SAFETY CHECK: Only animate if both elements are actually visible
+        if (srcRect.width > 0 && destRect.width > 0) {
+            // 1. LOCK: Tell UI to show the OLD pile state
+            state.discardAnimationActive = true;
+            
+            const imgUrl = getCardImage(cardData); // Show Face Up
+            targetEl.style.opacity = "0"; 
 
-        // Hide original immediately
-        targetEl.style.opacity = "0"; 
-
-        // 4. Fly!
-        flyCard(srcRect, destRect, imgUrl, 0);
+            // 2. FLY:
+            flyCard(srcRect, destRect, imgUrl, 0, () => {
+                // 3. UNLOCK: Animation done.
+                state.discardAnimationActive = false;
+                
+                // 4. TRIGGER: Force UI to re-render the pile
+                if (renderCallback && state.activeData) renderCallback(state.activeData);
+            });
+        }
     }
 }
 
-// --- OPTION 2: "THE DISSOLVE" ---
 export function animateMeld(indices, rank) {
-    // 1. Target the General Meld Container
-    const container = document.getElementById('my-melds');
-    if (!container) return;
-
-    const containerRect = container.getBoundingClientRect();
+    // 1. Target the Specific Rank Pile
+    // The ID format comes from your ui.js logic: `meld-pile-my-${rank}`
+    // If the pile doesn't exist yet (new meld), we default to the container center.
+    const pileId = `meld-pile-my-${rank}`;
+    let destRect = null;
     
-    // 2. Get Hand Elements to fly
-    const handCards = document.querySelectorAll('#my-hand .hand-card-wrap');
+    const pileEl = document.getElementById(pileId);
+    const container = document.getElementById('my-melds');
+
+    // 2. Determine Destination
+    if (pileEl) {
+        // SCENARIO A: ADDING TO EXISTING MELD
+        // Find the last card currently in this pile
+        const existingCards = pileEl.querySelectorAll('.meld-card');
+        
+        if (existingCards.length > 0) {
+            const lastCard = existingCards[existingCards.length - 1];
+            const lastRect = lastCard.getBoundingClientRect();
+            
+            // Calculate the "Next Spot" in the cascade.
+            // In ui.js, the vertical margin (vertMargin) determines the overlap.
+            // On desktop (~105px height), the visible strip is small (~20px).
+            // We want to land roughly on top of the last card, shifted down by that visible strip.
+            
+            const isDesktop = window.innerWidth > 800;
+            const offsetStep = isDesktop ? 22 : 18; // Matches 'visibleStrip' from ui.js
+            
+            destRect = {
+                left: lastRect.left,
+                top: lastRect.top + offsetStep, 
+                width: lastRect.width,
+                height: lastRect.height
+            };
+        } else {
+            // Pile exists but empty (rare edge case), fallback to pile header
+            destRect = pileEl.getBoundingClientRect();
+        }
+    } 
+    
+    // SCENARIO B: NEW MELD (Pile doesn't exist yet)
+    // We target the "my-melds" container, but we try to estimate where the NEW pile will appear.
+    // Since flexbox adds to the right, we aim for the rightmost edge of the container.
+    if (!destRect && container) {
+        const cRect = container.getBoundingClientRect();
+        // Default to centering it vertically, but placing it at the end horizontally
+        destRect = {
+            left: cRect.right - 60, // Approximate width of a card group
+            top: cRect.top + (cRect.height / 2) - 40, 
+            width: 50,
+            height: 70
+        };
+    }
+
+    // Safety fallback
+    if (!destRect) return;
 
     // 3. Launch Animations
-    indices.forEach(idx => {
+    const handCards = document.querySelectorAll('#my-hand .hand-card-wrap');
+
+    indices.forEach((idx, i) => {
         const cardEl = handCards[idx];
         if (cardEl) {
             const srcRect = cardEl.getBoundingClientRect();
             
-            // Image: Face Up is better for melds so we see what we played
+            // Image: Face Up
             const img = cardEl.querySelector('img');
             const src = img ? img.src : "cards/BackRed.png";
 
-            // Hide the card in hand immediately
+            // Hide immediately
             cardEl.style.opacity = "0";
 
-            // --- CALCULATE MIDPOINT DESTINATION ---
-            // Instead of flying to the exact spot (which might be wrong),
-            // we fly 50% of the way towards the center of the meld area.
+            // If we are moving multiple cards at once (e.g. melding 3 Kings),
+            // we should stagger their destinations slightly so they don't all land on the exact same pixel.
+            const staggerOffset = i * 20; 
             
-            const srcCx = srcRect.left + srcRect.width/2;
-            const srcCy = srcRect.top + srcRect.height/2;
-            
-            const contCx = containerRect.left + containerRect.width/2;
-            const contCy = containerRect.top + containerRect.height/2;
-
-            // Interpolate 50% (0.5)
-            const midX = srcCx + (contCx - srcCx) * 0.5;
-            const midY = srcCy + (contCy - srcCy) * 0.5;
-
-            // Create a fake rect for the destination
-            const midRect = {
-                left: midX - srcRect.width/2,
-                top: midY - srcRect.height/2,
-                width: srcRect.width,
-                height: srcRect.height
+            const finalDest = {
+                ...destRect,
+                top: destRect.top + staggerOffset
             };
 
-            // Call flyCard with fadeOut = true
-            flyCard(srcRect, midRect, src, 0, null, true);
+            // Call flyCard with fadeOut = true 
+            // (We fade out because the UI update will redraw the new static card instantly upon server confirmation)
+            flyCard(srcRect, finalDest, src, 0, null, true);
         }
     });
 }
 
-export function handleServerAnimations(oldData, newData) {
+export function handleServerAnimations(oldData, newData, renderCallback) {
     if (!oldData || !newData) return;
 
-    // --- 1. DETECT DISCARDS (Opponents Only) ---
-    // Improved Logic: Check for Phase Transition (Playing -> Draw/GameOver)
-    // This implies the player finished their turn by discarding (or going out).
-    
     const wasPlaying = oldData.phase === 'playing';
     const nowDrawOrEnd = (newData.phase === 'draw' || newData.phase === 'game_over');
-    
-    // Also verify the pile top card actually changed (avoids animation if floating out)
     const getSig = (c) => c ? (c.rank + c.suit) : "null";
-    const oldTop = oldData.topDiscard;
-    const newTop = newData.topDiscard;
-    const pileChanged = getSig(oldTop) !== getSig(newTop);
+    
+    // --- 1. DETECT DISCARDS (Opponents Only) ---
+    if (wasPlaying && nowDrawOrEnd && getSig(oldData.topDiscard) !== getSig(newData.topDiscard)) {
+        const actorSeat = oldData.currentPlayer; 
 
-    if (wasPlaying && nowDrawOrEnd && newTop && pileChanged) {
-        const actorSeat = oldData.currentPlayer; // The player who just finished their turn
-
+        // Only animate for opponents (we handled our own locally)
         if (actorSeat !== -1 && actorSeat !== state.mySeat) {
             const actorHandDiv = getHandDiv(actorSeat);
             const discardArea = document.getElementById('discard-area');
@@ -149,11 +186,22 @@ export function handleServerAnimations(oldData, newData) {
             if (actorHandDiv && discardArea) {
                 const srcRect = actorHandDiv.getBoundingClientRect();
                 const destRect = discardArea.getBoundingClientRect();
-                
-                // For opponents, we show the FACE of the card so you see what they threw.
-                const imgUrl = getCardImage(newTop);
 
-                flyCard(srcRect, destRect, imgUrl, 0);
+                // SAFETY CHECK: Only animate if visible
+                if (srcRect.width > 0 && destRect.width > 0) {
+                    // 1. LOCK
+                    state.discardAnimationActive = true;
+
+                    const imgUrl = getCardImage(newData.topDiscard);
+
+                    // 2. FLY
+                    flyCard(srcRect, destRect, imgUrl, 0, () => {
+                        // 3. UNLOCK & TRIGGER
+                        state.discardAnimationActive = false;
+                        // CRITICAL FIX: We now use the renderCallback passed in the arguments
+                        if (renderCallback && state.activeData) renderCallback(state.activeData);
+                    });
+                }
             }
         }
     }

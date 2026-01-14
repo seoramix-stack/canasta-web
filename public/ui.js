@@ -17,9 +17,17 @@ export function toggleGameMenu() {
 // --- RENDER FUNCTIONS ---
 export { renderHand };
 
-// REPLACEMENT FUNCTION
 export function renderDiscardPile(data) {
     const discardDiv = document.getElementById('discard-display');
+    if (!discardDiv) return;
+
+    // --- CRITICAL FIX START ---
+    // 1. FREEZE STATE CHECK MUST BE FIRST!
+    // If we clear innerHTML before this line, the pile will disappear.
+    if (state.discardAnimationActive) return;
+    // --- CRITICAL FIX END ---
+
+    // 2. NOW it is safe to clear the pile for the new render
     discardDiv.innerHTML = ""; 
     
     if (!data.topDiscard) {
@@ -29,17 +37,15 @@ export function renderDiscardPile(data) {
 
     const isFrozen = !!data.freezingCard;
     
-    // Check if the Top Card IS the freezing card (e.g. just discarded a Wild/Red3)
-    // We check if the ranks and suits match the server's freezingCard data
+    // Check if the Top Card IS the freezing card (e.g. Wild/Red3 on top)
     const topIsFreezer = isFrozen && 
                          (data.freezingCard.rank === data.topDiscard.rank) && 
                          (data.freezingCard.suit === data.topDiscard.suit);
 
     if (topIsFreezer) {
-        // --- SCENARIO 1: TOP CARD IS FROZEN (Wild/Red3) ---
-        // We must render the previous card so the pile doesn't "disappear"
+        // --- SCENARIO 1: PILE IS FROZEN ON TOP (Wild/Red3 just played) ---
+        // We render the Previous Card (Base) + The Wild (Rotated Top)
         
-        // 1. Render Previous Card (The Base)
         if (data.previousDiscard) {
             const prevImg = document.createElement("img");
             prevImg.src = getCardImage(data.previousDiscard);
@@ -47,24 +53,22 @@ export function renderDiscardPile(data) {
             discardDiv.appendChild(prevImg);
         }
 
-        // 2. Render Top Card (Rotated Wild)
         const topImg = document.createElement("img");
         topImg.src = getCardImage(data.topDiscard);
         topImg.className = "card-img discard-stack-card frozen-rotated-top";
         discardDiv.appendChild(topImg);
 
     } else {
-        // --- SCENARIO 2: TOP CARD IS NORMAL ---
+        // --- SCENARIO 2: NORMAL CARD ON TOP ---
         
-        // 1. Check for Buried Freezer (e.g. Red 3 at bottom)
         if (isFrozen) {
+            // Render the buried Wild/Red3 sticking out underneath
             const freezeImg = document.createElement("img");
             freezeImg.src = getCardImage(data.freezingCard);
             freezeImg.className = "card-img discard-stack-card frozen-rotated-under";
             discardDiv.appendChild(freezeImg);
         }
 
-        // 2. Render Top Card (Normal)
         const topImg = document.createElement("img");
         topImg.src = getCardImage(data.topDiscard);
         topImg.className = "card-img discard-stack-card";
@@ -73,6 +77,7 @@ export function renderDiscardPile(data) {
         discardDiv.appendChild(topImg);
     }
 }
+
 
 export function updateUI(data) {
     state.activeData = data;

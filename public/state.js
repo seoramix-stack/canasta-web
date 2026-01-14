@@ -16,7 +16,8 @@ export const state = {
     currentTurnSeat: -1,
     timerInterval: null,
     gameStarted: false,
-    isTransitioning: false // New flag to prevent double next-round clicks
+    isTransitioning: false,
+    discardAnimationActive: false
 };
 
 // Helper to save session

@@ -128,7 +128,7 @@ window.handleDiscardClick = () => {
         const card = state.activeData.hand[idx];
 
         // 2. Trigger the optimistic animation immediately
-        Anim.animatePlayerDiscard(idx, card);
+        Anim.animatePlayerDiscard(idx, card, UI.renderDiscardPile);
         // --- FIX END ---
 
         state.socket.emit('act_discard', { seat: state.mySeat, index: state.selectedIndices[0] });
@@ -474,7 +474,7 @@ function initSocket(token) {
     state.socket.on('update_game', (data) => {
         // Run animations if we have old data
         if (state.activeData) {
-            Anim.handleServerAnimations(state.activeData, data);
+            Anim.handleServerAnimations(state.activeData, data, UI.renderDiscardPile);
         }
         UI.updateUI(data);
     });
