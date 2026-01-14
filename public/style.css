@@ -1,4 +1,6 @@
-/* --- APP RESET & THEME --- */
+/* ========================================= */
+/* === 1. VARIABLES & RESET              === */
+/* ========================================= */
 :root {
     --card-w: 50px; 
     --card-h: 70px;
@@ -14,12 +16,13 @@ body {
     background: var(--bg-color); 
     color: white;
     width: 100vw;
-    height: 100vh;       /* Fallback for old browsers */
-    height: 100dvh;      /* NEW: Dynamic height fixes mobile cutoff */
+    height: 100vh; height: 100dvh; /* Mobile Fallback */
     overflow: hidden; user-select: none;
 }
 
-/* --- NAVIGATION SCREENS --- */
+/* ========================================= */
+/* === 2. SCREENS & MENUS                === */
+/* ========================================= */
 .app-screen {
     display: none !important;
     height: 100%; width: 100%;
@@ -31,9 +34,9 @@ body {
 .active-screen { display: flex !important; z-index: 20; }
 .game-bg { background: var(--bg-color); }
 
-/* --- MENU ELEMENTS --- */
 .logo { font-size: 40px; font-weight: bold; color: var(--accent-color); text-shadow: 2px 2px 0 #000; margin-bottom: 5px; }
 .logo-sub { font-size: 14px; color: #bdc3c7; margin-bottom: 40px; }
+
 .menu-btn {
     width: 250px; padding: 15px; margin: 10px 0; border: none; border-radius: 50px;
     font-size: 16px; font-weight: bold; cursor: pointer;
@@ -42,27 +45,20 @@ body {
 .menu-btn.primary { background: var(--accent-color); color: #2c3e50; }
 .menu-btn.secondary { background: #34495e; color: white; }
 .menu-btn.text-only { background: transparent; color: #bdc3c7; box-shadow: none; }
+.menu-btn.danger { background: #e74c3c; color: white; margin-top: 10px; }
 .menu-btn:active { transform: scale(0.95); }
 
 /* ========================================= */
-/* === RESPONSIVE GAME GRID ARCHITECTURE === */
+/* === 3. GAME GRID (MOBILE DEFAULT)     === */
 /* ========================================= */
-
 #game-ui { width: 100%; height: 100%; }
 
 #game-grid { 
     display: grid; 
     height: 100%; width: 100%;
-    
-    /* MOBILE LAYOUT: 5 ROWS */
-    /* 1. Partner (25px) */
-    /* 2. Top Timers (30px) */
-    /* 3. Table (Flexible) */
-    /* 4. Bottom Timer (30px) */
-    /* 5. Player Hand (110px) */
+    /* Mobile: 5 Rows */
     grid-template-columns: 25px 1fr 25px; 
     grid-template-rows: 25px 30px 1fr 30px 110px; 
-    
     grid-template-areas: 
         "top-info   top-info   top-info"
         "timer-top  timer-top  timer-top"
@@ -71,372 +67,212 @@ body {
         "player     player     player";
 }
 
-/* ========================================= */
-/* === ZONES & CONTAINERS === */
-/* ========================================= */
-
-/* --- MOBILE TIMER ROWS (Background Strips) --- */
-.timer-row {
-    background: rgba(41, 128, 185, 0.3); /* Blue strip */
-    border-top: 1px solid rgba(255,255,255,0.1);
-    border-bottom: 1px solid rgba(255,255,255,0.1);
-    z-index: 1; /* Sits behind HUDs */
-}
-
+/* Timer Backgrounds (Hidden by default based on latest preference) */
+.timer-row { background: transparent !important; border: none !important; z-index: 1; }
 #timers-top { grid-area: timer-top; }
 #timers-bottom { grid-area: timer-bot; }
 
-/* --- HUD POSITIONS (Mobile) --- */
-/* Placing HUDs in same grid area as background, but with higher Z-index and justification */
-#hud-left    { grid-area: timer-top; justify-self: start;  z-index: 10; margin-left: 5px; }
-#hud-partner { grid-area: timer-top; justify-self: center; z-index: 10; }
-#hud-right   { grid-area: timer-top; justify-self: end;    z-index: 10; margin-right: 5px; flex-direction: row-reverse; }
-
-#hud-me      { grid-area: timer-bot; justify-self: center; z-index: 10; }
-
-/* Common Mobile HUD Styling */
-#hud-left, #hud-right, #hud-partner, #hud-me {
-    display: flex; align-items: center; gap: 6px;
-    position: relative; /* Relative for mobile grid flow */
-}
-
-/* --- PLAYER HUD CONTENT --- */
-.player-hud {
-    background: rgba(0, 0, 0, 0.85);
-    padding: 4px 4px;
-    border-radius: 12px;
-    border: 1px solid rgba(255,255,255,0.2);
-    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
-    pointer-events: none;
-}
-.status-light {
-    width: 10px; height: 10px; border-radius: 50%;
-    background-color: #e74c3c; border: 1px solid rgba(255,255,255,0.5);
-    transition: all 0.3s;
-}
-.status-light.active { background-color: #2ecc71; box-shadow: 0 0 8px #2ecc71; transform: scale(1.2); }
-.timer-text { font-family: monospace; font-weight: bold; font-size: 12px; color: white; }
-
-/* --- SIDE ZONES --- */
+/* ========================================= */
+/* === 4. ZONES & CONTAINERS             === */
+/* ========================================= */
 .side-zone { 
-    position: relative; 
-    width: 100%; height: 100%; overflow: hidden;
+    position: relative; width: 100%; height: 100%; overflow: visible !important;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    background: rgba(0,0,0,0.1); 
-    z-index: 2;
+    background: transparent !important; z-index: 2; border: none !important;
 }
-.side-zone#hand-left-zone { grid-area: side-left; border-right: 1px solid rgba(255,255,255,0.05); }
-.side-zone#hand-right-zone { grid-area: side-right; border-left: 1px solid rgba(255,255,255,0.05); }
+#hand-left-zone { grid-area: side-left; align-items: flex-start !important; }
+#hand-right-zone { grid-area: side-right; align-items: flex-end !important; }
 
-/* --- OTHER ZONES --- */
 #partner-zone {
-    grid-area: top-info;
-    background: var(--surface-dark);
-    display: flex; 
-    justify-content: center; 
-    align-items: flex-end;
-    position: relative;
-    overflow: hidden;
+    grid-area: top-info; background: transparent !important;
+    display: flex; justify-content: center; align-items: flex-end;
+    position: relative; overflow: hidden;
 }
 
 #table-zone {
-    grid-area: table;
-    display: flex; flex-direction: column; 
-    justify-content: center; 
-    gap: 10px; /* Consistent space between top melds, middle strip, bottom melds */
-    position: relative; 
-    padding: 5px 0;
-    overflow: hidden;
+    grid-area: table; position: relative; padding: 5px 0; overflow: visible !important;
+    display: flex; flex-direction: column; justify-content: center; gap: 10px; 
 }
 
 #my-zone {
-    grid-area: player;
-    background: linear-gradient(to top, rgba(0,0,0,0.6), transparent);
+    grid-area: player; background: transparent !important;
     display: flex; align-items: flex-end; justify-content: center;
-    padding-bottom: 10px; 
-    position: relative;
-    z-index: 5; 
+    padding-bottom: 10px; position: relative; z-index: 5; 
 }
 
 /* ========================================= */
-/* === CARDS & TABLE ELEMENTS === */
+/* === 5. HUD ELEMENTS                   === */
 /* ========================================= */
-
-/* Push Left Opponent further Left */
-#hand-left { align-items: flex-start; transform: translateX(-20px); }
-/* Push Right Opponent further Right */
-#hand-right { align-items: flex-start; transform: translateX(20px); }
-
-/* style.css */
-
-/* 1. ALLOW VISUAL OVERFLOW */
-/* This ensures the "top" of the cards isn't chopped off by the container box */
-.vert-hand-container { 
-    display: flex; 
-    flex-direction: column; 
-    justify-content: center; 
-    height: 100%; 
-    width: 100%;
-    
-    /* CHANGE: Allow cards to stick out horizontally so we see the full card */
-    overflow: visible !important; 
-    
-    position: relative;
+#hud-left, #hud-right, #hud-partner, #hud-me {
+    display: flex; align-items: center; gap: 6px; position: relative;
+    background: transparent !important; border: none !important; box-shadow: none !important;
 }
 
-/* DESKTOP OVERRIDES */
-@media (min-width: 800px) {
+/* Mobile HUD Positioning */
+#hud-left    { grid-area: timer-top; justify-self: start;  z-index: 10; margin-left: 5px; }
+#hud-partner { grid-area: timer-top; justify-self: center; z-index: 10; }
+#hud-right   { grid-area: timer-top; justify-self: end;    z-index: 10; margin-right: 5px; flex-direction: row-reverse; }
+#hud-me      { grid-area: timer-bot; justify-self: center; z-index: 10; }
 
-    /* 2. LEFT PLAYER (P4) */
-    #hand-left {
-        /* Align to the Screen Edge (Left) */
-        align-items: flex-start !important; 
-        
-        /* Remove old padding that might push cards 'in' too much */
-        padding: 20px 0; 
-        
-        /* OPTIONAL: Nudge them slightly 'out' so the screen cuts the bottom, 
-           but the 'top' (table-facing side) is fully visible. 
-           (10px margin ensures we see the card pattern clearly) */
-        margin-left: 5px !important;
-    }
-
-    /* 3. RIGHT PLAYER (P2) */
-    #hand-right {
-        /* Align to the Screen Edge (Right) */
-        align-items: flex-end !important; 
-        
-        padding: 20px 0;
-        
-        /* Nudge slightly 'out' from the right wall */
-        margin-right: 5px !important; 
-    }
-    
-    /* Ensure the Side Zones don't clip either */
-    .side-zone {
-        overflow: visible !important;
-    }
+.player-hud {
+    background: rgba(0, 0, 0, 0.85); padding: 4px; border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.2); pointer-events: none;
 }
-
-.horiz-hand-container { display: flex; flex-direction: row; align-items: center; justify-content: center; }
-    /* 2. Left Player (P4): Align to Left Edge (Screen Side) */
-#hand-left {
-    align-items: flex-start; /* Pushes cards to the left wall */
-    
-    /* OPTIONAL TWEAK: 
-       Since cards are rotated 90deg, their "width" is visually their "height".
-       Depending on rotation origin, you might need a slight negative margin 
-       to make them look truly "cut off". 
-       Uncomment below if they aren't close enough to the edge: */
-    /* margin-left: -15px; */
+.status-light {
+    width: 10px; height: 10px; border-radius: 50%;
+    background-color: #e74c3c; border: 1px solid rgba(255,255,255,0.5); transition: all 0.3s;
 }
-
-/* 3. Right Player (P2): Align to Right Edge (Screen Side) */
-#hand-right {
-    align-items: flex-end;   /* Pushes cards to the right wall */
-    
-    /* OPTIONAL TWEAK: same logic as above */
-    /* margin-right: -15px; */
+.status-light.active { background-color: #2ecc71; box-shadow: 0 0 8px #2ecc71; transform: scale(1.2); }
+.hud-name, .timer-text {
+    font-family: 'Segoe UI', sans-serif !important; font-size: 14px !important; 
+    font-weight: bold !important; text-shadow: 1px 1px 3px rgba(0,0,0,0.9) !important; 
+    color: white; line-height: 1.2 !important;
 }
+.hud-name { color: #f1c40f !important; text-transform: uppercase; max-width: none !important; }
 
-/* 4. Ensure Desktop Layout respects this */
-@media (min-width: 800px) {
-    #hand-left, #hand-right {
-        transform: none !important; /* Remove old offsets */
-        padding: 20px 0; /* Vertical padding only */
-    }
-}
-
-/* --- MELDS & TABLE AREAS --- */
-.meld-row { 
-    display: flex; 
-    
-    /* CHANGED: Disable scroll, allow cards to be drawn outside bounds if calculation fails slightly, 
-       though our math ensures they fit. */
-    overflow-x: visible !important; 
-    
-    padding: 0 5px; 
-    min-height: 80px; 
-    width: 100%; 
-    
-    /* Ensure flexbox doesn't try to shrink them itself */
-    flex-wrap: nowrap;
-    align-items: flex-start !important;
-    height: 160px !important;
-    min-height: 160px !important;
-    max-height: 160px !important;
-    
-    /* Ensure they don't shift margins unexpectedly */
-    margin: 0 !important;
-}
-
-#my-melds { }
-#enemy-melds { }
-
-.pile-area { 
-    display: flex; width: 100%; height: 75px; 
-    margin: 5px 0; padding: 0 5px;
-}
-.score-group { 
-    flex: 1; 
-    display: flex; flex-direction: column; align-items: flex-start; justify-content: center; 
-    padding-left: 10px; margin-right: 5px;
-    background: rgba(241, 196, 15, 0.15); 
-    border: 1px solid rgba(241, 196, 15, 0.3);
-    border-radius: 8px;
-    font-size: 12px; font-weight: bold; color: #f1c40f; 
-}
-.piles-group { 
-    flex: 1; 
-    display: flex; align-items: center; justify-content: flex-start; padding-left: 5px; gap: 5px; 
-    background: rgba(52, 152, 219, 0.15); 
-    border: 1px solid rgba(52, 152, 219, 0.3);
-    border-radius: 8px;
-}
-
-#discard-area { position: relative; width: var(--card-w); height: var(--card-h); cursor: pointer; }
-#discard-display { width: 100%; height: 100%; position: relative; }
-
-.discard-stack-card {
-    position: absolute; top: 0; left: 0;
-    width: var(--card-w); height: var(--card-h);
-    border-radius: 4px;
-    box-shadow: 1px 1px 3px rgba(0,0,0,0.3);
-    transition: transform 0.2s ease-out;
-}
-.discard-base-card { z-index: 1; }
-.discard-wild-top { transform: translateX(10px) rotate(90deg); z-index: 10; box-shadow: -2px 2px 5px rgba(0,0,0,0.4); }
-.discard-frozen-rot { transform: rotate(90deg) translateX(5px); z-index: 5; filter: brightness(0.9); }
-.discard-top-offset { transform: translate(10px, 10px); z-index: 10; }
-.score-val { color: white; font-size: 1.2em; margin-left: 5px; }
-
-/* Cards */
+/* ========================================= */
+/* === 6. CARDS & PILES                  === */
+/* ========================================= */
 .card-img { width: var(--card-w); height: var(--card-h); border-radius: 4px; box-shadow: 1px 1px 3px rgba(0,0,0,0.3); background: white; }
+
+/* Containers */
+.vert-hand-container { 
+    display: flex; flex-direction: column; justify-content: center; 
+    height: 100%; width: 100%; overflow: visible !important; position: relative; 
+}
+.horiz-hand-container { display: flex; flex-direction: row; align-items: center; justify-content: center; }
+
+/* Mobile Side Hands Push */
+#hand-left { align-items: flex-start; transform: translateX(-30px); padding: 0; width: 100%; }
+#hand-right { align-items: flex-end; transform: translateX(30px); padding: 0; width: 100%; }
 
 .side-card {
     width: var(--card-w); height: var(--card-h); 
     background-image: url('cards/BackRed.png'); background-size: cover;
     border-radius: 4px; border: 1px solid #111;
-    transform: rotate(90deg); 
-    box-shadow: -2px 2px 5px rgba(0,0,0,0.4);
-    flex-shrink: 0; /* Important: prevents the card from being squished by flexbox */
+    transform: rotate(90deg); box-shadow: -2px 2px 5px rgba(0,0,0,0.4); flex-shrink: 0;
 }
-@media (min-width: 800px) { 
-    #hand-left, #hand-right {
-        transform: none !important; /* Remove the translate offsets */
-        padding: 20px 0; /* Add small buffer */
-    }
-}
-
 .partner-card {
     width: var(--card-w); height: var(--card-h); 
     background-image: url('cards/BackRed.png'); background-size: cover;
     border-radius: 4px; border: 1px solid #111;
 }
 
+/* My Hand */
 #my-hand {
-    display: flex;
-    width: 100%;
-    height: 100%;
-    
-    /* 1. Alignment (Top) */
-    align-items: flex-start !important; 
-    justify-content: center; 
-    
-    /* 2. Padding (Combine them so they don't overwrite each other) */
-    /* Top: 15px, Right: 5px, Bottom: 0, Left: 5px */
-    padding: 15px 5px 0 5px; 
-    
-    /* 3. Critical Fixes */
-    overflow: visible !important; /* Allow cards to pop up without being cut off */
-    z-index: 50; /* Ensure cards sit ON TOP of everything else */
-    
-    box-sizing: border-box;
+    display: flex; width: 100%; height: 100%;
+    align-items: flex-start !important; justify-content: center; 
+    padding: 15px 5px 0 5px; overflow: visible !important; z-index: 50;
 }
-
-.hand-group {
-    display: flex;
-    flex-direction: column; 
-    align-items: center; 
-    
-    /* Important for overlap logic */
-    position: relative; 
-    
-    /* Ensure groups don't shrink smaller than a card width */
-    min-width: var(--card-w); 
-    width: var(--card-w);
-    
-    /* Smooth transition if you discard and cards slide over */
-    transition: margin 0.3s ease; 
-}
+.hand-group { display: flex; flex-direction: column; align-items: center; position: relative; min-width: var(--card-w); transition: margin 0.3s ease; }
 .hand-card-wrap { width: var(--card-w); height: var(--card-h); position: relative; transition: margin 0.2s, transform 0.1s; }
 .hand-card-wrap.selected::after { content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(255, 253, 208, 0.4); border: 2px solid #f1c40f; border-radius: 4px; pointer-events: none; }
 .hand-card-wrap img { width: 100%; height: 100%; border-radius: 4px; }
+
+/* Melds */
+.meld-row { 
+    display: flex; overflow: visible !important; padding: 0 5px; 
+    width: 100%; flex-wrap: nowrap; align-items: flex-start !important;
+    height: 160px !important; min-height: 160px !important; margin: 0 !important;
+}
 .meld-group { display: flex; flex-direction: column; align-items: center; min-width: var(--card-w); margin-right: 8px; }
 .meld-label { font-size: 9px; font-weight: bold; text-shadow: 1px 1px 1px black; margin-bottom: 2px; color: #bdc3c7; }
 
-/* Buttons & Modals */
-.action-btn { padding: 8px 16px; border-radius: 20px; font-weight: bold; border: none; font-size: 0.9em; margin-top:10px; cursor: pointer; }
-.action-btn.success { background: #2ecc71; color: white; }
-.action-btn.danger { background: #e74c3c; color: white; }
+/* Center Strip */
+.pile-area { display: flex; width: 100%; height: 75px; margin: 5px 0; padding: 0 5px; overflow: visible; }
+.score-group, .piles-group {
+    background: transparent !important; border: none !important; box-shadow: none !important;
+}
+.score-group { flex: 0.7; display: flex; flex-direction: column; justify-content: center; padding-left: 10px; margin-right: 5px; color: #f1c40f; font-weight: bold; font-size: 12px; }
+.piles-group { flex: 1.3; display: flex; align-items: center; justify-content: flex-start; gap: 5px; padding-left: 0; }
 
-#ready-modal { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 2000; flex-direction: column; align-items: center; justify-content: center; }
-.ready-box { background: #2c3e50; border: 2px solid var(--accent-color); padding: 30px; border-radius: 15px; text-align: center; box-shadow: 0 0 30px rgba(0,0,0,0.8); }
-.ready-title { font-size: 24px; color: var(--accent-color); margin-bottom: 10px; font-weight: bold; }
-.ready-sub { color: #bdc3c7; margin-bottom: 25px; }
-
-#staging-panel { display: none; position: absolute; bottom: 35%; left: 10%; width: 80%; background: #2d3436; color: white; padding: 10px; border-radius: 8px; border: 2px solid #f1c40f; z-index: 999; }
-#score-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 500; justify-content: center; align-items: center; }
-.score-box { background: white; color: #333; padding: 20px; border-radius: 10px; text-align: center; width: 85%; }
-
-/* Score Table */
-.score-table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 14px; color: #333; }
-.score-table th, .score-table td { padding: 8px; border-bottom: 1px solid #ddd; text-align: center; }
-.score-table th { background: #f1c40f; color: #2c3e50; }
-.total-row { font-weight: bold; background: #eee; }
-
-.victory-content { text-align: center; animation: popIn 0.5s ease; }
-#vic-title { font-size: 50px; margin: 10px 0; text-shadow: 0 4px 10px rgba(0,0,0,0.5); font-weight: 900; }
-#vic-sub { color: #bdc3c7; font-size: 18px; margin-bottom: 30px; letter-spacing: 2px; }
-.final-score-box { background: rgba(255,255,255,0.1); padding: 20px; border-radius: 12px; width: 280px; margin: 0 auto 30px auto; border: 1px solid rgba(255,255,255,0.2); }
-.fs-row { display: flex; justify-content: space-between; font-size: 20px; font-weight: bold; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.1); }
-.fs-row:last-child { border-bottom: none; }
-@keyframes popIn { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
-
-/* Bot Buttons */
-.diff-grid { display: flex; gap: 10px; margin: 20px 0; justify-content: center; }
-.diff-btn { padding: 10px 20px; border: 2px solid #34495e; border-radius: 8px; color: #bdc3c7; cursor: pointer; font-weight: bold; transition: all 0.2s; background: rgba(0,0,0,0.2); }
-.diff-btn:hover { background: rgba(255,255,255,0.05); border-color: #bdc3c7; }
-.diff-btn.selected { background: var(--accent-color); color: #2c3e50; border-color: var(--accent-color); box-shadow: 0 0 10px rgba(241, 196, 15, 0.4); }
-
-/* =========================================
-   DESKTOP OVERRIDE (>800px)
-   Based on "Cross Layout" PDF
-   ========================================= */
-@media (min-width: 800px) {
-    /* 1. RESTORE BIG CARDS */
-    :root {
-        --card-w: 75px; 
-        --card-h: 105px;
-    }
-
-    /* --- 1. THE GRID SKELETON --- */
-    #game-grid {
+/* Discard & Draw */
+#discard-area, #draw-area { position: relative; width: var(--card-w); height: var(--card-h); cursor: pointer; }
+#discard-display { width: 100%; height: 100%; position: relative; }
+.discard-stack-card { position: absolute; top: 0; left: 0; width: var(--card-w); height: var(--card-h); border-radius: 4px; box-shadow: 1px 1px 3px rgba(0,0,0,0.3); transition: transform 0.2s ease-out; z-index: 5; }
+.discard-base-card { z-index: 1; }
+.frozen-rotated-top { 
+    transform: translateX(20px) rotate(-90deg); 
+    z-index: 20; 
+    /* Shadow shifted to positive 2px to fall on the right side */
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.4); 
+}
+.discard-empty-slot {
+    width: var(--card-w);
+    height: var(--card-h);
     
-        /* Columns: Left Opponent (140px) | CENTER TABLE (Flexible) | Right Opponent (140px) */
+    /* 2px Dashed Line, semi-transparent white */
+    border: 2px dashed rgba(255, 255, 255, 0.3); 
+    border-radius: 4px;
+    
+    /* Ensures the border stays inside the width/height calculations */
+    box-sizing: border-box; 
+    
+    /* Optional: Center it perfectly if needed */
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+/* CHANGED: Buried Freezer -> Shift RIGHT (20px) & rotate. */
+.frozen-rotated-under { 
+    transform: translateX(20px) rotate(-90deg); 
+    z-index: 0; 
+    filter: brightness(0.9); 
+}
+
+#deck-count {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.7); color: white;
+    font-size: 14px; font-weight: bold; min-width: 30px; padding: 2px 5px;
+    border-radius: 10px; border: 1px solid rgba(255,255,255,0.3);
+    z-index: 10; pointer-events: none; display: flex; justify-content: center;
+}
+
+/* ========================================= */
+/* === 7. MOBILE OVERRIDES (< 800px)     === */
+/* ========================================= */
+@media (max-width: 800px) {
+    /* 1. GIVE SCOREBOARD MORE SPACE (50% width) */
+    .score-group {
+        flex: 0.9 !important;
+        padding-left: 5px;         
+    }
+    /* 2. PUSH PILES TO THE RIGHT */
+    .piles-group {
+        flex: 1 !important;
+        justify-content: flex-start !important; 
+        padding-left: 0 !important;
+        padding-right: 5px;        
+    }
+    #hud-left {
+        grid-area: side-left !important; align-self: center; justify-self: center;
+        transform: rotate(90deg); background: rgba(0,0,0,0.5) !important; z-index: 50;
+        width: max-content; padding: 4px 10px; margin: 0; pointer-events: none;
+    }
+    #hud-right {
+        grid-area: side-right !important; align-self: center; justify-self: center;
+        transform: rotate(-90deg); background: rgba(0,0,0,0.5) !important; z-index: 50;
+        width: max-content; padding: 4px 10px; margin: 0; pointer-events: none;
+    }
+    #hud-partner {
+        grid-area: top-info !important; background: rgba(0,0,0,0.5) !important;
+        border-radius: 0 0 10px 10px;
+    }
+    #timers-top { display: none; }
+    /* Reclaim space from timer row */
+    #game-grid { grid-template-rows: 30px 0px 1fr 30px 110px !important; }
+}
+
+/* ========================================= */
+/* === 8. DESKTOP OVERRIDES (> 800px)    === */
+/* ========================================= */
+@media (min-width: 800px) {
+    :root { --card-w: 75px; --card-h: 105px; }
+
+    /* --- LAYOUT --- */
+    #game-grid {
         grid-template-columns: 140px 1fr 140px; 
-        
-        /* ROWS:
-           1. Partner Hand (80px)
-           2. Partner Timer (40px)
-           3. TABLE AREA (1fr) -> Gains the extra space!
-           4. Player Timer (40px)
-           5. Player Hand (130px) -> REDUCED from 200px. 
-              (105px card + 25px buffer is enough now that we don't stack)
-        */
         grid-template-rows: 50px 0px 1fr 0px 130px; 
-        
-        /* The Map */
         grid-template-areas: 
             ".          partner    ."
             ".          timer-top  ."
@@ -445,619 +281,95 @@ body {
             ".          player     .";
     }
 
-    /* --- 2. ZONES & ALIGNMENT --- */
-
-    /* Partner Zone (Top) */
-    #partner-zone { 
-        grid-area: partner; 
-        align-items: flex-end; /* Cards sit at bottom of zone */
-        overflow: visible; 
-    }
-
-    /* Player Zone (Bottom) */
-    #my-zone { 
-        grid-area: player; 
-        align-items: flex-start; /* Cards sit at top of zone */
-        padding-top: 10px; 
-    }
-
-    /* --- MOVE MENU TO TOP-RIGHT ON DESKTOP --- */
-    #btn-game-menu {
-        bottom: auto !important; /* Unset mobile position */
-        top: 20px !important;    /* Top corner */
-        right: 20px !important;  /* Right corner */
-        
-        /* Make it slightly larger for desktop mouse usage */
-        width: 45px;
-        height: 45px;
-        font-size: 24px;
-    }
-
-    /* --- SIDE TIMERS: MOVE TO CENTER TABLE --- */
-    #hud-left, #hud-right {
-        /* 1. Move them to the Center Grid Area (Row 3) */
-        grid-area: center !important; 
-        
-        /* 2. Vertically align them with the Score/Piles */
-        align-self: center !important;
-        
-        /* 3. Reset positioning */
-        position: static !important;
-        margin: 0 !important;
-        width: auto !important;
-        height: auto !important;
-        
-        /* 4. Ensure they sit on top of any table elements */
-        z-index: 100 !important;
-    }
-    .hud-name {
-    font-size: 8px;
-    font-weight: bold;
-    color: #f1c40f; /* Gold accent */
-    margin: 0 4px;
-    text-transform: uppercase;
-    max-width: 60px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    }
-    /* Pin Left Timer to the left of the table */
-    #hud-left {
-        justify-self: start !important; /* Stick to left edge of center zone */
-        margin-left: 10px !important;   /* Small gap from the edge */
-    }
-
-    /* Pin Right Timer to the right of the table */
-    #hud-right {
-        justify-self: end !important;   /* Stick to right edge of center zone */
-        margin-right: 10px !important;  /* Small gap from the edge */
-    }
-
-    /* --- SIDE CARD ZONES (Adjustment) --- */
-
-    .side-zone {
-        justify-content: center;
-        padding-top: 0 !important;
-        border: none;
-        background: rgba(0,0,0,0.2);
-    }
-
-    /* --- 4. CENTER TIMERS --- */
-    #hud-partner { grid-area: timer-top; align-self: center; justify-self: center; margin: 0; }
-    #hud-me      { grid-area: timer-bot; align-self: center; justify-self: center; margin: 0; }
-
-    /* ... inside @media (min-width: 800px) ... */
-    #hud-me {
-        /* Ensure it's visible even though its row height is 0 */
-        z-index: 100 !important;
-        overflow: visible !important;
-        
-        /* Nudge it down so it sits closer to the cards */
-        transform: translateY(15px) !important;
-        
-        /* Ensure it doesn't block clicks on the table area above it */
-        pointer-events: none; 
-    }
-    #hud-partner {
-        /* Ensure visibility */
-        z-index: 100 !important;
-        overflow: visible !important;
-        transform: translateY(10px) !important;
-        
-        pointer-events: none;
-    }
-    /* --- 5. THE CENTER TABLE (Expanded) --- */
+    /* --- ZONES --- */
+    #partner-zone { grid-area: partner; align-items: flex-end; overflow: visible; }
+    #my-zone { grid-area: player; align-items: flex-start; padding-top: 10px; }
     #table-zone {
-        grid-area: center;
-        display: grid;
-       /* CHANGED: 
-           Instead of fixed 220px, use minmax to allow shrinking on laptops 
-           but expanding on large screens. 
-           We use fractional units (1fr) for the meld areas so they share available height equally.
-        */
-        grid-template-rows: 1fr auto 1fr !important;
-        padding: 0 40px; /* Add side padding so cards don't hit the timers */
-        height: 100%;
-        overflow: hidden; 
-        gap: 0 !important; 
-        align-content: center; /* Centers the whole block vertically in the screen */
+        grid-area: center; display: grid; grid-template-rows: 1fr auto 1fr !important;
+        padding: 0 40px; height: 100%; gap: 0 !important; align-content: center; overflow: hidden;
     }
+    .side-zone { justify-content: center; padding-top: 0 !important; border: none; background: rgba(0,0,0,0.2); }
 
-    /* ENEMY MELDS (Top Area) */
-    #enemy-melds { 
-        width: 100%;
-        /* Inherit the fixed height from the grid row or enforce it */
-        height: 100% !important;
-        
-        display: flex;
-        flex-direction: row;
-        /* FIX 5: Align Top on Desktop too */
-        align-items: flex-start !important;
-        gap: 30px !important; 
-        padding-top: 35px !important;
-        padding-bottom: 0px; 
-        margin: 0 !important;
-        min-height: 0;
+    /* --- HUD POSITIONS --- */
+    #hud-left, #hud-right {
+        grid-area: center !important; align-self: center !important; position: static !important;
+        width: auto !important; height: auto !important; z-index: 100 !important; margin: 0 !important;
     }
+    #hud-left { justify-self: start !important; margin-left: 10px !important; }
+    #hud-right { justify-self: end !important; margin-right: 10px !important; }
+    #hud-partner { grid-area: timer-top; align-self: center; justify-self: center; transform: translateY(10px) !important; pointer-events: none; z-index: 100 !important; }
+    #hud-me { grid-area: timer-bot; align-self: center; justify-self: center; transform: translateY(15px) !important; pointer-events: none; z-index: 100 !important; }
 
-    /* MY MELDS (Bottom Area) */
-    #my-melds { 
-        width: 100%;
-        height: 100%;
-        
-        display: flex;
-        flex-direction: row;
-        align-items: flex-start; /* Cards sit at the top */
-        
-        /* NEW: Add consistent spacing between groups */
-        gap: 30px !important; 
-        
-        padding-top: 15px;
-        margin: 0 !important;
-        min-height: 0;
-    }
-
-    /* OVERRIDE JS SPACING RULES */
-    /* This forces the browser to ignore the small margins calculated by the game logic */
-    .meld-group {
-        margin-right: 0 !important;
-    }
-
-    /* THE CENTER STRIP: FIXED BRICK STRATEGY */
+    /* --- TABLE ELEMENTS --- */
     .pile-area {
-        grid-row: 2; /* Middle Row */
-        
-        /* 1. FORCE A FIXED WIDTH */
-        /* This stops the "shrink-wrap" effect. We declare exactly how big we are. */
-        width: 550px !important; 
-        max-width: 90% !important; /* Safety for smaller tablets */
-        
-        /* 2. AUTO MARGINS = PERFECT CENTERING */
-        margin-left: auto !important;
-        margin-right: auto !important;
-        
-        /* 3. LAYOUT INSIDE THE BRICK */
-        display: flex !important;
-        flex-direction: row !important;
-        justify-content: center !important;
-        align-items: center !important;
-        gap: 20px !important;
-        
-        /* Reset container props */
-        height: 100px;
-        padding: 0 !important;
-        position: static !important;
-        background: transparent;
-    }
-
-    /* 1. Score Board */
-    .score-group {
-        /* Fixed Size */
-        flex: 0 0 220px !important; 
-        width: 220px !important; 
-        height: 90px !important;
-        margin: 0 !important;
-        
-        /* Reset positioning */
-        position: static !important;
-        transform: none !important;
-    }
-
-    /* 2. Piles Group */
-    .piles-group {
-        /* Fit Content but with a minimum size */
-        flex: 0 0 auto !important;
-        width: auto !important;
-        min-width: 180px !important;
-        height: 90px !important;
-        margin: 0 !important;
-        
-        /* Internal Layout */
-        display: flex !important;
-        justify-content: center;
-        align-items: center;
-        gap: 15px;
-        
-        /* Reset positioning */
-        position: static !important;
-        transform: none !important;
-    }
-
-    /* Adjust Card rotation overlap for vertical columns */
-    .side-card { margin-top: -50px; }
-    /* FORCE TRANSPARENT BACKGROUNDS FOR ALL BOTS */
-    #hud-left, #hud-right, #hud-partner {
-        background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-    }
-}
-/* 1. LOCK THE PARENT CONTAINER */
-/* Ensure the draw area is exactly the size of a card and acts as an anchor */
-#draw-area {
-    position: relative;          /* This anchors the absolute child inside it */
-    width: var(--card-w);        /* Force width to match card */
-    height: var(--card-h);       /* Force height to match card */
-    cursor: pointer;
-    display: flex;               /* Helps align the image if needed */
-    justify-content: center;
-    align-items: center;
-}
-
-/* 2. POSITION THE BADGE */
-/* Update the existing #deck-count rule */
-#deck-count {
-    position: absolute;
-    /* Option A: Centered on the deck */
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    
-    /* Option B: Top-Right Corner (Notification style) - Uncomment to use */
-    /* top: -5px; right: -5px; transform: none; */
-
-    background-color: rgba(0, 0, 0, 0.7); /* Semi-transparent black looks cleaner on cards */
-    color: white;
-    font-size: 14px;
-    font-weight: bold;
-    
-    /* Make it a bit larger/clearer */
-    min-width: 30px;
-    padding: 2px 5px;
-    border-radius: 10px; /* Pill shape */
-    
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid rgba(255,255,255,0.3);
-    z-index: 10;
-    pointer-events: none;
-}
-/* --- ANIMATION ELEMENTS --- */
-.flying-card {
-    position: fixed;
-    z-index: 9999;
-    pointer-events: none; /* Let clicks pass through */
-    transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1); /* "Ease Out" physics */
-    box-shadow: 5px 5px 15px rgba(0,0,0,0.5);
-    border-radius: 4px;
-    transform-origin: top left;
-}
-.p-indicator {
-    width: 40px; height: 40px;
-    border-radius: 50%;
-    background: #444; /* Default Dark */
-    color: #aaa;
-    display: flex; align-items: center; justify-content: center;
-    font-weight: bold;
-    border: 2px solid #555;
-    transition: all 0.3s;
-}
-.p-indicator.ready {
-    background: #2ecc71; /* Green */
-    color: white;
-    border-color: white;
-    box-shadow: 0 0 10px #2ecc71;
-}
-
-/* --- FORMS --- */
-.form-group {
-    margin-bottom: 15px;
-    width: 100%;
-    max-width: 300px;
-}
-.form-input {
-    width: 100%;
-    padding: 12px;
-    border-radius: 25px;
-    border: none;
-    background: rgba(0,0,0,0.3);
-    color: white;
-    font-size: 16px;
-    text-align: center;
-    border: 1px solid rgba(255,255,255,0.1);
-}
-.form-input:focus {
-    outline: none;
-    border-color: var(--accent-color);
-    background: rgba(0,0,0,0.5);
-}
-.link-text {
-    color: #bdc3c7;
-    margin-top: 15px;
-    cursor: pointer;
-    font-size: 14px;
-    text-decoration: underline;
-}
-.error-msg {
-    color: #e74c3c;
-    margin-bottom: 10px;
-    font-size: 14px;
-    display: none; /* Hidden by default */
-}
-/* --- IN-GAME MENU --- */
-/* --- IN-GAME MENU (Mobile Default) --- */
-#btn-game-menu {
-    position: absolute;
-    z-index: 2000;
-    
-    /* Mobile Position: Bottom-Right, aligned with Timer Row */
-    /* Hand is 110px high, so we sit just above it */
-    bottom: 115px; 
-    right: 10px;
-    top: auto; 
-    left: auto;
-
-    /* Styling */
-    width: 35px; 
-    height: 35px;
-    background: rgba(0, 0, 0, 0.6);
-    color: white;
-    font-size: 20px;
-    border-radius: 50%;
-    display: flex; 
-    align-items: center; 
-    justify-content: center;
-    cursor: pointer;
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    transition: all 0.2s;
-}
-
-#btn-game-menu:hover {
-    background: var(--accent-color);
-    color: #2c3e50;
-    border-color: var(--accent-color);
-}
-
-#game-menu-overlay {
-    position: absolute;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    background: rgba(0, 0, 0, 0.85); /* Dark semi-transparent background */
-    z-index: 2001; /* Above the button */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-direction: column;
-}
-
-.menu-box {
-    background: #2c3e50;
-    border: 2px solid var(--accent-color);
-    padding: 30px;
-    border-radius: 15px;
-    text-align: center;
-    box-shadow: 0 0 30px rgba(0,0,0,0.8);
-    width: 300px;
-}
-
-.menu-box h3 {
-    margin-top: 0;
-    color: white;
-    font-size: 24px;
-    margin-bottom: 20px;
-}
-
-/* Helper for the danger button */
-.menu-btn.danger {
-    background: #e74c3c;
-    color: white;
-    margin-top: 10px;
-}
-.menu-btn.danger:hover {
-    background: #c0392b;
-}
-/* --- PASSWORD TOGGLE --- */
-.pass-toggle {
-    position: absolute;
-    right: 15px;
-    top: 50%;
-    transform: translateY(-50%);
-    cursor: pointer;
-    font-size: 18px;
-    opacity: 0.7;
-    user-select: none; /* Prevents highlighting the icon */
-    z-index: 5;
-}
-
-.pass-toggle:hover {
-    opacity: 1;
-}
-
-/* Add padding to inputs so text doesn't hit the eye icon */
-.form-input {
-    padding-right: 40px !important; 
-}
-
-/* === MOBILE HUD OVERLAY (Left/Right Players) === */
-@media (max-width: 800px) {
-
-    /* 1. LEFT PLAYER (P4) */
-    #hud-left {
-        /* Move to the same grid cell as the Left Hand cards */
-        grid-area: side-left !important;
-        
-        /* Center it in that column */
-        align-self: center;
-        justify-self: center;
-        
-        /* Rotate 90 degrees (Text runs bottom-to-top) */
-        transform: rotate(90deg);
-        
-        /* Visual Styling */
-        background: rgba(0, 0, 0, 0.5); /* Transparent Dark */
-        z-index: 50; /* Ensure it sits ON TOP of the cards */
-        
-        /* Sizing fixes for rotation */
-        width: max-content; 
-        padding: 4px 10px;
-        margin: 0;
-        
-        /* Critical: Let clicks pass through so you can still click cards if needed */
-        pointer-events: none; 
-    }
-
-    /* 2. RIGHT PLAYER (P2) */
-    #hud-right {
-        /* Move to the same grid cell as the Right Hand cards */
-        grid-area: side-right !important;
-        
-        /* Center it */
-        align-self: center;
-        justify-self: center;
-        
-        /* Rotate -90 degrees (Text runs top-to-bottom) */
-        transform: rotate(-90deg);
-        
-        /* Visual Styling */
-        background: rgba(0, 0, 0, 0.5);
-        z-index: 50;
-        
-        width: max-content;
-        padding: 4px 10px;
-        margin: 0;
-        pointer-events: none;
-    }
-
-    /* 3. Tweak the Partner HUD (Top) */
-    /* Ensure it stays centered in the top row since its neighbors just moved */
-    #hud-partner {
-        grid-area: top-info !important; /* Move to very top row to save space */
-        background: rgba(0,0,0,0.5);
-        border-radius: 0 0 10px 10px;
-        border-top: none;
-    }
-
-    /* 4. Hide the now-empty blue timer row to save space */
-    #timers-top {
-        display: none; 
-    }
-    
-    /* 5. Adjust Grid Rows to reclaim the space from the empty timer row */
-    #game-grid {
-        /* Updated Rows: 
-           1. Partner Info (30px) 
-           2. REMOVED OLD TIMER ROW (0px)
-           3. Table (1fr) 
-           4. Bottom Timer (30px) 
-           5. Player Hand (110px) 
-        */
-        grid-template-rows: 30px 0px 1fr 30px 110px !important;
-    }
-}
-
-/* --- UNIFY BACKGROUND OVERRIDES --- */
-
-/* 1. Remove the blue strip behind the timers */
-.timer-row {
-    background: transparent !important;
-    border: none !important;
-}
-
-/* 2. Remove the dark gradient behind your hand (bottom) */
-#my-zone {
-    background: transparent !important;
-}
-
-/* 3. Remove the dark background from the top partner zone */
-#partner-zone {
-    background: transparent !important;
-}
-
-/* 4. Remove the faint background/borders from side zones (bots) */
-.side-zone {
-    background: transparent !important;
-    border: none !important;
-}
-
-/* Optional: If you want the Score Box to also blend in (remove if you want to keep it distinct) */
-/*
-.score-group, .piles-group {
-    background: transparent !important;
-    border: 1px solid rgba(255,255,255,0.1) !important; 
-}
-*/
-/* 5. Remove backgrounds and outlines from Scoreboard & Pile areas */
-.score-group, .piles-group {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-}
-/* 6. Remove background ONLY from the User's Timer (Bottom) */
-#hud-me {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-}
-
-/* 7. Unify Font and Size for Names and Timers */
-.hud-name, .timer-text {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important; /* Matches app font */
-    font-size: 14px !important;       /* Sets both to the same size */
-    font-weight: bold !important;
-    text-shadow: 1px 1px 3px rgba(0,0,0,0.9) !important; /* Adds shadow for readability on blue bg */
-    line-height: 1.2 !important;
-}
-
-/* Optional: Ensure names aren't cut off if they were restricted before */
-.hud-name {
-    max-width: none !important;
-}
-/* 1. Mobile: Shrink Score box, Expand Pile box */
-/* This shifts the starting point of the piles to the left */
-@media (max-width: 800px) {
-    .score-group {
-        flex: 0.7 !important; /* Was 1 (50%) -> Now 35% */
-    }
-    .piles-group {
-        flex: 1.3 !important; /* Was 1 (50%) -> Now 65% */
-        padding-left: 0 !important; /* Remove padding to pull draw pile tighter */
-    }
-}
-
-/* 2. Desktop: Shift the center container left */
-/* Since the Score box is wider than the Discard pile, we shift the whole 
-   block left to make the Draw pile visually central. */
-@media (min-width: 800px) {
-    .pile-area {
+        grid-row: 2; width: 550px !important; max-width: 90% !important; margin: 0 auto !important;
         transform: translateX(-40px) !important;
+        display: flex !important; justify-content: center !important; align-items: center !important; gap: 20px !important;
+        height: 100px; padding: 0 !important; position: static !important;
     }
+    .score-group { flex: 0 0 220px !important; width: 220px !important; height: 90px !important; margin: 0 !important; position: static !important; }
+    .piles-group { flex: 0 0 auto !important; width: auto !important; min-width: 180px !important; height: 90px !important; margin: 0 !important; justify-content: center; gap: 15px; position: static !important; }
+
+    #enemy-melds, #my-melds { 
+        height: 100% !important; 
+        align-items: flex-start !important; 
+        padding-top: 35px !important; 
+        margin: 0 !important; 
+        min-height: 0;
+        /* Ensure we don't wrap to a new line */
+        flex-wrap: nowrap !important;
+        /* Allow overlap */
+        overflow: visible !important;
+    }
+    #my-melds { padding-top: 15px; }
+    .meld-group { 
+        flex-shrink: 0;
+        transition: margin 0.2s ease; /* Smooth squeeze animation */
+    }
+
+    /* --- CARDS --- */
+    #hand-left, #hand-right { transform: none !important; padding: 20px 0; margin: 0 5px !important; }
+    #hand-left { align-items: flex-start !important; }
+    #hand-right { align-items: flex-end !important; }
+    .side-card { margin-top: -50px; }
+
+    /* --- MISC --- */
+    #btn-game-menu { top: 20px !important; right: 20px !important; bottom: auto !important; width: 45px; height: 45px; font-size: 24px; }
 }
 
-/* FIX: Force Side Zones to hug the screen edges on Mobile */
-#hand-left-zone {
-    align-items: flex-start !important; /* Push content to the Left Wall */
-}
+/* ========================================= */
+/* === 9. UI COMPONENTS                  === */
+/* ========================================= */
+.form-group { margin-bottom: 15px; width: 100%; max-width: 300px; }
+.form-input { width: 100%; padding: 12px; border-radius: 25px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.3); color: white; font-size: 16px; text-align: center; }
+.form-input:focus { outline: none; border-color: var(--accent-color); background: rgba(0,0,0,0.5); }
+.error-msg { color: #e74c3c; margin-bottom: 10px; font-size: 14px; display: none; }
+.link-text { color: #bdc3c7; margin-top: 15px; cursor: pointer; font-size: 14px; text-decoration: underline; }
 
-#hand-right-zone {
-    align-items: flex-end !important;   /* Push content to the Right Wall */
-}
+/* Modals */
+#ready-modal, #score-modal, #game-menu-overlay { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 2000; flex-direction: column; align-items: center; justify-content: center; }
+.ready-box, .menu-box { background: #2c3e50; border: 2px solid var(--accent-color); padding: 30px; border-radius: 15px; text-align: center; box-shadow: 0 0 30px rgba(0,0,0,0.8); }
+.score-box { background: white; color: #333; width: 85%; padding: 20px; border-radius: 10px; text-align: center; }
+.score-table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 14px; color: #333; }
+.score-table th, .score-table td { padding: 8px; border-bottom: 1px solid #ddd; text-align: center; }
+.score-table th { background: #f1c40f; color: #2c3e50; }
+.total-row { font-weight: bold; background: #eee; }
 
-/* FIX: Refine the Push values */
-#hand-left {
-    align-items: flex-start; 
-    /* Increased push to hide the bottom gap */
-    transform: translateX(-42px); 
-    padding: 0;
-    width: 100%; 
-}
+/* In-Game Menu */
+#btn-game-menu { position: absolute; bottom: 115px; right: 10px; width: 35px; height: 35px; background: rgba(0,0,0,0.6); color: white; font-size: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 2px solid rgba(255,255,255,0.3); z-index: 2000; }
+.pass-toggle { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); cursor: pointer; opacity: 0.7; z-index: 5; }
 
-#hand-right {
-    align-items: flex-end;
-    /* Increased push to hide the bottom gap */
-    transform: translateX(42px); 
-    padding: 0;
-    width: 100%;
-}
+/* Victory & Animation */
+.victory-content { text-align: center; animation: popIn 0.5s ease; }
+@keyframes popIn { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+.final-score-box { background: rgba(255,255,255,0.1); padding: 20px; border-radius: 12px; width: 280px; margin: 0 auto 30px auto; border: 1px solid rgba(255,255,255,0.2); }
+.fs-row { display: flex; justify-content: space-between; font-size: 20px; font-weight: bold; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.1); }
+.flying-card { position: fixed; z-index: 9999; pointer-events: none; transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1); box-shadow: 5px 5px 15px rgba(0,0,0,0.5); border-radius: 4px; transform-origin: top left; }
 
-/* style.css - Fix for clipped meld cards */
-
-/* FIX: Allow rotated cards to stick out of the central table area */
-#table-zone {
-    overflow: visible !important;
-}
-
-/* Ensure the meld rows themselves don't hide anything either */
-.meld-row {
-    overflow: visible !important;
-}
+/* Bot UI */
+.diff-grid { display: flex; gap: 10px; margin: 20px 0; justify-content: center; }
+.diff-btn { padding: 10px 20px; border: 2px solid #34495e; border-radius: 8px; color: #bdc3c7; cursor: pointer; font-weight: bold; background: rgba(0,0,0,0.2); }
+.diff-btn.selected { background: var(--accent-color); color: #2c3e50; border-color: var(--accent-color); }
+.p-indicator { width: 40px; height: 40px; border-radius: 50%; background: #444; color: #aaa; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid #555; }
+.p-indicator.ready { background: #2ecc71; color: white; border-color: white; box-shadow: 0 0 10px #2ecc71; }
+#staging-panel { display: none; position: absolute; bottom: 35%; left: 10%; width: 80%; background: #2d3436; color: white; padding: 10px; border-radius: 8px; border: 2px solid #f1c40f; z-index: 999; }

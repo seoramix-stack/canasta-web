@@ -276,7 +276,9 @@ class CanastaGame {
         if (rank === "3") {
             if (cards.some(c => c.isWild)) return { success: false, message: "Cannot use Wilds with Black 3s." };
             let remaining = hand.length - cards.length;
-            if (remaining > 0) return { success: false, message: "Black 3s can only be melded when going out." };
+            if (remaining > 1) { 
+                return { success: false, message: "Black 3s allowed only when going out." }; 
+            }
         }
 
         if (!existingMeld && cards.length < 3) {

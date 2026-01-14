@@ -17,7 +17,62 @@ export function toggleGameMenu() {
 // --- RENDER FUNCTIONS ---
 export { renderHand };
 
-// ui.js
+// REPLACEMENT FUNCTION
+export function renderDiscardPile(data) {
+    const discardDiv = document.getElementById('discard-display');
+    discardDiv.innerHTML = ""; 
+    
+    if (!data.topDiscard) {
+        discardDiv.innerHTML = '<div class="discard-empty-slot"></div>';
+        return;
+    }
+
+    const isFrozen = !!data.freezingCard;
+    
+    // Check if the Top Card IS the freezing card (e.g. just discarded a Wild/Red3)
+    // We check if the ranks and suits match the server's freezingCard data
+    const topIsFreezer = isFrozen && 
+                         (data.freezingCard.rank === data.topDiscard.rank) && 
+                         (data.freezingCard.suit === data.topDiscard.suit);
+
+    if (topIsFreezer) {
+        // --- SCENARIO 1: TOP CARD IS FROZEN (Wild/Red3) ---
+        // We must render the previous card so the pile doesn't "disappear"
+        
+        // 1. Render Previous Card (The Base)
+        if (data.previousDiscard) {
+            const prevImg = document.createElement("img");
+            prevImg.src = getCardImage(data.previousDiscard);
+            prevImg.className = "card-img discard-stack-card discard-base-card";
+            discardDiv.appendChild(prevImg);
+        }
+
+        // 2. Render Top Card (Rotated Wild)
+        const topImg = document.createElement("img");
+        topImg.src = getCardImage(data.topDiscard);
+        topImg.className = "card-img discard-stack-card frozen-rotated-top";
+        discardDiv.appendChild(topImg);
+
+    } else {
+        // --- SCENARIO 2: TOP CARD IS NORMAL ---
+        
+        // 1. Check for Buried Freezer (e.g. Red 3 at bottom)
+        if (isFrozen) {
+            const freezeImg = document.createElement("img");
+            freezeImg.src = getCardImage(data.freezingCard);
+            freezeImg.className = "card-img discard-stack-card frozen-rotated-under";
+            discardDiv.appendChild(freezeImg);
+        }
+
+        // 2. Render Top Card (Normal)
+        const topImg = document.createElement("img");
+        topImg.src = getCardImage(data.topDiscard);
+        topImg.className = "card-img discard-stack-card";
+        // Ensure normal top card is above buried freezer
+        topImg.style.zIndex = "10"; 
+        discardDiv.appendChild(topImg);
+    }
+}
 
 export function updateUI(data) {
     state.activeData = data;
@@ -139,10 +194,10 @@ function renderTable(elementId, meldsObj, red3sArray) {
     
     container.innerHTML = "";
 
-    // 1. Sort & Separate Data (Open Melds vs Canastas)
+    // 1. Sort & Separate Data
     const rankPriority = ["A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3"];
     const openMelds = [];
-    const closedMelds = []; // Canastas (7+ cards)
+    const closedMelds = [];
 
     if (meldsObj) {
         const sortedRanks = Object.keys(meldsObj).sort((a, b) => { 
@@ -161,54 +216,50 @@ function renderTable(elementId, meldsObj, red3sArray) {
 
     const isDesktop = window.innerWidth > 800;
     const groupWidth = isDesktop ? 75 : 50;
-    const offsetStep = isDesktop ? 30 : 25; // Spacing between Canastas
-    const red3Overlap = 15; // Tighter overlap for Red 3s
-
+    
     // --- 2. RENDER THE "BONUS STACK" (Red 3s + Canastas) ---
+    // This sits on the left. We calculate its width to subtract from available space.
     const hasRed3s = (red3sArray && red3sArray.length > 0);
     const hasCanastas = (closedMelds.length > 0);
+    let stackWidth = 0;
 
     if (hasRed3s || hasCanastas) {
         const stackDiv = document.createElement("div");
         stackDiv.className = "meld-group";
         
-        // Layout: Relative container to hold absolute stacked cards
+        // Layout: Relative container
         stackDiv.style.position = "relative";
-        stackDiv.style.marginRight = "10px"; 
+        // Give the stack a fixed margin to separate it from open melds
+        stackDiv.style.marginRight = isDesktop ? "30px" : "15px"; 
         stackDiv.style.minWidth = "var(--card-w)"; 
         
+        // Track width used by this stack (Card Width + Margin)
+        stackWidth = groupWidth + (isDesktop ? 30 : 15);
+
         let zIndex = 1;
         let topOffset = 0;
+        const offsetStep = isDesktop ? 30 : 25;
+        const red3Overlap = 15;
 
-        // A. Render Red 3s (Base of the stack - Cascading)
+        // A. Render Red 3s
         if (hasRed3s) {
             red3sArray.forEach((card, idx) => {
                 const r3Img = document.createElement("img");
                 r3Img.src = getCardImage(card);
                 r3Img.className = "card-img meld-card";
                 r3Img.style.position = "absolute";
-                
-                // Cascade logic: Shift each 3 down slightly
-                const currentPos = idx * red3Overlap;
-                r3Img.style.top = `${currentPos}px`;
+                r3Img.style.top = `${idx * red3Overlap}px`;
                 r3Img.style.left = "0";
-                
                 r3Img.style.zIndex = zIndex++;
                 r3Img.style.boxShadow = "2px 2px 0 #555";
                 stackDiv.appendChild(r3Img);
-                
-                // Track the bottom of the last Red 3 to start Canastas below it
-                if (idx === red3sArray.length - 1) {
-                    topOffset = currentPos + offsetStep;
-                }
+                if (idx === red3sArray.length - 1) topOffset = (idx * red3Overlap) + offsetStep;
             });
         }
 
-        // B. Render Canastas (Stacked on top)
+        // B. Render Canastas
         closedMelds.forEach(m => {
             const pile = m.cards;
-            
-            // Determine Top Card
             const isNatural = !pile.some(c => c.isWild);
             let topCard = pile[0]; 
             if (isNatural) {
@@ -223,58 +274,52 @@ function renderTable(elementId, meldsObj, red3sArray) {
             cWrapper.style.left = "0";
             cWrapper.style.zIndex = zIndex++;
             
-            // --- UPDATED BADGE: Right Aligned ---
             const badgeColor = isNatural ? "#d63031" : "#2d3436";
             const badgeText = isNatural ? "NAT" : "MIX";
             
             cWrapper.innerHTML = `
                 <img src="${getCardImage(topCard)}" class="card-img meld-card" style="box-shadow: 2px 2px 3px rgba(0,0,0,0.4); border:1px solid #000;">
-                <div style="
-                    position: absolute; 
-                    top: 4px; 
-                    right: 4px; /* <--- ALIGNED RIGHT */
-                    background: ${badgeColor}; 
-                    color: white; 
-                    font-size: 9px; 
-                    font-weight: bold;
-                    padding: 1px 4px; 
-                    border: 1px solid rgba(255,255,255,0.8);
-                    border-radius: 4px;
-                    z-index: 10;
-                    white-space: nowrap;
-                    box-shadow: 0 1px 2px rgba(0,0,0,0.8);
-                ">
+                <div style="position: absolute; top: 4px; right: 4px; background: ${badgeColor}; color: white; font-size: 9px; font-weight: bold; padding: 1px 4px; border: 1px solid rgba(255,255,255,0.8); border-radius: 4px; z-index: 10; white-space: nowrap;">
                     ${badgeText}
                 </div>
             `;
-            
             stackDiv.appendChild(cWrapper);
             topOffset += offsetStep;
         });
 
-        // C. Spacer to maintain container height
         const spacer = document.createElement("div");
         spacer.style.width = "var(--card-w)";
         spacer.style.height = `calc(var(--card-h) + ${Math.max(0, topOffset - offsetStep)}px)`;
         stackDiv.appendChild(spacer);
-
         container.appendChild(stackDiv);
     }
 
-    // --- 3. RENDER OPEN MELDS (Standard Waterfall) ---
+    // --- 3. RENDER OPEN MELDS (With Squeeze Logic) ---
     if (openMelds.length === 0) return;
 
-    const safeWidth = container.clientWidth || window.innerWidth;
-    const usedWidth = (hasRed3s || hasCanastas) ? (groupWidth + 20) : 0;
-    const containerWidth = safeWidth - usedWidth - 10; 
+    // A. Calculate Available Space
+    const safeWidth = container.clientWidth || (window.innerWidth * 0.4); // Approx width of table zone
+    const availableWidth = safeWidth - stackWidth; // Remove space taken by Canastas
     
-    let horizMargin = 5; 
+    // B. Calculate Margin needed to fit all cards
+    // Formula: TotalWidth = (NumCards * CardWidth) + ((NumCards - 1) * Margin)
+    // We solve for Margin: Margin = (AvailableWidth - (NumCards * CardWidth)) / (NumCards - 1)
+    
+    let horizMargin = isDesktop ? 20 : 5; // Default comfortable margin
 
     if (openMelds.length > 1) {
-         const calculated = ((containerWidth - groupWidth) / (openMelds.length - 1)) - groupWidth;
-         const minVisible = 15; 
-         const maxSqueeze = -(groupWidth - minVisible); 
-         horizMargin = Math.min(10, Math.max(maxSqueeze, calculated));
+        const totalCardWidth = openMelds.length * groupWidth;
+        const spacingSlots = openMelds.length - 1;
+        
+        // Check if we overflow
+        if (totalCardWidth + (spacingSlots * horizMargin) > availableWidth) {
+            // Squeeze calculation
+            const neededSqueeze = (availableWidth - totalCardWidth) / spacingSlots;
+            
+            // Cap the squeeze (don't overlap more than 60% of card)
+            const minOverlap = isDesktop ? -50 : -30; 
+            horizMargin = Math.max(minOverlap, neededSqueeze);
+        }
     }
 
     const cardHeight = isDesktop ? 105 : 70;
@@ -288,8 +333,9 @@ function renderTable(elementId, meldsObj, red3sArray) {
         groupDiv.id = `meld-pile-${teamSuffix}-${groupData.rank}`;
         
         groupDiv.style.position = "relative";
-        groupDiv.style.zIndex = gIdx + 100;
+        groupDiv.style.zIndex = gIdx + 10;
         
+        // APPLY THE CALCULATED MARGIN
         if (gIdx < openMelds.length - 1) {
             groupDiv.style.marginRight = `${horizMargin}px`;
         }
@@ -298,24 +344,18 @@ function renderTable(elementId, meldsObj, red3sArray) {
             groupDiv.setAttribute("onclick", `handleMeldClick(event, '${groupData.rank}')`);
             groupDiv.style.cursor = "pointer";
         }
-        let html = "";
-        html += `<div class='meld-container' style='display:flex; flex-direction:column; align-items:center;'>`;
+
+        let html = `<div class='meld-container' style='display:flex; flex-direction:column; align-items:center;'>`;
         
         let activeMargin = vertMargin;
         if (groupData.cards.length > 5) activeMargin -= 5; 
 
         groupData.cards.forEach((c, cIdx) => { 
             const marginTop = (cIdx > 0) ? `margin-top:${activeMargin}px;` : "";
-            
-            // --- ROTATION LOGIC (Now correctly INSIDE the loop) ---
             let transformStyle = "transform: none;";
-            
-            // Check if this specific pile has 6 cards AND we are drawing the last one (index 5)
             if (groupData.cards.length === 6 && cIdx === 5) {
                 transformStyle = "transform: rotate(-45deg) translateX(10px) translateY(-5px);";
             }
-
-            // Apply the transformStyle to the img tag
             html += `<img src="${getCardImage(c)}" class="card-img meld-card" style="${marginTop} margin-left: 0; ${transformStyle} box-shadow: 1px 1px 2px rgba(0,0,0,0.3);">`; 
         });
 
@@ -324,21 +364,6 @@ function renderTable(elementId, meldsObj, red3sArray) {
         container.appendChild(groupDiv);
     });
 }
-
-function renderDiscardPile(data) {
-    const discardDiv = document.getElementById('discard-display');
-    discardDiv.innerHTML = ""; 
-    if (!data.topDiscard) {
-        discardDiv.innerHTML = '<div style="opacity:0.3; text-align:center; color:#aaa;">EMPTY</div>';
-        return;
-    }
-    const img = document.createElement("img");
-    img.src = getCardImage(data.topDiscard);
-    img.className = "card-img discard-stack-card"; 
-    discardDiv.appendChild(img);
-}
-
-// ui.js
 
 function renderOtherHand(elementId, count, orientation) {
     const div = document.getElementById(elementId);
