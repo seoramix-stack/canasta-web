@@ -122,7 +122,10 @@
     <h2>PLAY ONLINE</h2>
     
     <div style="margin-bottom: 15px;">
-        <div style="color: #bdc3c7; font-size: 14px; margin-bottom: 5px;">FORMAT</div>
+        
+        <button class="menu-btn secondary" onclick="openLeaderboard()" style="margin-bottom: 20px;">
+        🏆 TOP 100 LEADERBOARD
+    </button>
         <div class="diff-grid">
             <button class="diff-btn p-count-btn" onclick="selectPlayerCount(2, this)">2 PLAYERS</button>
             <button class="diff-btn p-count-btn selected" onclick="selectPlayerCount(4, this)">4 PLAYERS</button>
@@ -450,6 +453,16 @@
             </div>
         </div>
     </div> 
+    <div id="screen-leaderboard" class="app-screen">
+    <h2>TOP 100 PLAYERS</h2>
+    <div class="info-text" style="margin-bottom: 10px;">Ranked by ELO Rating</div>
+
+    <div id="leaderboard-list" class="leaderboard-container">
+        <div style="text-align:center; padding-top:50px;">Loading...</div>
+    </div>
+
+    <button class="menu-btn text-only" onclick="navTo('screen-online')">BACK</button>
+</div>
 <script src="/socket.io/socket.io.js"></script>
 <script type="module" src="client.js"></script>
 </body>

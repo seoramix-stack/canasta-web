@@ -112,6 +112,34 @@ const matchmakingQueues = {
     'casual_2': [],
     'casual_4': []
 };
+// --- LEADERBOARD ROUTE ---
+app.get('/api/leaderboard', async (req, res) => {
+    // 1. Dev Mode Mock Data (for testing without DB)
+    if (DEV_MODE) {
+        const mockData = Array.from({ length: 25 }, (_, i) => ({
+            username: `Player_${i + 1}`,
+            stats: { 
+                rating: 2000 - (i * 50), 
+                wins: 50 - i, 
+                losses: 10 + i 
+            }
+        }));
+        return res.json({ success: true, leaderboard: mockData });
+    }
+
+    // 2. Production DB Query
+    try {
+        const topPlayers = await User.find({})
+            .sort({ 'stats.rating': -1 }) // Sort Descending by Rating
+            .limit(100)                   // Top 100 only
+            .select('username stats.rating stats.wins stats.losses -_id'); // Only safe fields
+
+        res.json({ success: true, leaderboard: topPlayers });
+    } catch (e) {
+        console.error("[API] Leaderboard Error:", e);
+        res.status(500).json({ success: false, message: "Server Error" });
+    }
+});
 
 // --- SOCKET CONNECTION ---
 io.on('connection', async (socket) => {
@@ -327,7 +355,7 @@ io.on('connection', async (socket) => {
 
         console.log(`[Ready] Seat ${data.seat} Ready. Total: ${game.readySeats.size}/4`);
 
-        if (game.readySeats.size === 4 && game.currentPlayer === -1) {
+        if (game.readySeats.size === game.config.PLAYER_COUNT && game.currentPlayer === -1) {
              console.log(`[Start] All players ready!`);
              
              if (game.roundStarter === undefined) game.roundStarter = 0;

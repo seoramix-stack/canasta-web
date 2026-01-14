@@ -373,3 +373,53 @@ body {
 .p-indicator { width: 40px; height: 40px; border-radius: 50%; background: #444; color: #aaa; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid #555; }
 .p-indicator.ready { background: #2ecc71; color: white; border-color: white; box-shadow: 0 0 10px #2ecc71; }
 #staging-panel { display: none; position: absolute; bottom: 35%; left: 10%; width: 80%; background: #2d3436; color: white; padding: 10px; border-radius: 8px; border: 2px solid #f1c40f; z-index: 999; }
+
+/* --- LEADERBOARD STYLES --- */
+.leaderboard-container {
+    width: 95%;
+    max-width: 600px;
+    height: 60vh; 
+    overflow-y: auto;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 10px;
+    margin-bottom: 20px;
+    box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+}
+
+.lb-row {
+    display: flex; 
+    align-items: center; 
+    justify-content: space-between;
+    padding: 12px 10px; 
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    font-size: 15px;
+}
+
+/* Row Hover Effect */
+.lb-row:not(.lb-header):hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.lb-header { 
+    font-weight: bold; 
+    color: #7f8c8d; 
+    border-bottom: 2px solid #555;
+    font-size: 12px;
+    letter-spacing: 1px;
+    position: sticky;
+    top: 0;
+    background: #2c3e50; /* Matches body bg to cover scrolling items */
+    z-index: 10;
+}
+
+.lb-name { flex: 1; text-align: left; padding-left: 10px; font-weight: bold; color: white; }
+.lb-rating { width: 60px; text-align: right; color: #f1c40f; font-weight: bold; }
+.lb-stats { width: 60px; text-align: right; color: #95a5a6; font-size: 12px; }
+
+/* Rank Styling */
+.rank-num { width: 50px; text-align: left; font-weight: bold; color: #777; }
+.rank-1 { color: #f1c40f; text-shadow: 0 0 10px rgba(241, 196, 15, 0.3); font-size: 1.1em; } /* Gold */
+.rank-2 { color: #bdc3c7; text-shadow: 0 0 10px rgba(189, 195, 199, 0.3); } /* Silver */
+.rank-3 { color: #e67e22; text-shadow: 0 0 10px rgba(230, 126, 34, 0.3); } /* Bronze */

@@ -433,7 +433,15 @@ function initSocket(token) {
             for (let i = 0; i < 4; i++) {
                 const el = document.getElementById(`ind-${i}`);
                 if (el) {
-                    // If seat 'i' is in the list, make it green. Otherwise, keep it gray.
+                    // --- FIX START ---
+                    // 1. Hide indicators that don't exist in this game mode
+                    // (We use state.currentPlayerCount which holds 2 or 4)
+                    if (i >= state.currentPlayerCount) {
+                        el.style.display = 'none';
+                        continue; 
+                    } else {
+                        el.style.display = 'flex'; // Reset to flex if re-using modal
+                    }
                     if (data.readySeats.includes(i)) {
                         el.classList.add('ready');
                     } else {
@@ -728,5 +736,73 @@ function renderUserList(items, mode) {
         // Insert Name with Dot
         row.innerHTML = `<div style="display:flex; align-items:center;">${statusDot}<span>${name}</span></div> <div>${actions}</div>`;
         div.appendChild(row);
+    });
+}
+
+// --- LEADERBOARD LOGIC ---
+
+window.openLeaderboard = async () => {
+    // 1. Navigate
+    UI.navTo('screen-leaderboard');
+    
+    // 2. Show Loading State
+    const container = document.getElementById('leaderboard-list');
+    container.innerHTML = '<div style="text-align:center; margin-top:50px; color:#aaa;">Fetching rankings...</div>';
+
+    // 3. Fetch Data
+    try {
+        const res = await fetch('/api/leaderboard');
+        const data = await res.json();
+
+        if (data.success) {
+            renderLeaderboard(data.leaderboard);
+        } else {
+            container.innerHTML = '<div style="text-align:center; margin-top:50px; color:#e74c3c;">Failed to load data.</div>';
+        }
+    } catch (e) {
+        container.innerHTML = '<div style="text-align:center; margin-top:50px; color:#e74c3c;">Server connection error.</div>';
+    }
+};
+
+function renderLeaderboard(players) {
+    const container = document.getElementById('leaderboard-list');
+    container.innerHTML = "";
+
+    if (players.length === 0) {
+        container.innerHTML = '<div style="text-align:center; margin-top:50px;">No ranked players yet.</div>';
+        return;
+    }
+
+    // Header Row
+    const header = document.createElement('div');
+    header.className = 'lb-row lb-header';
+    header.innerHTML = `
+        <span style="width:30px;">#</span> 
+        <span style="flex:1; text-align:left; padding-left:10px;">PLAYER</span> 
+        <span style="width:60px; text-align:right;">RATING</span> 
+        <span style="width:60px; text-align:right;">W / L</span>
+    `;
+    container.appendChild(header);
+
+    // Player Rows
+    players.forEach((p, index) => {
+        const row = document.createElement('div');
+        row.className = 'lb-row';
+
+        // Special styling for Top 3
+        let rankClass = 'rank-num';
+        let rankIcon = index + 1;
+        
+        if (index === 0) { rankClass += ' rank-1'; rankIcon = '🥇 ' + rankIcon; }
+        else if (index === 1) { rankClass += ' rank-2'; rankIcon = '🥈 ' + rankIcon; }
+        else if (index === 2) { rankClass += ' rank-3'; rankIcon = '🥉 ' + rankIcon; }
+
+        row.innerHTML = `
+            <span class="${rankClass}">${rankIcon}</span>
+            <span class="lb-name">${p.username}</span>
+            <span class="lb-rating">${Math.round(p.stats.rating)}</span>
+            <span class="lb-stats">${p.stats.wins} / ${p.stats.losses}</span>
+        `;
+        container.appendChild(row);
     });
 }
