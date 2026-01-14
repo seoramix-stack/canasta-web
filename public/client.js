@@ -97,7 +97,8 @@ window.leaveGame = () => {
 };
 
 window.confirmLeave = () => {
-    if(confirm("Quit game?")) { UI.toggleGameMenu(); window.leaveGame(); }
+    UI.toggleGameMenu(); 
+    window.leaveGame();
 };
 
 window.sendReady = () => {
