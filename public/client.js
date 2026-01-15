@@ -496,7 +496,6 @@ function initSocket(token) {
 });
 
     state.socket.on('match_over', (data) => {
-        // Fix for the Crash: Ensure we don't try to access UI if user left
         setTimeout(() => {
             // 1. Force close the Score Modal so it doesn't block the Victory screen
             const scoreModal = document.getElementById('score-modal');
@@ -520,9 +519,14 @@ function initSocket(token) {
                 if (lbl1) lbl1.innerText = name1;
                 if (lbl2) lbl2.innerText = name2;
             } else {
-                // 4-Player Mode: Keep "Team 1" vs "Team 2" (or customize if you prefer)
-                if (lbl1) lbl1.innerText = "TEAM 1";
-                if (lbl2) lbl2.innerText = "TEAM 2";
+                // 4-Player Mode: Use "MY TEAM" / "OPPONENTS"
+                const amITeam1 = (state.mySeat === 0 || state.mySeat === 2);
+                
+                // lbl1 corresponds to Team 1's score row
+                if (lbl1) lbl1.innerText = amITeam1 ? "MY TEAM" : "OPPONENTS";
+                
+                // lbl2 corresponds to Team 2's score row
+                if (lbl2) lbl2.innerText = amITeam1 ? "OPPONENTS" : "MY TEAM";
             }
             
             if (data.winner) {
@@ -546,7 +550,37 @@ function initSocket(token) {
                 if (finalS1) finalS1.innerText = data.scores.team1;
                 if (finalS2) finalS2.innerText = data.scores.team2;
             }
+            const rateBox = document.getElementById('victory-ratings');
+            if (data.ratings && Object.keys(data.ratings).length > 0) {
+                rateBox.style.display = 'block';
+                rateBox.innerHTML = '<div style="font-size:12px; color:#aaa; margin-bottom:5px;">RATING UPDATES</div>';
 
+                // Determine which seats to show based on player count
+                const seatsToShow = (state.currentPlayerCount === 2) ? [0, 1] : [0, 1, 2, 3];
+
+                seatsToShow.forEach(seat => {
+                    const rData = data.ratings[seat];
+                    if (rData) {
+                        const name = (data.names && data.names[seat]) ? data.names[seat] : `Player ${seat+1}`;
+                        const isPos = rData.delta >= 0;
+                        const color = isPos ? '#2ecc71' : '#e74c3c';
+                        const sign = isPos ? '+' : '';
+
+                        const row = document.createElement('div');
+                        row.style.cssText = "display:flex; justify-content:space-between; margin-bottom:4px; font-size:14px;";
+                        row.innerHTML = `
+                            <span>${name}</span>
+                            <span>
+                                <span style="color:#bdc3c7; margin-right:5px;">${rData.newRating}</span>
+                                <span style="color:${color}; font-weight:bold;">${sign}${rData.delta}</span>
+                            </span>
+                        `;
+                        rateBox.appendChild(row);
+                    }
+                });
+            } else {
+                rateBox.style.display = 'none'; // Hide if unrated or dev mode
+            }
             // 3. Navigate to Victory Screen
             UI.navTo('screen-victory');
             
@@ -594,7 +628,7 @@ if (nameEl) nameEl.innerText = pName;
 
 // --- TIMER LOGIC ---
 
-function startTimerSystem() {
+function startTimerSystem(shouldReset = true) {
     if (state.timerInterval) clearInterval(state.timerInterval);
 
     if (shouldReset) {

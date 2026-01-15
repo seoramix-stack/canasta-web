@@ -816,6 +816,9 @@ async function handleRoundEnd(gameId, io) {
     if (result.isMatchOver) {
         console.log(`[MATCH END] Game ${gameId} won by ${result.winner}`);
 
+        // 1. Prepare Data Holder for Client
+    let ratingUpdates = {}; // Will hold { seatIndex: { newRating, delta } }
+
         // --- RATING & STATS UPDATE START ---
         if (!DEV_MODE) {
             try {
@@ -848,46 +851,42 @@ async function handleRoundEnd(gameId, io) {
                     // 3. Calculate Delta using our new Elo module
                     const delta = calculateEloChange(team1Rating, team2Rating, s1, s2);
                     
-                    console.log(`[ELO] T1(${team1Rating}) vs T2(${team2Rating}) | Score ${s1}-${s2} | Delta: ${delta}`);
-
-                    // 4. Apply Updates
-                    // Team 1 (Seats 0, 2)
-                    players[0].stats.rating += delta;
-                    players[2].stats.rating += delta;
-                    // Team 2 (Seats 1, 3) gets the opposite
-                    players[1].stats.rating -= delta;
-                    players[3].stats.rating -= delta;
-
-                    // Update Wins/Losses
+                    // Apply Updates & Populate ratingUpdates
+                [0, 1, 2, 3].forEach(seat => {
+                    const isTeam1 = (seat === 0 || seat === 2);
+                    // Team 1 gets +delta, Team 2 gets -delta
+                    const change = isTeam1 ? delta : -delta;
+                    
+                    players[seat].stats.rating += change;
+                    
                     const winnerTeam = (result.winner === 'team1') ? 0 : 1;
-                    [0, 1, 2, 3].forEach(seat => {
-                        const isTeam1 = (seat === 0 || seat === 2);
-                        const won = (winnerTeam === 0 && isTeam1) || (winnerTeam === 1 && !isTeam1);
-                        if (won) players[seat].stats.wins++;
-                        else players[seat].stats.losses++;
-                    });
+                    const won = (winnerTeam === 0 && isTeam1) || (winnerTeam === 1 && !isTeam1);
+                    if (won) players[seat].stats.wins++;
+                    else players[seat].stats.losses++;
 
-                    // 5. Save to DB
-                    await Promise.all([
-                        players[0].save(), players[1].save(), players[2].save(), players[3].save()
-                    ]);
-                } else if (!game.isRated) {
-                    // Just update wins/losses for unrated/bot games if needed, or skip
-                    console.log("Game unrated or missing players, skipping Elo.");
-                }
+                    // Store for Client
+                    ratingUpdates[seat] = {
+                        newRating: Math.round(players[seat].stats.rating),
+                        delta: change
+                    };
+                });
 
-            } catch (e) {
-                console.error("Stats/Elo update failed:", e);
-            }
+                await Promise.all([
+                    players[0].save(), players[1].save(), players[2].save(), players[3].save()
+                ]);
+            } 
+        } catch (e) {
+            console.error("Stats/Elo update failed:", e);
         }
-        // --- RATING & STATS UPDATE END ---
+    }
 
         // Emit MATCH_OVER immediately
         io.to(gameId).emit('match_over', {
             winner: result.winner,
             scores: game.cumulativeScores,
             reason: "score_limit",
-            names: game.names
+            names: game.names,
+            ratings: ratingUpdates
         });
 
         // Cleanup
