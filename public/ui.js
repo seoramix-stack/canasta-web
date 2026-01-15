@@ -694,6 +694,7 @@ function showScoreModal(round, match, names) {
     setText('row-bonus-1',   round.team1.goOutBonus);
     setText('row-deduct-1',  round.team1.deductions);
     setText('row-total-1',   round.team1.total);
+    setText('row-cumul-1',   match.team1);
 
     // 6. Populate Team 2 Column
     setText('row-base-2',    round.team2.basePoints);
@@ -702,6 +703,7 @@ function showScoreModal(round, match, names) {
     setText('row-bonus-2',   round.team2.goOutBonus);
     setText('row-deduct-2',  round.team2.deductions);
     setText('row-total-2',   round.team2.total);
+    setText('row-cumul-2',   match.team2);
 
     // --- 7. BUTTON RESET LOGIC (The Fix for Stuck Games) ---
     // We try to find the button by ID. If your HTML doesn't have the ID,

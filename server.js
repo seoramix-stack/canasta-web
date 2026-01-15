@@ -662,6 +662,8 @@ function joinGlobalGame(socket, data) {
             games[gameId].names[i] = pName;
 
             const token = p.handshake.auth.token;
+            if (!games[gameId].playerTokens) games[gameId].playerTokens = {};
+    if (token) games[gameId].playerTokens[i] = token;
             if (token) {
                  const cachedName = playerSessions[token] ? playerSessions[token].username : null;
                  playerSessions[token] = { 
@@ -835,59 +837,77 @@ async function handleRoundEnd(gameId, io) {
         // --- RATING & STATS UPDATE START ---
         if (!DEV_MODE) {
             try {
-                // A. Fetch all sockets to get tokens
-                const sockets = await io.in(gameId).fetchSockets();
-                const players = {}; // Map seat -> User Document
+                const players = {};
+            const playerCount = game.config.PLAYER_COUNT; // Uses your previous fix (2 or 4)
 
-                // B. Fetch User Docs from DB
-                for (const s of sockets) {
-                    const seat = s.data.seat;
-                    const token = s.handshake.auth.token;
-                    if (token) {
-                        const userDoc = await User.findOne({ token: token });
-                        if (userDoc) players[seat] = userDoc;
-                    }
+            // Loop through all EXPECTED seats (0 to N-1)
+            for (let i = 0; i < playerCount; i++) {
+                // Retrieve the token we saved at the start of the game
+                const token = (game.playerTokens && game.playerTokens[i]) ? game.playerTokens[i] : null;
+                
+                if (token) {
+                    const userDoc = await User.findOne({ token: token });
+                    if (userDoc) players[i] = userDoc;
                 }
+            }
+            
+            console.log(`[ELO] Found ${Object.keys(players).length} / ${playerCount} players for rating update.`);
+            
+            // Check if we found all players in the DB (regardless of if they are online)
+            if (Object.keys(players).length === playerCount && game.isRated) {
+    
+    // 1. Calculate Average Ratings Dynamically
+    let team1Rating, team2Rating;
 
-                // Use game.config.PLAYER_COUNT so it works for both 2 and 4 players
-                // (If someone disconnected mid-game, we might skip rating or penalize leaver - simple version here)
-                if (Object.keys(players).length === game.config.PLAYER_COUNT && game.isRated) {
-                    
-                    // 1. Calculate Average Ratings
-                    const team1Rating = (players[0].stats.rating + players[2].stats.rating) / 2;
-                    const team2Rating = (players[1].stats.rating + players[3].stats.rating) / 2;
+    if (playerCount === 2) {
+        // 1v1 Logic
+        team1Rating = players[0].stats.rating;
+        team2Rating = players[1].stats.rating;
+    } else {
+        // 2v2 Logic (Average of partners)
+        team1Rating = (players[0].stats.rating + players[2].stats.rating) / 2;
+        team2Rating = (players[1].stats.rating + players[3].stats.rating) / 2;
+    }
 
-                    // 2. Get Scores
-                    const s1 = game.cumulativeScores.team1;
-                    const s2 = game.cumulativeScores.team2;
+    // 2. Get Scores
+    const s1 = game.cumulativeScores.team1;
+    const s2 = game.cumulativeScores.team2;
 
-                    // 3. Calculate Delta using our new Elo module
-                    const delta = calculateEloChange(team1Rating, team2Rating, s1, s2);
-                    
-                    // Apply Updates & Populate ratingUpdates
-                [0, 1, 2, 3].forEach(seat => {
-                    const isTeam1 = (seat === 0 || seat === 2);
-                    // Team 1 gets +delta, Team 2 gets -delta
-                    const change = isTeam1 ? delta : -delta;
-                    
-                    players[seat].stats.rating += change;
-                    
-                    const winnerTeam = (result.winner === 'team1') ? 0 : 1;
-                    const won = (winnerTeam === 0 && isTeam1) || (winnerTeam === 1 && !isTeam1);
-                    if (won) players[seat].stats.wins++;
-                    else players[seat].stats.losses++;
+    // 3. Calculate Delta
+    const delta = calculateEloChange(team1Rating, team2Rating, s1, s2);
+    
+    // 4. Apply Updates & Save
+    const savePromises = [];
 
-                    // Store for Client
-                    ratingUpdates[seat] = {
-                        newRating: Math.round(players[seat].stats.rating),
-                        delta: change
-                    };
-                });
+    // Loop only through the ACTUAL seats (0..1 OR 0..3)
+    for (let seat = 0; seat < playerCount; seat++) {
+        const isTeam1 = (seat === 0 || seat === 2);
+        const change = isTeam1 ? delta : -delta;
+        
+        players[seat].stats.rating += change;
+        
+        const winnerTeam = (result.winner === 'team1') ? 0 : 1; // 0=Team1, 1=Team2
+        const won = (winnerTeam === 0 && isTeam1) || (winnerTeam === 1 && !isTeam1);
+        
+        if (won) players[seat].stats.wins++;
+        else players[seat].stats.losses++;
 
-                await Promise.all([
-                    players[0].save(), players[1].save(), players[2].save(), players[3].save()
-                ]);
-            } 
+        // Store for Client
+        ratingUpdates[seat] = {
+            newRating: Math.round(players[seat].stats.rating),
+            delta: change
+        };
+
+        savePromises.push(players[seat].save());
+    }
+
+    await Promise.all(savePromises);
+    console.log("[ELO] Ratings updated successfully.");
+
+} else {
+    console.log("[ELO] Skipped: Not enough players found or not rated.");
+}
+
         } catch (e) {
             console.error("Stats/Elo update failed:", e);
         }
