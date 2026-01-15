@@ -1,331 +1,182 @@
 // bot.js
+
 class CanastaBot {
-    constructor(seat, difficulty) {
+    constructor(seat, difficulty = 'hard') {
         this.seat = seat;
-        this.difficulty = difficulty; // 'easy', 'medium', 'hard'
+        this.difficulty = difficulty;
+        
+        this.seenDiscards = {}; 
+        this.partnerSignaled = false; 
+    }
+
+    observeDiscard(card, playerSeat, game) {
+        if (!this.seenDiscards[card.rank]) this.seenDiscards[card.rank] = 0;
+        this.seenDiscards[card.rank]++;
+
+        let partnerSeat = (this.seat + 2) % 4; // 4-Player Logic
+        if (playerSeat === partnerSeat) {
+            this.partnerSignaled = card.isWild;
+        }
     }
 
     async executeTurn(game, broadcastFunc) {
         const delay = (ms) => new Promise(res => setTimeout(res, ms));
         
-        // --- 1. DECIDE DRAW ---
-    let pile = game.discardPile;
-    let topCard = pile.length > 0 ? pile[pile.length - 1] : null;
-    let wantPile = false;
+        // --- CHECK ENDGAME STATUS ---
+        // "If there is 7 cards or more left... I will still have one more turn."
+        let realDeckSize = this.getRealDeckSize(game);
+        let isLastTurn = realDeckSize < 7; 
 
-    if (topCard) {
-        let hand = game.players[this.seat];
-        // Count naturals and wilds
-        let matches = hand.filter(c => c.rank === topCard.rank && !c.isWild).length;
-        let wilds = hand.filter(c => c.isWild).length;
-        
-        let myMelds = (this.seat % 2 === 0) ? game.team1Melds : game.team2Melds;
-        let hasTableMeld = myMelds[topCard.rank] && myMelds[topCard.rank].length > 0;
-        let weHaveOpened = Object.keys(myMelds).length > 0;
-        let isFrozen = pile.some(c => c.isWild) || (pile.length > 0 && pile[0].isRed3);
+        // --- PHASE 1: DRAW ---
+        let pile = game.discardPile;
+        let topCard = pile.length > 0 ? pile[pile.length - 1] : null;
+        let wantPile = false;
 
-        // --- NEW DIFFICULTY LOGIC ---
-        
-        // EASY: 30% chance to simply ignore a valid pickup
-        if (this.difficulty === 'easy') {
-            if (Math.random() > 0.3) { 
-                if (matches >= 2) wantPile = true; 
-            }
-        } 
-        
-        // MEDIUM: Standard rules (Needs 2 naturals OR a table meld)
-        else if (this.difficulty === 'medium') {
-            if (weHaveOpened) {
-                if (isFrozen) { if (matches >= 2) wantPile = true; }
-                else { if (matches >= 2 || hasTableMeld) wantPile = true; }
-            } else {
-                if (matches >= 2 && this.canOpenWithPile(game, topCard)) wantPile = true;
-            }
-        } 
-        
-        // HARD: Aggressive & Smart
-        else if (this.difficulty === 'hard') {
-            if (weHaveOpened) {
-                if (isFrozen) { if (matches >= 2) wantPile = true; }
-                else {
-                    if (matches >= 2 || hasTableMeld) wantPile = true;
-                    // SMART MOVE: Use 1 Natural + 1 Wild to pickup!
-                    if (matches >= 1 && wilds >= 1) wantPile = true;
-                }
-            } else {
-                // Hard bots check if the pile helps them open immediately
-                if ((matches >= 2 || (matches >= 1 && wilds >= 1)) && this.canOpenWithPile(game, topCard)) {
-                    wantPile = true;
-                }
-            }
-        }
-    }
-
-        // CHECK: Can I pick up the pile?
         if (topCard) {
-            // Logic: Do I have 2 naturals for this?
             let hand = game.players[this.seat];
-            let matches = hand.filter(c => c.rank === topCard.rank && !c.isWild).length;
+            let myMelds = this.getMyMelds(game);
             
-            // Check table state
-            let myMelds = (this.seat % 2 === 0) ? game.team1Melds : game.team2Melds;
-            let hasTableMeld = myMelds[topCard.rank] && myMelds[topCard.rank].length > 0;
-            let isFrozen = pile.some(c => c.isWild) || (pile.length > 0 && pile[0].isRed3); // Simplified frozen check
-            let weHaveOpened = Object.keys(myMelds).length > 0;
-
-            // --- LOGIC TREE ---
-            if (weHaveOpened) {
-                // CASE A: We already opened.
-                // If frozen: Need 2 naturals.
-                // If NOT frozen: Need 2 naturals OR (1 natural + 1 wild) OR (existing meld on table).
-                if (isFrozen) {
-                    if (matches >= 2) wantPile = true;
+            if (this.canTakePile(game, hand, topCard, myMelds)) {
+                // LAST TURN LOGIC: Always take the pile if we can!
+                // Why? It gives us more cards to meld points, and denies the opponent the pile (if game continues).
+                if (isLastTurn) {
+                    wantPile = true;
                 } else {
-                    // Not frozen: easier to pick up
-                    if (matches >= 2 || hasTableMeld) wantPile = true;
-                    // Smart Bot: Check for 1 natural + 1 wild
-                    if (this.difficulty === 'hard' && !wantPile) {
-                        let wilds = hand.filter(c => c.isWild).length;
-                        if (matches >= 1 && wilds >= 1) wantPile = true;
-                    }
-                }
-            } else {
-                // CASE B: We have NOT opened yet.
-                // Rule: MUST have 2 naturals to open with pile.
-                if (matches >= 2) {
-                    // Check points requirement (50, 90, 120)
-                    if (this.canOpenWithPile(game, topCard)) {
-                        wantPile = true;
-                    }
+                    // Standard Logic
+                    let pileValue = this.evaluatePile(pile);
+                    if (pileValue > 50) wantPile = true; 
+                    else if (this.difficulty === 'hard' && pile.length < 2) wantPile = false;
                 }
             }
         }
 
-        // EXECUTE DRAW
         if (wantPile) {
-            // Try to pickup
             let res = game.pickupDiscardPile(this.seat);
-            if (!res.success) {
-                // If failed (e.g. logic error), fallback to deck
-                game.drawFromDeck(this.seat);
-            }
+            if (!res.success) game.drawFromDeck(this.seat);
         } else {
             game.drawFromDeck(this.seat);
         }
         
-        broadcastFunc(this.seat); 
-        await delay(1000); 
+        broadcastFunc(this.seat);
+        await delay(1000);
 
-        // 2. DECIDE MELD
-        this.tryMelding(game);
+        // --- PHASE 2: MELD ---
+        // Updated with "Dump Everything" logic for last turn
+        this.executeMeldingStrategy(game, isLastTurn);
+        
         broadcastFunc(this.seat);
         await delay(800);
 
-        // 3. DECIDE DISCARD
+        // --- PHASE 3: DISCARD ---
         if (game.players[this.seat].length > 0) {
-            // FIX: Changed 'pickSafeDiscard' to 'pickDiscard' to match the method definition below
-            let discardIndex = this.pickDiscard(game); 
+            let discardIndex = this.pickDiscard(game, isLastTurn);
+            
+            let cardToThrow = game.players[this.seat][discardIndex];
+            this.observeDiscard(cardToThrow, this.seat, game); 
             
             game.discardFromHand(this.seat, discardIndex);
-            broadcastFunc(this.seat); 
-        } else {
-            console.log(`[BOT] Seat ${this.seat} has empty hand. Skipping discard.`);
+            broadcastFunc(this.seat);
         }
     }
 
-    // --- NEW: LOGIC TO CHECK POINTS REQUIREMENT ---
-    canOpenWithPile(game, topCard) {
-        // 1. Get current score to find requirement
-        let currentScore = (this.seat % 2 === 0) ? game.team1Score : game.team2Score;
-        // Default to 0 if undefined (start of game)
-        currentScore = currentScore || 0; 
+    // --- STRATEGY CORE ---
 
-        let req = 50;
-        if (currentScore >= 1500) req = 90;
-        if (currentScore >= 3000) req = 120;
-
-        // 2. Calculate points of BEST possible melds using Hand + TopCard
+    executeMeldingStrategy(game, isLastTurn) {
         let hand = game.players[this.seat];
-        let mockHand = [...hand, topCard]; // Pretend we picked it up
         
-        let points = this.calculateBestHandPoints(mockHand);
+        // 1. PANIC / LAST TURN: DUMP EVERYTHING
+        // "Make sure you play all possible cards on the last turn, to don't get minus points."
+        let panicMode = this.checkPanicMode(game);
         
-        return points >= req;
-    }
-
-    calculateBestHandPoints(hand) {
-        // Simplified Greedy Calculation
-        // 1. Group by Rank
-        let groups = {};
-        let wilds = [];
-        let points = 0;
-
-        hand.forEach(c => {
-            if (c.isWild) {
-                wilds.push(c);
-            } else {
-                if (!groups[c.rank]) groups[c.rank] = [];
-                groups[c.rank].push(c);
-            }
-        });
-
-        // 2. Form Naturals (Groups of 3+)
-        for (let rank in groups) {
-            let cards = groups[rank];
-            if (cards.length >= 3) {
-                // Valid natural meld! Add points.
-                cards.forEach(c => points += this.getCardScore(c));
-                // Remove from potential use (simple logic: used cards are done)
-                groups[rank] = []; 
-            }
+        if (isLastTurn || panicMode) {
+            // New Helper: Tries to meld every single card possible
+            this.meldMax(game); 
+            return;
         }
 
-        // 3. Use Wilds to help pairs become melds
-        for (let rank in groups) {
-            let cards = groups[rank];
-            if (cards.length === 2 && wilds.length > 0) {
-                // Use 1 wild to make a meld of 3
-                let w = wilds.pop();
-                points += this.getCardScore(w);
-                cards.forEach(c => points += this.getCardScore(c));
-                groups[rank] = []; // done
-            }
+        // 2. NORMAL PLAY (Strategic)
+        let deckSize = this.getRealDeckSize(game);
+        let earlyGame = (deckSize > 37);
+        let midGame = (deckSize <= 37 && deckSize > 18);
+
+        // If early game, don't meld (unless we just picked up pile)
+        if (earlyGame) return;
+
+        // If End Game approaching (but not last turn yet)
+        if (!midGame) {
+             let wildsInHand = hand.filter(c => c.isWild).length;
+             // Coordination logic: Meld naturals to help partner, keep wilds for closer
+             if (wildsInHand >= 2) this.meldNaturals(game);
+             else this.meldToCreateTargets(game);
         }
-
-        // (Note: This logic is conservative. It doesn't count "Top Card Points" 
-        // if that card didn't help form a meld. This ensures we only count 
-        // points that actually land on the table.)
-
-        return points;
     }
 
-    getCardScore(card) {
-        if (card.rank === 'Joker') return 50;
-        if (card.rank === '2') return 20;
-        if (card.rank === 'A') return 20;
-        if (['8','9','10','J','Q','K'].includes(card.rank)) return 10;
-        if (['4','5','6','7'].includes(card.rank)) return 5;
-        return 5; // Black 3, etc.
-    }
-
-    tryMelding(game) {
+    pickDiscard(game, isLastTurn) {
         let hand = game.players[this.seat];
-        let myMelds = (this.seat % 2 === 0) ? game.team1Melds : game.team2Melds;
-        
-        // Group cards by rank
-        let groups = {};
-        hand.forEach((c, i) => {
-            if (c.isWild) return; 
-            if (!groups[c.rank]) groups[c.rank] = [];
-            groups[c.rank].push(i);
-        });
+        let candidates = [];
 
-        // --- STRATEGY BRANCH ---
+        hand.forEach((card, index) => {
+            let score = 0; 
 
-        // EASY & MEDIUM: Meld everything immediately (Greedy)
-        if (this.difficulty !== 'hard') {
-            this.meldAggressively(game, groups, myMelds);
-        }
-
-        // HARD: Strategic / Conservative
-        else {
-            // 1. Prioritize finishing a Canasta (if a pile has 5+ cards, add to it)
-            for (let rank in myMelds) {
-                if (myMelds[rank].length >= 5 && groups[rank]) {
-                     game.meldCards(this.seat, groups[rank], rank);
+            // --- LAST TURN DISCARD ---
+            if (isLastTurn) {
+                // If it's the last turn, we just want to discard the HIGHEST value card
+                // that is useless to us, to minimize the minus points in hand.
+                // We don't care about "Safe" discards anymore, because the game is ending.
+                score -= this.getCardPointValue(card); 
+            } 
+            // --- NORMAL STRATEGY ---
+            else {
+                if (card.isWild) score += 2000;
+                if (card.isRed3) score += 5000; 
+                
+                if (this.partnerSignaled) {
+                    if (!this.isCardSafe(card, game)) score += 10000; 
                 }
+
+                if (this.isCardSafe(card, game)) score -= 1000; 
+                else score += 100;
             }
 
-            // 2. Only meld new sets if we haven't opened yet
-            let weHaveOpened = Object.keys(myMelds).length > 0;
-            if (!weHaveOpened) {
-                this.meldAggressively(game, groups, myMelds);
-            } else {
-                // If already opened, hold cards back! Only meld big groups (4+)
-                for (let rank in groups) {
-                    if (groups[rank].length >= 4) { 
-                        game.meldCards(this.seat, groups[rank], rank);
-                    }
-                }
-            }
-        }
-    }
-
-    // Helper for Easy/Medium bots
-    meldAggressively(game, groups, myMelds) {
-        // Add to existing melds
-        for (let rank in myMelds) {
-            if (groups[rank] && groups[rank].length > 0) {
-                let res = game.meldCards(this.seat, groups[rank], rank);
-                if (res.success) return this.tryMelding(game); // Recurse to see if we can do more
-            }
-        }
-        // Create new melds
-        for (let rank in groups) {
-            if (groups[rank].length >= 3) {
-                let res = game.meldCards(this.seat, groups[rank], rank);
-                if (res.success) return this.tryMelding(game);
-            }
-        }
-    }
-
-    // bot.js
-
-    pickDiscard(game) {
-        let hand = game.players[this.seat];
-        
-        // --- DIFFICULTY CHECK ---
-        // EASY: 20% Chance to pick a totally random card (blunder)
-        if (this.difficulty === 'easy' && Math.random() < 0.2) {
-            return Math.floor(Math.random() * hand.length);
-        }
-
-        // --- HARD/MEDIUM STRATEGY ---
-        
-        // 1. Determine Enemy Melds
-        // We need to know who the next player is to avoid feeding them.
-        // Use the game config to determine rotation size
-        const pCount = game.config ? game.config.PLAYER_COUNT : 4;
-        const nextPlayerSeat = (this.seat + 1) % pCount;
-        
-        // Identify which melds belong to the enemy
-        // In 2P (pCount=2): Seat 0 vs Seat 1. If I am 1, Next is 0 (Team 1).
-        // In 4P (pCount=4): If I am 1, Next is 2 (Team 1).
-        const enemyMelds = (nextPlayerSeat % 2 === 0) ? game.team1Melds : game.team2Melds;
-
-        // 2. Evaluate Candidates
-        let candidates = hand.map((card, index) => {
-            let score = 0;
-            
-            // Penalties for discarding valuable cards
-            if (card.isWild) score += 1000;
-            if (card.isRed3) score += 2000; 
-            
-            // CRITICAL: Do NOT feed the enemy a card they have melded
-            if (enemyMelds[card.rank]) {
-                if (this.difficulty === 'hard') score += 5000; // Hard bot NEVER feeds
-                else score += 500; // Medium bot tries not to
-            }
-
-            // Bonus for discarding singles (safe to throw)
-            // (We want to discard cards we don't have pairs of)
-            let matches = hand.filter(c => c.rank === card.rank).length;
-            if (matches === 1) score -= 50; 
-            
-            // Hard Strategy: Freeze the pile?
-            // If enemy has many melds, Hard bot might discard a Wild to freeze the pile
-            if (this.difficulty === 'hard' && card.isWild && Object.keys(enemyMelds).length > 2) {
-                let wildCount = hand.filter(c => c.isWild).length;
-                if (wildCount > 1) score = -1000; // Force this discard to be chosen
-            }
-
-            return { index, score };
+            candidates.push({ index, score });
         });
 
-        // 3. Sort by lowest score (safest discard)
         candidates.sort((a, b) => a.score - b.score);
         return candidates[0].index;
     }
+
+    // --- HELPERS ---
+
+    getRealDeckSize(game) {
+        // "It is important to consider how many red 3s... add this amount."
+        // Example: If 12 cards visible, but only 1 Red Three on table (meaning 3 are in deck),
+        // Real Playable Cards = 12 - 3 = 9.
+        
+        let visibleDeckCount = game.deck.length;
+        
+        // 1. Count Red 3s on table (Both teams)
+        let team1R3 = game.team1RedThrees || []; // Assuming array of Red3s
+        let team2R3 = game.team2RedThrees || [];
+        let visibleR3 = team1R3.length + team2R3.length;
+        
+        // 2. Calculate missing Red 3s
+        let missingR3 = 4 - visibleR3; // Total 4 in deck
+        
+        // 3. Subtract missing Red 3s from deck count
+        // (Because drawing a Red 3 is free—it immediately draws another card, 
+        // so it doesn't count as a "turn's worth" of cards)
+        return visibleDeckCount - missingR3; 
+    }
+
+    // Simple point lookup for the "Last Turn" discard logic
+    getCardPointValue(card) {
+        if (card.rank === 'Joker') return 50;
+        if (card.rank === '2' || card.rank === 'A') return 20;
+        if (['8','9','10','J','Q','K'].includes(card.rank)) return 10;
+        return 5; 
+    }
+    
+    // ... (Previous methods: observeDiscard, isCardSafe, checkPanicMode remain the same) ...
 }
 
 module.exports = { CanastaBot };
