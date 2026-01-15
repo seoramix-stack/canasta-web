@@ -42,8 +42,15 @@ export function flyCard(sourceRect, destRect, imageSrc, delay = 0, onComplete = 
         }
 
         setTimeout(() => {
-            // FIX: Run callback BEFORE removing (to allow seamless overlap)
-            if (onComplete) onComplete();
+            // If onComplete (rendering) crashes, we MUST still remove the card
+            try {
+                if (onComplete) onComplete();
+            } catch (err) {
+                console.error("Animation callback failed:", err);
+                // Force reset state if render crashed
+                state.discardAnimationActive = false;
+                state.meldAnimationActive = false;
+            }
 
             // Only remove automatically if persist is FALSE
             if (!persist) {
@@ -74,10 +81,15 @@ export function animatePlayerDiscard(cardIndex, cardData, renderCallback) {
             const imgUrl = getCardImage(cardData);
             targetEl.style.opacity = "0"; 
 
-            flyCard(srcRect, destRect, imgUrl, 0, () => {
+            const flyer = flyCard(srcRect, destRect, imgUrl, 0, () => {
                 state.discardAnimationActive = false;
                 if (renderCallback && state.activeData) renderCallback(state.activeData);
             });
+
+            if (!flyer) {
+                state.discardAnimationActive = false;
+                targetEl.style.opacity = "1"; // Restore card if animation failed
+            }
         }
     }
 }
@@ -243,10 +255,15 @@ export function handleServerAnimations(oldData, newData, renderCallback) {
                     state.discardAnimationActive = true;
                     const imgUrl = getCardImage(newData.topDiscard);
 
-                    flyCard(srcRect, destRect, imgUrl, 0, () => {
-                        state.discardAnimationActive = false;
+                    const flyer = flyCard(srcRect, destRect, imgUrl, 0, () => {
+                        state.discardAnimationActive = false; // Unlock
                         if (renderCallback && state.activeData) renderCallback(state.activeData);
                     });
+                    
+                    // If flyCard returned null (failed to start), force unlock IMMEDIATELY
+                    if (!flyer) {
+                        state.discardAnimationActive = false;
+                    }
                 }
             }
         }

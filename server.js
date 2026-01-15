@@ -368,6 +368,53 @@ io.on('connection', async (socket) => {
     });
     
     // 2. GAME ACTIONS
+    socket.on('act_request_rematch', () => {
+        const gameId = socket.data.gameId;
+        const game = games[gameId];
+        if (!game) return;
+
+        // 1. Initialize Vote Set
+        if (!game.rematchVotes) game.rematchVotes = new Set();
+        
+        // 2. Register Vote
+        game.rematchVotes.add(socket.data.seat);
+        
+        // 3. Auto-vote for Bots
+        if (gameBots[gameId]) {
+            Object.keys(gameBots[gameId]).forEach(botSeat => {
+                game.rematchVotes.add(parseInt(botSeat));
+            });
+        }
+
+        const needed = game.config.PLAYER_COUNT;
+        
+        // 4. Send Status Update
+        io.to(gameId).emit('rematch_update', { 
+            current: game.rematchVotes.size, 
+            needed: needed 
+        });
+
+        // 5. Check if Everyone Accepted
+        if (game.rematchVotes.size >= needed) {
+            console.log(`[Rematch] All players accepted. Restarting Game ${gameId}.`);
+            
+            // A. Cancel Cleanup Timer
+            if (game.cleanupTimer) clearTimeout(game.cleanupTimer);
+            
+            // B. Reset Game Logic
+            game.resetMatch(); 
+            game.rematchVotes.clear();
+            game.nextRoundReady = new Set();
+
+            // This sends 'deal_hand', which forces the client to switch screens.
+            io.sockets.sockets.forEach((s) => {
+                if (s.data.gameId === gameId) {
+                    sendUpdate(gameId, s.id, s.data.seat);
+                }
+            });
+        }
+    });
+
     socket.on('act_ready', (data) => {
         const gameId = socket.data.gameId;
         const game = games[gameId];
@@ -854,6 +901,10 @@ function getPlayerNames(gameId) {
 //  Helper Function
 
 async function handleRoundEnd(gameId, io) {
+    game.cleanupTimer = setTimeout(() => {
+    delete games[gameId];
+    delete gameBots[gameId];
+}, 60000);
     const game = games[gameId];
     if (!game) return;
     game.nextRoundReady = new Set(); // Reset the "Next Round" votes

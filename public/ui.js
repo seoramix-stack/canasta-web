@@ -677,10 +677,6 @@ function showScoreModal(round, match, names) {
         if (h2) h2.innerText = amITeam1 ? "OPPONENTS" : "MY TEAM";
     }
 
-    // 3. Update Match Score Header
-    document.getElementById('match-s1').innerText = match.team1;
-    document.getElementById('match-s2').innerText = match.team2;
-
     // 4. Helper to set text by ID
     const setText = (id, val) => {
         const el = document.getElementById(id);
