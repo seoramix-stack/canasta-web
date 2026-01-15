@@ -505,6 +505,17 @@ function initSocket(token) {
     // 3. Perform the initial update (unless locked by animation flags)
     UI.updateUI(data);
 });
+    window.requestRematch = () => {
+    const btn = document.getElementById('btn-victory-start');
+    if(btn) {
+        btn.innerText = "WAITING FOR OTHERS...";
+        btn.disabled = true;
+        btn.style.opacity = "0.7";
+        btn.style.cursor = "default";
+    }
+    // Send signal to server
+    state.socket.emit('act_request_rematch');
+};
 
     state.socket.on('match_over', (data) => {
         setTimeout(() => {
@@ -593,6 +604,17 @@ function initSocket(token) {
             } else {
                 rateBox.style.display = 'none'; // Hide if unrated or dev mode
             }
+            const btn = document.getElementById('btn-victory-start');
+            if (btn) {
+                btn.id = "btn-victory-start"; 
+                btn.innerText = "WANT A REMATCH?"; 
+                btn.onclick = window.requestRematch; 
+                btn.disabled = false;
+                btn.style.opacity = "1";
+                btn.style.cursor = "pointer";
+            }
+            // --------------------------------
+
             // 3. Navigate to Victory Screen
             UI.navTo('screen-victory');
             
@@ -610,6 +632,13 @@ function initSocket(token) {
     
     // Auto-fill join inputs for easy sharing testing
     document.getElementById('join-id').value = data.gameId;
+});
+
+state.socket.on('rematch_update', (data) => {
+    const btn = document.getElementById('btn-victory-start');
+    if (btn && data.current && data.needed) {
+        btn.innerText = `WAITING (${data.current}/${data.needed})`;
+    }
 });
 
 state.socket.on('joined_private_success', (data) => {
