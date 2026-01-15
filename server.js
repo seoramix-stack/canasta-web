@@ -112,6 +112,39 @@ const matchmakingQueues = {
     'casual_2': [],
     'casual_4': []
 };
+// server.js - Add this route
+
+app.get('/api/profile', async (req, res) => {
+    // 1. Get token from headers
+    const token = req.headers.authorization;
+    if (!token) return res.json({ success: false, message: "No token" });
+
+    // 2. Handle Dev Mode
+    if (DEV_MODE) {
+        return res.json({ 
+            success: true, 
+            username: "DevPlayer", 
+            stats: { rating: 1250, wins: 5, losses: 2 } 
+        });
+    }
+
+    // 3. Find User in DB
+    try {
+        const user = await User.findOne({ token: token });
+        if (!user) return res.json({ success: false, message: "User not found" });
+
+        // 4. Return Stats
+        res.json({ 
+            success: true, 
+            username: user.username, 
+            stats: user.stats 
+        });
+    } catch (e) {
+        console.error("Profile fetch error:", e);
+        res.status(500).json({ success: false, message: "Server error" });
+    }
+});
+
 // --- LEADERBOARD ROUTE ---
 app.get('/api/leaderboard', async (req, res) => {
     // 1. Dev Mode Mock Data (for testing without DB)

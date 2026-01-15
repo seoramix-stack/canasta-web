@@ -876,3 +876,37 @@ function renderLeaderboard(players) {
         container.appendChild(row);
     });
 }
+// client.js
+
+window.openProfile = async () => {
+    // 1. Show Screen
+    UI.navTo('screen-profile');
+    
+    // 2. Prepare UI (Show loading state)
+    document.getElementById('my-rating').innerText = "...";
+    document.getElementById('my-wins').innerText = "...";
+
+    // 3. Fetch Data
+    const token = state.playerToken;
+    if (!token) return;
+
+    try {
+        const res = await fetch('/api/profile', {
+            method: 'GET',
+            headers: { 'Authorization': token }
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            // 4. Update UI with fresh DB data
+            document.getElementById('my-username').innerText = data.username;
+            document.getElementById('my-rating').innerText = Math.round(data.stats.rating);
+            document.getElementById('my-wins').innerText = data.stats.wins;
+            
+            const lossEl = document.getElementById('my-losses');
+            if(lossEl) lossEl.innerText = data.stats.losses;
+        }
+    } catch (e) {
+        console.error("Failed to load profile", e);
+    }
+};
