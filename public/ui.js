@@ -92,7 +92,20 @@ export function updateUI(data) {
     // Ready Modal Logic
     const readyModal = document.getElementById('ready-modal');
     if (data.currentPlayer === -1 && data.phase !== 'game_over') {
-        if(readyModal) readyModal.style.display = 'flex';
+        if(readyModal) {
+            readyModal.style.display = 'flex';
+            
+            // --- FIX START: Reset Modal State ---
+            // Force the "Start Game" button to be visible
+            const step1 = document.getElementById('ready-step-1');
+            if (step1) step1.style.display = 'block';
+
+            // Force the "Waiting" spinner to be hidden
+            const step2 = document.getElementById('ready-step-2');
+            if (step2) step2.style.display = 'none';
+            // --- FIX END ---
+        }
+
         for (let i = 0; i < 4; i++) {
                 const el = document.getElementById(`ind-${i}`);
                 if (el) {
