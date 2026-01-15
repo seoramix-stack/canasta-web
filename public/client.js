@@ -508,6 +508,7 @@ function initSocket(token) {
 
     state.socket.on('match_over', (data) => {
         setTimeout(() => {
+            document.querySelectorAll('.flying-card').forEach(el => el.remove());
             // 1. Force close the Score Modal so it doesn't block the Victory screen
             const scoreModal = document.getElementById('score-modal');
             if (scoreModal) scoreModal.style.display = 'none';

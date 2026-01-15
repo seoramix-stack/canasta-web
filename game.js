@@ -44,7 +44,9 @@ class CanastaGame {
 
     // --- HELPERS ---
     getCardValue(rank) {
-        return this.RANK_VALUES[rank] || 0;
+        // This ensures that 7 (number) matches "7" (string) in the lookup table
+        const key = String(rank); 
+        return this.RANK_VALUES[key] || 0;
     }
     
     sortHand(playerIndex) {
@@ -386,11 +388,13 @@ class CanastaGame {
             details.red3Points = hasMelded ? r3Val : -r3Val;
 
             pIndices.forEach(idx => {
+                if (this.players[idx]) {
                 let handPoints = this.players[idx].reduce((sum, c) => sum + this.getCardValue(c.rank), 0);
                 details.deductions -= handPoints; 
-                if (idx === winnerSeat) {
-                    details.goOutBonus = 100; 
-                    if (isConcealed) details.goOutBonus += 100; 
+                if (Number(idx) === Number(winnerSeat)) {
+                        details.goOutBonus = 100; 
+                        if (isConcealed) details.goOutBonus += 100; 
+                }
                 }
             });
 

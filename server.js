@@ -904,9 +904,9 @@ async function handleRoundEnd(gameId, io) {
     await Promise.all(savePromises);
     console.log("[ELO] Ratings updated successfully.");
 
-} else {
+    } else {
     console.log("[ELO] Skipped: Not enough players found or not rated.");
-}
+    }
 
         } catch (e) {
             console.error("Stats/Elo update failed:", e);
@@ -931,8 +931,16 @@ async function handleRoundEnd(gameId, io) {
     } 
     // 3. CASE B: JUST A ROUND END
     else {
-        broadcastAll(gameId); 
+    // ROUND OVER (Not Match Over)
+    
+    // Ensure finalScores is populated. If logic failed previously, force a calc.
+    if (!game.finalScores) {
+        console.log("⚠️ [Warning] finalScores missing at round end. Recalculating...");
+        game.finalScores = game.calculateScores(); 
     }
+
+    broadcastAll(gameId); 
+}
 }
 
 // Keep-Alive for Render (Optional for Local)
