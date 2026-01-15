@@ -642,8 +642,6 @@ function renderHand(hand) {
     });
 }
 
-// ui.js - Replace the existing incomplete showScoreModal function with this:
-
 function showScoreModal(round, match, names) {
     // 1. Show the modal
     document.getElementById('score-modal').style.display = 'flex';
@@ -654,20 +652,17 @@ function showScoreModal(round, match, names) {
     const h1 = document.getElementById('header-col-1');
     const h2 = document.getElementById('header-col-2');
 
-    // --- HEADER LOGIC ---
+    // --- HEADER LOGIC (Your Name Fix) ---
     if (names && state.currentPlayerCount === 2) {
         // 2-Player Mode: Show exact Usernames
         if (h1) h1.innerText = names[0] || "Player 1";
         if (h2) h2.innerText = names[1] || "Player 2";
     } else {
         // 4-Player Mode: "MY TEAM" vs "OPPONENTS"
-        // Check if I am Team 1 (Seat 0 or 2)
         const amITeam1 = (state.mySeat === 0 || state.mySeat === 2);
-        
         if (h1) h1.innerText = amITeam1 ? "MY TEAM" : "OPPONENTS";
         if (h2) h2.innerText = amITeam1 ? "OPPONENTS" : "MY TEAM";
     }
-    // --------------------
 
     // 3. Update Match Score Header
     document.getElementById('match-s1').innerText = match.team1;
@@ -694,4 +689,29 @@ function showScoreModal(round, match, names) {
     setText('row-bonus-2',   round.team2.goOutBonus);
     setText('row-deduct-2',  round.team2.deductions);
     setText('row-total-2',   round.team2.total);
+
+    // --- 7. BUTTON RESET LOGIC (The Fix for Stuck Games) ---
+    // We try to find the button by ID. If your HTML doesn't have the ID,
+    // we find it by the onclick attribute or inject a new one.
+    
+    let nextBtn = document.getElementById('btn-next-round');
+    
+    // If not found by ID, try to find the existing button in the modal
+    if (!nextBtn) {
+        const modal = document.getElementById('score-modal');
+        const buttons = modal.querySelectorAll('button');
+        buttons.forEach(b => {
+            if (b.innerText.includes("NEXT ROUND")) nextBtn = b;
+        });
+    }
+
+    if (nextBtn) {
+        // RESET the button state so it's fresh for this new round
+        nextBtn.id = "btn-next-round"; // Ensure it has the ID for next time
+        nextBtn.innerText = "START NEXT ROUND";
+        nextBtn.disabled = false;
+        nextBtn.style.opacity = "1";
+        nextBtn.style.cursor = "pointer";
+        nextBtn.onclick = window.startNextRound;
+    }
 }

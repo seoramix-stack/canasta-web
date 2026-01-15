@@ -441,31 +441,44 @@ io.on('connection', async (socket) => {
         const game = games[gameId];
         if (!game) return;
 
-        // We only proceed if we are in 'game_over' but NOT 'match_over' logic
-        if (game.turnPhase === "game_over" && !game.isTransitioning) {
-            game.isTransitioning = true;
+        // Only allow if round is actually over
+        if (game.turnPhase !== "game_over") return;
+
+        // Initialize set if missing
+        if (!game.nextRoundReady) game.nextRoundReady = new Set();
+        
+        // 1. Register this player's vote
+        game.nextRoundReady.add(socket.data.seat);
+
+        // 2. Auto-vote for bots (if any exist)
+        if (gameBots[gameId]) {
+            Object.keys(gameBots[gameId]).forEach(botSeat => {
+                game.nextRoundReady.add(parseInt(botSeat));
+            });
+        }
+
+        // 3. Ack to the clicker (so their button changes to "Waiting...")
+        socket.emit('next_round_ack');
+
+        // 4. Check if ALL players are ready
+        const needed = game.config.PLAYER_COUNT;
+        if (game.nextRoundReady.size >= needed) {
+            console.log(`[Round] All ${needed} players ready. Starting next round.`);
             
-            // Just setup the round (scores already handled)
+            // Start the round
             game.startNextRound(); 
             
-            // Reset transition flags
-            game.readySeats = new Set();
-            if (gameBots[gameId]) {
-                game.readySeats.add(0);
-                Object.keys(gameBots[gameId]).forEach(b => game.readySeats.add(parseInt(b)));
-            } else {
-                game.currentPlayer = -1;
-            }
-            game.isTransitioning = false;
-            game.processingTurnFor = null;
+            // Clear votes for next time
+            game.nextRoundReady = new Set();
 
-            // Broadcast new hands
-            io.in(gameId).fetchSockets().then(sockets => {
-                sockets.forEach(s => {
-                    if (s.data.seat !== undefined) sendUpdate(gameId, s.id, s.data.seat);
-                });
-                checkBotTurn(gameId);
-            });
+            // Broadcast new hands/board to EVERYONE
+            // (This automatically moves them from Scoreboard -> Game)
+            broadcastAll(gameId);
+        } else {
+            // Do NOT broadcast yet. 
+            // Other players stay on the scoreboard. 
+            // This player waits.
+             console.log(`[Round] Player ${socket.data.seat} ready. Waiting for others (${game.nextRoundReady.size}/${needed}).`);
         }
     });
 
@@ -808,7 +821,7 @@ function getPlayerNames(gameId) {
 async function handleRoundEnd(gameId, io) {
     const game = games[gameId];
     if (!game) return;
-
+    game.nextRoundReady = new Set(); // Reset the "Next Round" votes
     // 1. Commit scores and check if match is over
     const result = game.resolveMatchStatus();
 

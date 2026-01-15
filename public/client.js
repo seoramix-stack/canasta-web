@@ -175,6 +175,8 @@ window.handleMeldClick = (event, targetRank) => {
 
 window.startNextRound = () => {
     state.socket.emit('act_next_round');
+    // Note: We don't change the UI here immediately; 
+    // we wait for 'next_round_ack' to ensure server got the message.
 };
 
 // --- MELDING LOGIC (RESTORED) ---
@@ -424,7 +426,16 @@ function initSocket(token) {
     state.socket = io({
         auth: { token: token, username: storedUser }
     });
-
+    state.socket.on('next_round_ack', () => {
+        // Change the button on the Scoreboard to show we are waiting
+        const btn = document.getElementById('btn-next-round');
+        if (btn) {
+            btn.innerText = "WAITING FOR OPPONENTS...";
+            btn.disabled = true;
+            btn.style.opacity = "0.7";
+            btn.style.cursor = "default";
+        }
+    });
     state.socket.on('connect', () => console.log("Connected"));
     state.socket.on('ready_status', (data) => {
         // data.readySeats is an array of seat numbers who clicked start (e.g., [0, 2])
