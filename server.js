@@ -849,9 +849,9 @@ async function handleRoundEnd(gameId, io) {
                     }
                 }
 
-                // C. Ensure we have all 4 players for a fair calculation
+                // Use game.config.PLAYER_COUNT so it works for both 2 and 4 players
                 // (If someone disconnected mid-game, we might skip rating or penalize leaver - simple version here)
-                if (Object.keys(players).length === 4 && game.isRated) {
+                if (Object.keys(players).length === game.config.PLAYER_COUNT && game.isRated) {
                     
                     // 1. Calculate Average Ratings
                     const team1Rating = (players[0].stats.rating + players[2].stats.rating) / 2;
