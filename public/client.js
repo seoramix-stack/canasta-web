@@ -470,7 +470,9 @@ function initSocket(token) {
         
         // Render UI first
         UI.updateUI(data);
-        startTimerSystem();
+        // If scores are 0-0, reset timer. Otherwise, keep existing time.
+        const isNewMatch = (data.cumulativeScores.team1 === 0 && data.cumulativeScores.team2 === 0);
+        startTimerSystem(isNewMatch);
 
         // Then Animate
         if (data.hand.length > 0) {
@@ -505,15 +507,38 @@ function initSocket(token) {
             const vicSub = document.getElementById('vic-sub');
             const finalS1 = document.getElementById('final-s1');
             const finalS2 = document.getElementById('final-s2');
+            
+            const name1 = (data.names && data.names[0]) ? data.names[0] : "TEAM 1";
+            const name2 = (data.names && data.names[1]) ? data.names[1] : "TEAM 2";
 
+            // Update the score table labels
+            const lbl1 = document.getElementById('vic-name-1');
+            const lbl2 = document.getElementById('vic-name-2');
+            
+            if (state.currentPlayerCount === 2) {
+                // 2-Player Mode: Show exact usernames
+                if (lbl1) lbl1.innerText = name1;
+                if (lbl2) lbl2.innerText = name2;
+            } else {
+                // 4-Player Mode: Keep "Team 1" vs "Team 2" (or customize if you prefer)
+                if (lbl1) lbl1.innerText = "TEAM 1";
+                if (lbl2) lbl2.innerText = "TEAM 2";
+            }
+            
             if (data.winner) {
                 if (data.winner === 'draw') {
                     vicTitle.innerText = "DRAW!";
                     vicSub.innerText = "IT'S A TIE";
                 } else {
-                    const winTeam = (data.winner === 'team1') ? "TEAM 1" : "TEAM 2";
-                    vicTitle.innerText = "VICTORY!";
-                    vicSub.innerText = `${winTeam} WINS THE MATCH`;
+                    if (state.currentPlayerCount === 2) {
+                        const wName = (data.winner === 'team1') ? name1 : name2;
+                        vicTitle.innerText = "VICTORY!";
+                        vicSub.innerText = `${wName} WINS!`;
+                    } else {
+                        const winTeam = (data.winner === 'team1') ? "TEAM 1" : "TEAM 2";
+                        vicTitle.innerText = "VICTORY!";
+                        vicSub.innerText = `${winTeam} WINS THE MATCH`;
+                    }
                 }
             }
 
@@ -572,8 +597,9 @@ if (nameEl) nameEl.innerText = pName;
 function startTimerSystem() {
     if (state.timerInterval) clearInterval(state.timerInterval);
 
-    // Reset to 12 minutes (720 seconds)
-    state.seatTimers = { 0: 720, 1: 720, 2: 720, 3: 720 };
+    if (shouldReset) {
+        state.seatTimers = { 0: 720, 1: 720, 2: 720, 3: 720 };
+    }
     updateTimerDOM(); 
 
     state.timerInterval = setInterval(() => {
@@ -624,8 +650,6 @@ function updateTimerDOM() {
         if (el) el.innerText = fmt(state.seatTimers[i]);
     }
 }
-
-// client.js
 
 // --- PRIVATE ROOM LOGIC ---
 

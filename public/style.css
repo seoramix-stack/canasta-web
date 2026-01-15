@@ -287,7 +287,7 @@ body {
     #partner-zone { grid-area: partner; align-items: flex-end; overflow: visible; }
     #my-zone { grid-area: player; align-items: flex-start; padding-top: 10px; }
     #table-zone {
-        grid-area: center; display: grid; grid-template-rows: 1fr auto 1fr !important;
+        grid-area: center; display: grid; grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr) !important;
         padding: 0 40px; height: 100%; gap: 0 !important; align-content: center; overflow: hidden;
     }
     .side-zone { justify-content: center; padding-top: 0 !important; border: none; background: rgba(0,0,0,0.2); }

@@ -233,7 +233,6 @@ function renderTable(elementId, meldsObj, red3sArray) {
     const groupWidth = isDesktop ? 75 : 50;
     
     // --- 2. RENDER THE "BONUS STACK" (Red 3s + Canastas) ---
-    // This sits on the left. We calculate its width to subtract from available space.
     const hasRed3s = (red3sArray && red3sArray.length > 0);
     const hasCanastas = (closedMelds.length > 0);
     let stackWidth = 0;
@@ -241,20 +240,34 @@ function renderTable(elementId, meldsObj, red3sArray) {
     if (hasRed3s || hasCanastas) {
         const stackDiv = document.createElement("div");
         stackDiv.className = "meld-group";
-        
-        // Layout: Relative container
         stackDiv.style.position = "relative";
-        // Give the stack a fixed margin to separate it from open melds
         stackDiv.style.marginRight = isDesktop ? "30px" : "15px"; 
         stackDiv.style.minWidth = "var(--card-w)"; 
         
-        // Track width used by this stack (Card Width + Margin)
         stackWidth = groupWidth + (isDesktop ? 30 : 15);
+        const totalItems = (red3sArray ? red3sArray.length : 0) + closedMelds.length;
+        const cardH = isDesktop ? 105 : 70;
+        let offsetStep = isDesktop ? 30 : 25; // Default overlap
+
+        // Calculate available height for this specific row (approximate)
+        // Desktop: (Screen Height - Top/Bottom Zones - Pile Zone) / 2
+        // We conservatively estimate about 40% of screen height is available for one row
+        const availableH = container.clientHeight || (window.innerHeight * 0.4); 
+
+        // Calculate total height if we used default spacing
+        const neededH = (totalItems * offsetStep) + cardH;
+
+        // If too tall, squeeze!
+        if (neededH > availableH && totalItems > 1) {
+            // Formula: step = (Available - CardHeight) / (Items - 1) (Simplified distribution)
+            // We cap the minimum squeeze to 10px so cards don't disappear completely
+            const squeezed = (availableH - cardH) / totalItems;
+            offsetStep = Math.max(10, squeezed);
+        }
 
         let zIndex = 1;
         let topOffset = 0;
-        const offsetStep = isDesktop ? 30 : 25;
-        const red3Overlap = 15;
+        const red3Overlap = offsetStep; // Apply squeeze to Red 3s too
 
         // A. Render Red 3s
         if (hasRed3s) {
@@ -263,17 +276,23 @@ function renderTable(elementId, meldsObj, red3sArray) {
                 r3Img.src = getCardImage(card);
                 r3Img.className = "card-img meld-card";
                 r3Img.style.position = "absolute";
-                r3Img.style.top = `${idx * red3Overlap}px`;
+                r3Img.style.top = `${topOffset}px`; // Use cumulative offset
                 r3Img.style.left = "0";
                 r3Img.style.zIndex = zIndex++;
                 r3Img.style.boxShadow = "2px 2px 0 #555";
                 stackDiv.appendChild(r3Img);
-                if (idx === red3sArray.length - 1) topOffset = (idx * red3Overlap) + offsetStep;
+                
+                // Increment offset for next item
+                if (idx < red3sArray.length - 1 || hasCanastas) {
+                    topOffset += red3Overlap;
+                }
             });
+            // Add spacing between Red 3s and Canastas if both exist
+            if (hasRed3s && hasCanastas) topOffset += (offsetStep * 0.5); 
         }
 
         // B. Render Canastas
-        closedMelds.forEach(m => {
+        closedMelds.forEach((m, idx) => {
             const pile = m.cards;
             const isNatural = !pile.some(c => c.isWild);
             let topCard = pile[0]; 
@@ -299,12 +318,16 @@ function renderTable(elementId, meldsObj, red3sArray) {
                 </div>
             `;
             stackDiv.appendChild(cWrapper);
-            topOffset += offsetStep;
+            
+            // Increment offset, unless it's the very last item
+            if (idx < closedMelds.length - 1) topOffset += offsetStep;
         });
 
+        // Ensure the container has size so flexbox respects it
         const spacer = document.createElement("div");
         spacer.style.width = "var(--card-w)";
-        spacer.style.height = `calc(var(--card-h) + ${Math.max(0, topOffset - offsetStep)}px)`;
+        // Height = Top position of last card + Card Height
+        spacer.style.height = `calc(var(--card-h) + ${topOffset}px)`;
         stackDiv.appendChild(spacer);
         container.appendChild(stackDiv);
     }

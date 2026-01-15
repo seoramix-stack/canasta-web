@@ -886,7 +886,8 @@ async function handleRoundEnd(gameId, io) {
         io.to(gameId).emit('match_over', {
             winner: result.winner,
             scores: game.cumulativeScores,
-            reason: "score_limit"
+            reason: "score_limit",
+            names: game.names
         });
 
         // Cleanup
