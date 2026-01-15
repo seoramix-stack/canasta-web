@@ -92,6 +92,8 @@ body {
 #table-zone {
     grid-area: table; position: relative; padding: 5px 0; overflow: visible !important;
     display: flex; flex-direction: column; justify-content: center; gap: 10px; 
+    min-width: 0; /* Prevents grid blowout */
+    width: 100%;  /* Ensures it stays within the 1fr track */
 }
 
 #my-zone {

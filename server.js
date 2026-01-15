@@ -701,7 +701,8 @@ function sendUpdate(gameId, socketId, seat) {
         cumulativeScores: game.cumulativeScores,
         isFrozen: isFrozen, 
         handSizes: game.players.map(p => p.length),
-        deckSize: game.deck.length
+        deckSize: game.deck.length,
+        maxPlayers: game.config.PLAYER_COUNT
     });
 }
 
@@ -734,7 +735,8 @@ function broadcastAll(gameId, activeSeat) {
                 cumulativeScores: game.cumulativeScores,
                 isFrozen: isFrozen, 
                 handSizes: handSizes,
-                deckSize: game.deck.length
+                deckSize: game.deck.length,
+                maxPlayers: game.config.PLAYER_COUNT
             };
             
             let seat = s.data.seat;

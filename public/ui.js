@@ -81,6 +81,10 @@ export function renderDiscardPile(data) {
 
 export function updateUI(data) {
     state.activeData = data;
+
+    if (data.maxPlayers) {
+        state.currentPlayerCount = data.maxPlayers;
+    }
     
     // Safety check
     if(!document.getElementById('game-ui')) return;
@@ -89,6 +93,12 @@ export function updateUI(data) {
     const readyModal = document.getElementById('ready-modal');
     if (data.currentPlayer === -1 && data.phase !== 'game_over') {
         if(readyModal) readyModal.style.display = 'flex';
+        for (let i = 0; i < 4; i++) {
+                const el = document.getElementById(`ind-${i}`);
+                if (el) {
+                    el.style.display = (i < state.currentPlayerCount) ? 'flex' : 'none';
+                }
+            }
     } else {
         if(readyModal) readyModal.style.display = 'none';
     }
@@ -303,7 +313,19 @@ function renderTable(elementId, meldsObj, red3sArray) {
     if (openMelds.length === 0) return;
 
     // A. Calculate Available Space
-    const safeWidth = container.clientWidth || (window.innerWidth * 0.4); // Approx width of table zone
+    // --- FIX START: Cap width on mobile so squeeze logic triggers correctly ---
+    let safeWidth = container.clientWidth;
+    if (window.innerWidth <= 800) {
+        // Mobile Max = Screen Width - Side Columns (25px + 25px) - Padding (~10px)
+        const mobileMax = window.innerWidth - 60; 
+        // If container reports it's wider than the screen (overflowing), force it down
+        if (!safeWidth || safeWidth > mobileMax) safeWidth = mobileMax;
+    } else {
+        // Desktop Fallback
+        safeWidth = safeWidth || (window.innerWidth * 0.4); 
+    }
+    // --- FIX END ---
+
     const availableWidth = safeWidth - stackWidth; // Remove space taken by Canastas
     
     // B. Calculate Margin needed to fit all cards
