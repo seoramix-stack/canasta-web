@@ -713,6 +713,10 @@ function updateTimerDOM() {
 
     // Helper to find the right HTML element for a seat
     const getDomId = (seatIndex) => {
+        if (state.currentPlayerCount === 2) {
+            if (seatIndex === state.mySeat) return 'timer-me';
+            return 'timer-partner'; // Opponent is always "Partner" (Top) in 2P
+        }
         const rel = (seatIndex - state.mySeat + 4) % 4;
         if (rel === 0) return 'timer-me';
         if (rel === 1) return 'timer-left';

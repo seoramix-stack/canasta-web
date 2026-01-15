@@ -901,101 +901,109 @@ function getPlayerNames(gameId) {
 //  Helper Function
 
 async function handleRoundEnd(gameId, io) {
-    game.cleanupTimer = setTimeout(() => {
-    delete games[gameId];
-    delete gameBots[gameId];
-}, 60000);
+    // 1. FIX: Define 'game' immediately so we don't crash accessing it
     const game = games[gameId];
     if (!game) return;
-    game.nextRoundReady = new Set(); // Reset the "Next Round" votes
-    // 1. Commit scores and check if match is over
+
+    // 2. Set the cleanup timer safely now that 'game' is defined
+    if (game.cleanupTimer) clearTimeout(game.cleanupTimer);
+    
+    game.cleanupTimer = setTimeout(() => {
+        delete games[gameId];
+        delete gameBots[gameId];
+    }, 60000);
+
+    // 3. Reset votes for the next round
+    game.nextRoundReady = new Set(); 
+
+    // 4. Commit scores and check if match is over
     const result = game.resolveMatchStatus();
 
-    // 2. CASE A: MATCH OVER (5000+ points)
+    // 5. CASE A: MATCH OVER (5000+ points)
     if (result.isMatchOver) {
         console.log(`[MATCH END] Game ${gameId} won by ${result.winner}`);
 
-        // 1. Prepare Data Holder for Client
-    let ratingUpdates = {}; // Will hold { seatIndex: { newRating, delta } }
+        // Prepare Data Holder for Client
+        let ratingUpdates = {}; // Will hold { seatIndex: { newRating, delta } }
 
         // --- RATING & STATS UPDATE START ---
         if (!DEV_MODE) {
             try {
                 const players = {};
-            const playerCount = game.config.PLAYER_COUNT; // Uses your previous fix (2 or 4)
+                const playerCount = game.config.PLAYER_COUNT; 
 
-            // Loop through all EXPECTED seats (0 to N-1)
-            for (let i = 0; i < playerCount; i++) {
-                // Retrieve the token we saved at the start of the game
-                const token = (game.playerTokens && game.playerTokens[i]) ? game.playerTokens[i] : null;
-                
-                if (token) {
-                    const userDoc = await User.findOne({ token: token });
-                    if (userDoc) players[i] = userDoc;
+                // Loop through all EXPECTED seats (0 to N-1)
+                for (let i = 0; i < playerCount; i++) {
+                    // Retrieve the token we saved at the start of the game
+                    const token = (game.playerTokens && game.playerTokens[i]) ? game.playerTokens[i] : null;
+                    
+                    if (token) {
+                        const userDoc = await User.findOne({ token: token });
+                        if (userDoc) players[i] = userDoc;
+                    }
                 }
+                
+                console.log(`[ELO] Found ${Object.keys(players).length} / ${playerCount} players for rating update.`);
+                
+                // Check if we found all players in the DB (regardless of if they are online)
+                if (Object.keys(players).length === playerCount && game.isRated) {
+        
+                    // A. Calculate Average Ratings Dynamically
+                    let team1Rating, team2Rating;
+
+                    if (playerCount === 2) {
+                        // 1v1 Logic
+                        team1Rating = players[0].stats.rating;
+                        team2Rating = players[1].stats.rating;
+                    } else {
+                        // 2v2 Logic (Average of partners)
+                        team1Rating = (players[0].stats.rating + players[2].stats.rating) / 2;
+                        team2Rating = (players[1].stats.rating + players[3].stats.rating) / 2;
+                    }
+
+                    // B. Get Scores
+                    const s1 = game.cumulativeScores.team1;
+                    const s2 = game.cumulativeScores.team2;
+
+                    // C. Calculate Delta
+                    const delta = calculateEloChange(team1Rating, team2Rating, s1, s2);
+                    
+                    // D. Apply Updates & Save
+                    const savePromises = [];
+
+                    // Loop only through the ACTUAL seats (0..1 OR 0..3)
+                    for (let seat = 0; seat < playerCount; seat++) {
+                        const isTeam1 = (seat === 0 || seat === 2);
+                        const change = isTeam1 ? delta : -delta;
+                        
+                        players[seat].stats.rating += change;
+                        
+                        const winnerTeam = (result.winner === 'team1') ? 0 : 1; // 0=Team1, 1=Team2
+                        const won = (winnerTeam === 0 && isTeam1) || (winnerTeam === 1 && !isTeam1);
+                        
+                        if (won) players[seat].stats.wins++;
+                        else players[seat].stats.losses++;
+
+                        // Store for Client
+                        ratingUpdates[seat] = {
+                            newRating: Math.round(players[seat].stats.rating),
+                            delta: change
+                        };
+
+                        savePromises.push(players[seat].save());
+                    }
+
+                    await Promise.all(savePromises);
+                    console.log("[ELO] Ratings updated successfully.");
+
+                } else {
+                    console.log("[ELO] Skipped: Not enough players found or not rated.");
+                }
+
+            } catch (e) {
+                console.error("Stats/Elo update failed:", e);
             }
-            
-            console.log(`[ELO] Found ${Object.keys(players).length} / ${playerCount} players for rating update.`);
-            
-            // Check if we found all players in the DB (regardless of if they are online)
-            if (Object.keys(players).length === playerCount && game.isRated) {
-    
-    // 1. Calculate Average Ratings Dynamically
-    let team1Rating, team2Rating;
-
-    if (playerCount === 2) {
-        // 1v1 Logic
-        team1Rating = players[0].stats.rating;
-        team2Rating = players[1].stats.rating;
-    } else {
-        // 2v2 Logic (Average of partners)
-        team1Rating = (players[0].stats.rating + players[2].stats.rating) / 2;
-        team2Rating = (players[1].stats.rating + players[3].stats.rating) / 2;
-    }
-
-    // 2. Get Scores
-    const s1 = game.cumulativeScores.team1;
-    const s2 = game.cumulativeScores.team2;
-
-    // 3. Calculate Delta
-    const delta = calculateEloChange(team1Rating, team2Rating, s1, s2);
-    
-    // 4. Apply Updates & Save
-    const savePromises = [];
-
-    // Loop only through the ACTUAL seats (0..1 OR 0..3)
-    for (let seat = 0; seat < playerCount; seat++) {
-        const isTeam1 = (seat === 0 || seat === 2);
-        const change = isTeam1 ? delta : -delta;
-        
-        players[seat].stats.rating += change;
-        
-        const winnerTeam = (result.winner === 'team1') ? 0 : 1; // 0=Team1, 1=Team2
-        const won = (winnerTeam === 0 && isTeam1) || (winnerTeam === 1 && !isTeam1);
-        
-        if (won) players[seat].stats.wins++;
-        else players[seat].stats.losses++;
-
-        // Store for Client
-        ratingUpdates[seat] = {
-            newRating: Math.round(players[seat].stats.rating),
-            delta: change
-        };
-
-        savePromises.push(players[seat].save());
-    }
-
-    await Promise.all(savePromises);
-    console.log("[ELO] Ratings updated successfully.");
-
-    } else {
-    console.log("[ELO] Skipped: Not enough players found or not rated.");
-    }
-
-        } catch (e) {
-            console.error("Stats/Elo update failed:", e);
         }
-    }
 
         // Emit MATCH_OVER immediately
         io.to(gameId).emit('match_over', {
@@ -1013,18 +1021,18 @@ async function handleRoundEnd(gameId, io) {
         }, 60000);
 
     } 
-    // 3. CASE B: JUST A ROUND END
+    // 6. CASE B: JUST A ROUND END
     else {
-    // ROUND OVER (Not Match Over)
-    
-    // Ensure finalScores is populated. If logic failed previously, force a calc.
-    if (!game.finalScores) {
-        console.log("⚠️ [Warning] finalScores missing at round end. Recalculating...");
-        game.finalScores = game.calculateScores(); 
-    }
+        // ROUND OVER (Not Match Over)
+        
+        // Ensure finalScores is populated. If logic failed previously, force a calc.
+        if (!game.finalScores) {
+            console.log("⚠️ [Warning] finalScores missing at round end. Recalculating...");
+            game.finalScores = game.calculateScores(); 
+        }
 
-    broadcastAll(gameId); 
-}
+        broadcastAll(gameId); 
+    }
 }
 
 // Keep-Alive for Render (Optional for Local)
