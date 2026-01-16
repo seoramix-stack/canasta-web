@@ -34,15 +34,22 @@ class CanastaBot {
         this.seenDiscards[card.rank]++;
 
         // 2. Partner Signal Check
-        let partnerSeat = (this.seat + 2) % 4;
-        if (playerSeat === partnerSeat) {
-            this.partnerSignaled = card.isWild;
+        // FIX: Use dynamic player count to avoid looking for non-existent seats in 2P
+        let pCount = game.players.length;
+        if (pCount === 4) {
+            let partnerSeat = (this.seat + 2) % pCount;
+            if (playerSeat === partnerSeat) {
+                this.partnerSignaled = card.isWild;
+            }
         }
     }
 
     async executeTurn(game, broadcastFunc) {
         const delay = (ms) => new Promise(res => setTimeout(res, ms));
         
+        // FIX: Ensure we don't crash if game state is partial
+        if (!game.players[this.seat]) return;
+
         let realDeckSize = this.getRealDeckSize(game);
         let isLastTurn = realDeckSize < 7; 
 
@@ -177,28 +184,22 @@ class CanastaBot {
         return candidates[0].index;
     }
 
-    // --- MELDING LOGIC (IMPLEMENTED) ---
+    // --- MELDING LOGIC ---
 
-    // 1. Meld EVERYTHING possible (for panic/endgame)
     meldMax(game) {
-        // A. Try to add to existing melds first (Loop multiple times to handle new openings)
         let changed = true;
         while(changed) {
             changed = false;
             let hand = game.players[this.seat];
             let myMelds = this.getMyMelds(game);
             
-            // Loop backwards to splice safely
             for (let i = hand.length - 1; i >= 0; i--) {
                 let c = hand[i];
-                // Try to add to EXISTING meld
                 if (myMelds[c.rank]) {
                     let res = game.meldCards(this.seat, [i], c.rank);
                     if (res.success) changed = true;
                 }
-                // Try to add Wilds to ANY valid meld (prioritize Canastas or large melds)
                 else if (c.isWild) {
-                    // Find best target: Close to Canasta (6 cards) > High Value > Any
                     let bestRank = null;
                     for(let rank in myMelds) {
                         if (myMelds[rank].length < 7) {
@@ -213,15 +214,11 @@ class CanastaBot {
                 }
             }
         }
-        
-        // B. Try to create NEW melds from remaining hand
-        this.meldNaturals(game); // Reuse this logic
+        this.meldNaturals(game);
     }
 
-    // 2. Open cleanly if we meet requirements
     attemptToOpen(game) {
         let hand = game.players[this.seat];
-        // Group by rank
         let groups = {};
         hand.forEach((c, i) => {
             if (c.isWild) return;
@@ -229,7 +226,6 @@ class CanastaBot {
             groups[c.rank].push(i);
         });
         
-        // Identify pure naturals >= 3
         let potentialMelds = [];
         for (let r in groups) {
             if (groups[r].length >= 3) {
@@ -238,7 +234,6 @@ class CanastaBot {
         }
         
         if (potentialMelds.length > 0) {
-            // Check points
             let myScore = (this.seat % 2 === 0) ? game.cumulativeScores.team1 : game.cumulativeScores.team2;
             let req = game.getOpeningReq(myScore);
             
@@ -248,15 +243,12 @@ class CanastaBot {
             });
             
             if (currentPts >= req) {
-                // FIX: Use processOpening to send ALL melds atomically.
-                // This prevents index shifting errors and ensures total points logic holds.
+                // Atomic opening
                 game.processOpening(this.seat, potentialMelds, false);
             }
         }
     }
 
-    // 3. Create targets for partner (Naturals >= 3)
-    // FIX: Updated to handle Index Invalidation via Loop-Restart
     meldNaturals(game) {
         let changed = true;
         
@@ -265,27 +257,19 @@ class CanastaBot {
             let hand = game.players[this.seat];
             let groups = {};
             
-            // 1. Re-calculate groups based on CURRENT hand indices
             hand.forEach((c, i) => {
                 if (c.isWild) return;
                 if (!groups[c.rank]) groups[c.rank] = [];
                 groups[c.rank].push(i);
             });
 
-            // 2. Find ONE valid group to meld
-            // We only meld ONE group per iteration because melding invalidates indices.
-            // After a successful meld, we break and restart the loop (changed=true).
             const ranks = Object.keys(groups);
-            
-            // Optional: Sort ranks to prioritize Aces/Kings?
-            // ranks.sort(...) 
-
             for (let rank of ranks) {
                 if (groups[rank].length >= 3) {
                     let res = game.meldCards(this.seat, groups[rank], rank);
                     if (res.success) {
                         changed = true;
-                        break; // BREAK LOOP: Indices are now garbage. Re-scan.
+                        break; 
                     }
                 }
             }
@@ -305,10 +289,8 @@ class CanastaBot {
     canTakePile(game, hand, topCard, myMelds) {
         if (topCard.isWild || topCard.rank === '3') return false;
         
-        // 1. Can we add to existing meld?
         if (myMelds[topCard.rank]) return true;
 
-        // 2. Do we have 2 naturals in hand?
         let naturals = hand.filter(c => c.rank === topCard.rank && !c.isWild).length;
         if (naturals >= 2) return true;
 
@@ -331,7 +313,13 @@ class CanastaBot {
     }
 
     checkPanicMode(game) {
-        let oppSeat = (this.seat + 1) % 4; 
+        // FIX: Use dynamic player count logic to support 2-Player mode
+        let pCount = game.players.length; 
+        let oppSeat = (this.seat + 1) % pCount; 
+        
+        // Safety Check (should theoretically always exist, but good to have)
+        if (!game.players[oppSeat]) return false;
+
         let oppHandSize = game.players[oppSeat].length;
         let oppMelds = (this.seat % 2 !== 0) ? game.team1Melds : game.team2Melds;
         
@@ -363,7 +351,6 @@ class CanastaBot {
         let inTrash = this.seenDiscards[rank] || 0;
         let totalSeen = inHand + tableCount + inTrash;
 
-        // "Rule of 8": If 7 cards are accounted for, the 8th is safe (cannot make a pair)
         if (totalSeen >= 7) return true; 
         return false;
     }

@@ -283,17 +283,28 @@ function renderStagingArea() {
         grp.style.border = '1px dashed #f1c40f';
         grp.style.padding = '5px';
         
-        let meldPts = meld.cards.reduce((sum, c) => sum + c.value, 0);
+        // 1. Calculate points from cards currently in HAND
+        let meldPts = meld.cards.reduce((sum, c) => sum + getCardValue(c.rank), 0); // Use getCardValue helper safely
+        
+        // 2. If this is the Pickup Meld, add the TOP CARD's value virtually
         if (meld.isPickupKey) { 
             meldPts += getCardValue(meld.rank); 
-            totalPoints += getCardValue(meld.rank); 
+            // REMOVED: totalPoints += getCardValue(meld.rank); <--- THIS WAS THE BUG (Double Counting)
         }
+        
+        // 3. Add the final correct meld total to the grand total
         totalPoints += meldPts;
         
         let html = `<span class='meld-label'>${meld.rank} (${meldPts})</span><div style='display:flex;'>`; 
         meld.cards.forEach(c => { 
             html += `<img src="${Anim.getCardImage(c)}" style="width:30px; height:45px; margin-right:2px;">`; 
         });
+        
+        // Visual indicator for the "Ghost" card being picked up
+        if (meld.isPickupKey) {
+             html += `<div style="width:30px; height:45px; border:1px dashed #f1c40f; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:10px; color:#f1c40f;">+1</div>`;
+        }
+
         html += "</div>"; 
         grp.innerHTML = html; 
         container.appendChild(grp);
