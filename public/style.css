@@ -4,7 +4,7 @@
 :root {
     --card-w: 50px; 
     --card-h: 70px;
-    --bg-color: #34495e
+    --bg-color: #34495e;
     --accent-color: #f1c40f;
     --surface-dark: rgba(0,0,0,0.3);
 }
