@@ -4,7 +4,7 @@
 :root {
     --card-w: 50px; 
     --card-h: 70px;
-    --bg-color: #2c3e50;
+    --bg-color: #34495e
     --accent-color: #f1c40f;
     --surface-dark: rgba(0,0,0,0.3);
 }
@@ -323,7 +323,7 @@ h2 {
 /* ========================================= */
 @media (min-width: 800px) {
     :root { --card-w: 75px; --card-h: 105px; 
-    --bg-color: #1a252f;      /* Darker Navy (Matches Logo Background) */
+    --bg-color: #2c3e50;     /* Darker Navy (Matches Logo Background) */
     --accent-color: #f1c40f;  /* Gold (Keep this, matches Logo Text) */
     --accent-dark: #d4ac0d;   /* Darker Gold for hover/borders */
     --deep-red: #c0392b;      /* Deep Red (Matches Logo Ribbon) */
@@ -354,8 +354,12 @@ h2 {
         grid-area: center; display: grid; grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr) !important;
         padding: 0 40px; height: 100%; gap: 0 !important; align-content: center; overflow: hidden;
     }
-    .side-zone { justify-content: center; padding-top: 0 !important; border: none; background: rgba(0,0,0,0.2); }
-
+    .side-zone { 
+        justify-content: center; 
+        padding-top: 0 !important; 
+        border: none; 
+        background: transparent;
+    }
     /* --- HUD POSITIONS --- */
     #hud-left, #hud-right {
         grid-area: center !important; align-self: center !important; position: static !important;
