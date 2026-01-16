@@ -52,8 +52,17 @@ class CanastaBot {
 
         let realDeckSize = this.getRealDeckSize(game);
         let isLastTurn = realDeckSize < 7; 
-
+        
         // --- PHASE 1: DRAW ---
+        // Only draw if we haven't already (e.g. if we are resuming a turn)
+        let hasDrawn = (game.players[this.seat].length > 11 && game.config.PLAYER_COUNT === 4) || 
+                       (game.players[this.seat].length > 15 && game.config.PLAYER_COUNT === 2);
+        
+        // A better check: The server dictates phase. Rely on game.turnPhase.
+        // But since we are inside the bot logic, let's just attempt to draw.
+        
+        let drawResult = { success: false };
+
         let pile = game.discardPile;
         let topCard = pile.length > 0 ? pile[pile.length - 1] : null;
         let wantPile = false;
@@ -64,13 +73,10 @@ class CanastaBot {
             
             if (this.canTakePile(game, hand, topCard, myMelds)) {
                 if (isLastTurn) {
-                    wantPile = true; // Always take on last turn
+                    wantPile = true; 
                 } else {
                     let pileValue = this.evaluatePile(pile);
-                    // Take if valuable (>50 pts) OR if the pile is small but we need the card
                     if (pileValue > 50) wantPile = true; 
-                    
-                    // Smart Bot Logic: Even if low value, take it if it completes a Canasta
                     if (myMelds[topCard.rank] && myMelds[topCard.rank].length >= 5) {
                         wantPile = true;
                     }
@@ -80,10 +86,18 @@ class CanastaBot {
 
         if (wantPile) {
             let res = game.pickupDiscardPile(this.seat);
-            if (!res.success) game.drawFromDeck(this.seat); 
+            if (!res.success) {
+                // Fallback to deck if pickup fails
+                drawResult = game.drawFromDeck(this.seat); 
+            } else {
+                drawResult = res;
+            }
         } else {
-            game.drawFromDeck(this.seat);
+            drawResult = game.drawFromDeck(this.seat);
         }
+        
+        // If the draw failed (e.g. "Not your turn" or "Wrong Phase"), 
+        // we might already have drawn. Let's assume we proceed ONLY if we have a playable hand.
         
         broadcastFunc(this.seat);
         await delay(1000);
@@ -101,16 +115,24 @@ class CanastaBot {
             let cardToThrow = game.players[this.seat][discardIndex];
             this.observeDiscard(cardToThrow, this.seat, game); 
             
-            // --- FIX START: CHECK SUCCESS & FALLBACK ---
             let res = game.discardFromHand(this.seat, discardIndex);
             
             if (!res.success) {
                 console.log(`[BOT WARNING] Seat ${this.seat} failed to discard index ${discardIndex}: ${res.message}`);
-                // Fallback: Panic discard (Throw the first card found)
-                if (game.players[this.seat].length > 0) {
+                
+                // CRITICAL FIX: IF we failed because "Draw first!", try drawing now!
+                if (res.message === "Draw first!") {
+                    console.log(`[BOT RECOVERY] Attempting emergency draw for Seat ${this.seat}...`);
+                    game.drawFromDeck(this.seat);
+                    // Try discarding again immediately (index might have shifted, pick 0 to be safe)
+                    game.discardFromHand(this.seat, 0); 
+                } 
+                // Fallback: Panic discard 
+                else if (game.players[this.seat].length > 0) {
                     game.discardFromHand(this.seat, 0);
                 }
             }
+            
             broadcastFunc(this.seat);
         }
     }
