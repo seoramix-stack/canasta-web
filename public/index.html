@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <title>Canasta Master</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <style> 
         /* Spinner Animation */
@@ -14,7 +17,7 @@
 
     <div id="screen-login" class="app-screen">
         <div class="logo-area">
-            <div style="font-size: 60px;">🃏</div>
+            <img src="Canasta logo.png" style="width: 150px; height: auto; margin-bottom: 20px;">
             <div class="logo">CANASTA</div>
         </div>
 
@@ -131,7 +134,7 @@
         🏆 TOP 100 LEADERBOARD
     </button>
         <div class="diff-grid">
-            <button class="diff-btn p-count-btn" onclick="selectPlayerCount(2, this)">2 PLAYERS</button>
+            <button class="menu-btn secondary" onclick="connectToGame('casual')" style="display:none;">⚡ QUICK MATCH</button>
             <button class="diff-btn p-count-btn selected" onclick="selectPlayerCount(4, this)">4 PLAYERS</button>
         </div>
     </div>
@@ -143,7 +146,7 @@
 
     <div style="color: #bdc3c7; margin-bottom:10px;">CASUAL</div>
     
-    <button class="menu-btn secondary" onclick="connectToGame('casual')">⚡ QUICK MATCH</button>
+    <button class="menu-btn secondary" onclick="connectToGame('casual')" style="display:none;">⚡ QUICK MATCH</button>
     <button class="menu-btn secondary" onclick="navTo('screen-private-menu')">🔒 PRIVATE ROOM</button>
     
     <br>

@@ -135,6 +135,13 @@ export function updateUI(data) {
     renderTable("enemy-melds", (s % 2 === 0) ? data.team2Melds : data.team1Melds, (s % 2 === 0) ? data.team2Red3s : data.team1Red3s);
     renderTable("my-melds", (s % 2 === 0) ? data.team1Melds : data.team2Melds, (s % 2 === 0) ? data.team1Red3s : data.team2Red3s);
     
+    // --- UPDATE DRAW PILE IMAGE ---
+    // Change the deck image to match the actual next card (Red or Blue)
+    const drawImg = document.querySelector('#draw-area .card-img');
+    if (drawImg && data.nextDeckColor) {
+        drawImg.src = `cards/Back${data.nextDeckColor}.png`;
+    }
+
     // --- SEATING LOGIC UPDATE (2P vs 4P) ---
     const is2P = (state.currentPlayerCount === 2);
     
@@ -142,14 +149,15 @@ export function updateUI(data) {
         // 2-PLAYER MODE: Opponent sits at Top (Partner Zone)
         const oppSeat = (s === 0) ? 1 : 0; // If I am 0, Opponent is 1
 
-        renderOtherHand("hand-partner", data.handSizes[oppSeat], 'horiz'); // Top
-        renderOtherHand("hand-left", 0, 'vert');   // Empty
-        renderOtherHand("hand-right", 0, 'vert');  // Empty
+        // CHANGE: Pass handBacks (Array of colors) instead of handSizes
+        renderOtherHand("hand-partner", data.handBacks ? data.handBacks[oppSeat] : [], 'horiz'); 
+        renderOtherHand("hand-left", [], 'vert');   // Empty
+        renderOtherHand("hand-right", [], 'vert');  // Empty
 
         // Update Names & HUD Visibility
         if (data.names) {
             document.getElementById('name-me').innerText = data.names[s] || "";
-            document.getElementById('name-partner').innerText = data.names[oppSeat] || ""; // Opponent Name
+            document.getElementById('name-partner').innerText = data.names[oppSeat] || ""; 
             
             // Hide Side HUDs
             const hide = (id) => { if(document.getElementById(id)) document.getElementById(id).style.opacity = '0'; };
@@ -170,9 +178,10 @@ export function updateUI(data) {
 
     } else {
         // 4-PLAYER MODE (Standard)
-        renderOtherHand("hand-partner", data.handSizes[(s + 2) % 4], 'horiz');
-        renderOtherHand("hand-left", data.handSizes[(s + 1) % 4], 'vert');
-        renderOtherHand("hand-right", data.handSizes[(s + 3) % 4], 'vert');
+        // CHANGE: Pass handBacks (Array of colors) instead of handSizes
+        renderOtherHand("hand-partner", data.handBacks ? data.handBacks[(s + 2) % 4] : [], 'horiz');
+        renderOtherHand("hand-left",    data.handBacks ? data.handBacks[(s + 1) % 4] : [], 'vert');
+        renderOtherHand("hand-right",   data.handBacks ? data.handBacks[(s + 3) % 4] : [], 'vert');
 
         if (data.names) {
             document.getElementById('name-me').innerText = data.names[s];
@@ -501,56 +510,53 @@ function renderTable(elementId, meldsObj, red3sArray) {
     });
 }
 
-function renderOtherHand(elementId, count, orientation) {
+function renderOtherHand(elementId, backsArray, orientation) {
     const div = document.getElementById(elementId);
     if (!div) return;
     div.innerHTML = "";
-    if (!count) return;
+    
+    // Safety check if array is missing
+    if (!backsArray || backsArray.length === 0) return;
+    
+    const count = backsArray.length;
 
     // 1. Detect Environment
     const isDesktop = window.innerWidth > 800;
     
     // 2. Define Card Dimensions based on CSS variables/media query
-    // Desktop: 105px height, Mobile: 70px height
     const cardHeight = isDesktop ? 105 : 70; 
 
     // 3. Calculate Overlap (Squeeze) Logic
     let dynamicMargin = 0;
 
     if (orientation === 'vert' && isDesktop) {
-        // Get the parent zone height (the available space)
-        // We look at the parent element (#hand-left-zone or #hand-right-zone)
         const containerHeight = div.parentElement ? div.parentElement.clientHeight : 400;
-        
-        // Safety buffer (padding top/bottom)
         const availableHeight = containerHeight - 40; 
-
-        // Default overlap (if plenty of space)
         const defaultOverlap = -50; 
         
-        // Calculate needed overlap to fit all cards
-        // Formula: TotalHeight = CardHeight + (Count - 1) * VisibleStrip
-        // We solve for VisibleStrip, then Margin = VisibleStrip - CardHeight
         if (count > 1) {
             const maxVisibleStrip = (availableHeight - cardHeight) / (count - 1);
-            
-            // The margin is the visible strip minus the full card height
             let calculatedMargin = maxVisibleStrip - cardHeight;
-            
-            // Cap the margin so they don't spread out too much if there are few cards
-            // (e.g., don't let them float far apart)
             dynamicMargin = Math.min(defaultOverlap, calculatedMargin);
         }
     } else {
-        // Default Logic for Mobile or Horizontal (Partner)
-        if (orientation === 'vert') dynamicMargin = -55; // Mobile vertical default
-        else dynamicMargin = -35; // Partner horizontal default
+        if (orientation === 'vert') dynamicMargin = -55; 
+        else dynamicMargin = -35; 
     }
 
     // 4. Render Cards
     for (let i = 0; i < count; i++) {
         const card = document.createElement("div");
-        card.className = (orientation === 'vert') ? "side-card" : "partner-card";
+        
+        // Base class
+        let className = (orientation === 'vert') ? "side-card" : "partner-card";
+        
+        // CHANGE: Add the specific color class based on the data
+        // Expects: "card-back-Red" or "card-back-Blue"
+        const color = backsArray[i] || 'Red'; // Default to Red if undefined
+        className += ` card-back-${color}`;
+        
+        card.className = className;
         
         if (i > 0) {
             if (orientation === 'vert') {

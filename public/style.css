@@ -12,7 +12,7 @@
 * { box-sizing: border-box; }
 body {
     margin: 0; padding: 0;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: var(--font-body);
     background: var(--bg-color); 
     color: white;
     width: 100vw;
@@ -31,19 +31,72 @@ body {
     background: var(--bg-color);
     transition: opacity 0.3s; z-index: 10;
 }
+.logo-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    width: 100%;
+    margin-bottom: 20px; /* Moves the inputs down slightly for better spacing */
+}
 .active-screen { display: flex !important; z-index: 20; }
 .game-bg { background: var(--bg-color); }
 
-.logo { font-size: 40px; font-weight: bold; color: var(--accent-color); text-shadow: 2px 2px 0 #000; margin-bottom: 5px; }
+.logo { 
+    font-family: var(--font-title);
+    font-size: 48px; /* Slightly bigger */
+    font-weight: 900; 
+    color: var(--accent-color); 
+    text-shadow: 2px 2px 0px #000, 0 0 15px rgba(241, 196, 15, 0.3); /* Gold Glow */
+    letter-spacing: 2px;
+    margin-bottom: 5px; 
+}
+h2 {
+    font-family: var(--font-title);
+    color: var(--accent-color);
+    letter-spacing: 1px;
+    border-bottom: 2px solid rgba(241, 196, 15, 0.2);
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+}
 .logo-sub { font-size: 14px; color: #bdc3c7; margin-bottom: 40px; }
 
 .menu-btn {
-    width: 250px; padding: 15px; margin: 10px 0; border: none; border-radius: 50px;
-    font-size: 16px; font-weight: bold; cursor: pointer;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; gap: 10px;
+    width: 250px; padding: 15px; margin: 10px 0; 
+    border-radius: 4px; /* Less rounded, more like a plaque */
+    border: 1px solid var(--accent-dark); /* Gold Border */
+    
+    font-family: var(--font-title); /* Classy Font */
+    font-size: 18px; 
+    font-weight: 700; 
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    
+    box-shadow: 0 4px 6px rgba(0,0,0,0.5); 
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    transition: all 0.2s ease;
 }
-.menu-btn.primary { background: var(--accent-color); color: #2c3e50; }
-.menu-btn.secondary { background: #34495e; color: white; }
+.menu-btn.primary { 
+    background: linear-gradient(180deg, #f1c40f 0%, #f39c12 100%); /* Gold Gradient */
+    color: #1a252f; 
+    text-shadow: none;
+    border: 1px solid #f1c40f;
+}
+.menu-btn.primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 15px rgba(241, 196, 15, 0.4);
+}
+.menu-btn.secondary { 
+    background: rgba(44, 62, 80, 0.8); 
+    color: var(--accent-color); 
+    border: 1px solid var(--accent-color);
+}
+.menu-btn.secondary:hover {
+    background: rgba(44, 62, 80, 1);
+    border-color: #fff;
+}
 .menu-btn.text-only { background: transparent; color: #bdc3c7; box-shadow: none; }
 .menu-btn.danger { background: #e74c3c; color: white; margin-top: 10px; }
 .menu-btn:active { transform: scale(0.95); }
@@ -223,9 +276,9 @@ body {
 }
 
 #deck-count {
-    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    position: absolute; top: auto; bottom: 4px; left: 4px; transform: none;
     background: rgba(0, 0, 0, 0.7); color: white;
-    font-size: 14px; font-weight: bold; min-width: 30px; padding: 2px 5px;
+    font-size: 12px; font-weight: bold; min-width: 24px; padding: 2px 5px;
     border-radius: 10px; border: 1px solid rgba(255,255,255,0.3);
     z-index: 10; pointer-events: none; display: flex; justify-content: center;
 }
@@ -269,7 +322,18 @@ body {
 /* === 8. DESKTOP OVERRIDES (> 800px)    === */
 /* ========================================= */
 @media (min-width: 800px) {
-    :root { --card-w: 75px; --card-h: 105px; }
+    :root { --card-w: 75px; --card-h: 105px; 
+    --bg-color: #1a252f;      /* Darker Navy (Matches Logo Background) */
+    --accent-color: #f1c40f;  /* Gold (Keep this, matches Logo Text) */
+    --accent-dark: #d4ac0d;   /* Darker Gold for hover/borders */
+    --deep-red: #c0392b;      /* Deep Red (Matches Logo Ribbon) */
+    --surface-dark: rgba(0,0,0,0.4);
+    
+    /* NEW FONTS */
+    --font-title: 'Cinzel', serif;   /* For Headings, Logo, Buttons */
+    --font-body: 'Roboto', sans-serif; /* For Names, Scores, Chat */
+}
+    
 
     /* --- LAYOUT --- */
     #game-grid {
@@ -343,8 +407,31 @@ body {
 /* === 9. UI COMPONENTS                  === */
 /* ========================================= */
 .form-group { margin-bottom: 15px; width: 100%; max-width: 300px; }
-.form-input { width: 100%; padding: 12px; border-radius: 25px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.3); color: white; font-size: 16px; text-align: center; }
-.form-input:focus { outline: none; border-color: var(--accent-color); background: rgba(0,0,0,0.5); }
+.form-input { 
+    width: 100%; 
+    padding: 12px; 
+    border-radius: 4px; /* Sharper corners */
+    border: 1px solid #444; 
+    background: rgba(0,0,0,0.5); /* Darker background */
+    color: var(--accent-color); /* Gold text when typing */
+    font-family: var(--font-body);
+    font-size: 16px; 
+    text-align: center; 
+    transition: border 0.3s;
+}
+.form-input::placeholder {
+    color: #7f8c8d;
+    font-family: var(--font-title); /* Placeholder uses fancy font */
+    text-transform: uppercase;
+    font-size: 12px;
+    letter-spacing: 1px;
+}
+.form-input:focus { 
+    outline: none; 
+    border-color: var(--accent-color); /* Gold border on focus */
+    background: rgba(0,0,0,0.7); 
+    box-shadow: 0 0 10px rgba(241, 196, 15, 0.1);
+}
 .error-msg { color: #e74c3c; margin-bottom: 10px; font-size: 14px; display: none; }
 .link-text { color: #bdc3c7; margin-top: 15px; cursor: pointer; font-size: 14px; text-decoration: underline; }
 
@@ -425,3 +512,69 @@ body {
 .rank-1 { color: #f1c40f; text-shadow: 0 0 10px rgba(241, 196, 15, 0.3); font-size: 1.1em; } /* Gold */
 .rank-2 { color: #bdc3c7; text-shadow: 0 0 10px rgba(189, 195, 199, 0.3); } /* Silver */
 .rank-3 { color: #e67e22; text-shadow: 0 0 10px rgba(230, 126, 34, 0.3); } /* Bronze */
+
+/* Update .side-card and .partner-card to remove the hardcoded image */
+.side-card, .partner-card {
+    /* Remove background-image: url('cards/BackRed.png'); */
+    background-size: cover;
+    border-radius: 4px; 
+    border: 1px solid #111;
+}
+
+/* Add specific classes */
+.card-back-Red {
+    background-image: url('cards/BackRed.png');
+}
+
+.card-back-Blue {
+    background-image: url('cards/BackBlue.png');
+}
+#hand-left .side-card {
+    transform: rotate(270deg);
+}
+/* Remove white background from Draw Pile so transparent corners look correct */
+#draw-area .card-img {
+    background: transparent;
+}
+.table-logo {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 200px;  /* Adjust size */
+    opacity: 0.15; /* Make it faint/watermark style */
+    pointer-events: none; /* Click through it */
+    z-index: 0;    /* Behind cards */
+}
+
+/* style.css */
+
+/* 1. Ensure the meld container can anchor the logo */
+#my-melds {
+    position: relative; 
+    z-index: 1; /* Establishes a stacking context */
+}
+
+/* 2. Create the Logo using a pseudo-element */
+#my-melds::before {
+    content: "";
+    position: absolute;
+    
+    /* Center it perfectly */
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    
+    /* Size and Image */
+    width: 200px;  /* Adjust this if you want it bigger/smaller */
+    height: 100%;  /* Constrain height to fit the row */
+    background-image: url('Canasta logo.png'); /* Make sure your file is named logo.png */
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: contain; /* Keeps aspect ratio */
+    
+    /* Watermark styling */
+    opacity: 0.15; /* Transparent ghost effect */
+    pointer-events: none; /* Allows clicking through it */
+    z-index: -1; /* Places it BEHIND the cards */
+}

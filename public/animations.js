@@ -343,17 +343,24 @@ export function handleServerAnimations(oldData, newData, renderCallback) {
     for (let i = 0; i < 4; i++) {
         if (i === state.mySeat) continue; 
 
-        const oldSize = oldData.handSizes ? oldData.handSizes[i] : 0;
-        const newSize = newData.handSizes ? newData.handSizes[i] : 0;
+        // CHANGE: Compare handBacks arrays instead of handSizes numbers
+        const oldBacks = oldData.handBacks ? oldData.handBacks[i] : [];
+        const newBacks = newData.handBacks ? newData.handBacks[i] : [];
 
-        if (newSize > oldSize) {
+        // If the new hand has more cards than before
+        if (newBacks.length > oldBacks.length) {
             const handDiv = getHandDiv(i);
             const drawArea = document.getElementById('draw-area');     
 
-            if (handDiv) {
+            if (handDiv && drawArea) {
                 let srcRect = drawArea.getBoundingClientRect(); 
                 if (srcRect) {
-                    flyCard(srcRect, handDiv.getBoundingClientRect(), "cards/BackRed.png", 0);
+                    // CHANGE: Grab the color of the *last* card added to the hand
+                    // Default to 'Red' if undefined to prevent errors
+                    const newCardColor = newBacks[newBacks.length - 1] || 'Red';
+                    const imgName = `cards/Back${newCardColor}.png`;
+
+                    flyCard(srcRect, handDiv.getBoundingClientRect(), imgName, 0);
                 }
             }
         }

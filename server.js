@@ -901,6 +901,9 @@ function sendUpdate(gameId, socketId, seat) {
     const names = getPlayerNames(gameId);
     const freezingCard = getFreezingCard(game);
     const isFrozen = !!freezingCard;
+    const handBacks = game.players.map(p => p.map(c => c.deckType));
+    const nextDeckCard = game.deck.length > 0 ? game.deck[0] : null;
+    const nextDeckColor = nextDeckCard ? nextDeckCard.deckType : 'Red';
 
     io.to(socketId).emit('deal_hand', { 
         seat: seat, 
@@ -920,7 +923,9 @@ function sendUpdate(gameId, socketId, seat) {
         isFrozen: isFrozen, 
         handSizes: game.players.map(p => p.length),
         deckSize: game.deck.length,
-        maxPlayers: game.config.PLAYER_COUNT
+        maxPlayers: game.config.PLAYER_COUNT,
+        handBacks: handBacks,
+        nextDeckColor: nextDeckColor,
     });
 }
 
@@ -933,13 +938,17 @@ function broadcastAll(gameId, activeSeat) {
     const prevCard = pile.length > 1 ? pile[pile.length-2] : null;
     const freezingCard = getFreezingCard(game);
     const isFrozen = !!freezingCard;
-    const handSizes = game.players.map(p => p.length);
+    const handBacks = game.players.map(p => p.map(c => c.deckType));
     const names = getPlayerNames(gameId);
+    const nextDeckCard = game.deck.length > 0 ? game.deck[0] : null;
+    const nextDeckColor = nextDeckCard ? nextDeckCard.deckType : 'Red';
 
     io.sockets.sockets.forEach((s) => {
         if (s.data.gameId === gameId) {
             let update = {
                 currentPlayer: game.currentPlayer, 
+                handBacks: handBacks,
+                nextDeckColor: nextDeckColor,
                 phase: game.turnPhase,
                 topDiscard: topCard,
                 previousDiscard: prevCard,
@@ -952,7 +961,7 @@ function broadcastAll(gameId, activeSeat) {
                 scores: game.finalScores, 
                 cumulativeScores: game.cumulativeScores,
                 isFrozen: isFrozen, 
-                handSizes: handSizes,
+                handSizes: game.players.map(p => p.length),
                 deckSize: game.deck.length,
                 maxPlayers: game.config.PLAYER_COUNT
             };
