@@ -11,7 +11,7 @@ class CanastaBot {
     decideGoOutPermission(game) {
         let hand = game.players[this.seat];
         if (hand.some(c => c.isRed3)) return false;
-        
+
         let handPenalty = 0;
         hand.forEach(c => handPenalty += this.getCardPointValue(c));
         if (handPenalty > 150) return false;
@@ -78,23 +78,30 @@ class CanastaBot {
             drawResult = game.drawFromDeck(this.seat);
         }
 
-        // [FIX] CHECK DRAW RESULT
+        // ---------------------------------------------------------
+        // [CRITICAL FIX] STOP EXECUTION IF DRAW FAILED
+        // ---------------------------------------------------------
         if (!drawResult.success) {
-            // Exception: If we failed because "Wrong phase!" AND we are already 'playing',
-            // it means the bot crashed mid-turn previously and is resuming. We allow this.
-            if (drawResult.message === "Wrong phase!" && game.turnPhase === 'playing') {
-                 // Resume turn...
+            // Check for valid Resume scenarios
+            const isAlreadyPlaying = (game.turnPhase === 'playing' && game.currentPlayer === this.seat);
+            const isGameOver = (drawResult.message === "GAME_OVER_DECK_EMPTY");
+
+            if (isAlreadyPlaying) {
+                console.log(`[BOT RESUME] Seat ${this.seat} resuming turn in 'playing' phase.`);
+                // Allow proceeding to Meld/Discard
             } 
-            else if (drawResult.message === "GAME_OVER_DECK_EMPTY") {
-                 // Deck is empty, proceed to try and finish turn (or logic will handle game over)
-            }
+            else if (isGameOver) {
+                console.log(`[BOT END] Seat ${this.seat} triggered End of Deck.`);
+                // Allow proceeding so server can handle game over
+            } 
             else {
-                // TRUE FAILURE: Stop here to prevent the infinite loop
-                console.error(`[BOT STOP] Seat ${this.seat} could not draw: ${drawResult.message}`);
-                return; 
+                // REAL FAILURE: Stop to prevent infinite loop
+                console.error(`[BOT STOP] Seat ${this.seat} Draw Failed: ${drawResult.message}`);
+                return; // <--- This 'return' breaks the loop
             }
         }
-        
+        // ---------------------------------------------------------
+
         broadcastFunc(this.seat);
         await delay(1000);
 
@@ -107,19 +114,23 @@ class CanastaBot {
         // --- PHASE 3: DISCARD ---
         if (game.players[this.seat].length > 0) {
             let discardIndex = this.pickDiscard(game, isLastTurn);
-            let cardToThrow = game.players[this.seat][discardIndex];
             
-            if (cardToThrow) { // Check existence
+            // Validate the card exists before acting
+            if (game.players[this.seat][discardIndex]) {
+                let cardToThrow = game.players[this.seat][discardIndex];
                 this.observeDiscard(cardToThrow, this.seat, game); 
+                
                 let res = game.discardFromHand(this.seat, discardIndex);
                 
                 if (!res.success) {
-                    console.log(`[BOT WARNING] Seat ${this.seat} failed to discard index ${discardIndex}: ${res.message}`);
-                    // Fallback: Try discarding index 0 if specific choice failed
+                    console.warn(`[BOT WARNING] Seat ${this.seat} failed to discard index ${discardIndex}: ${res.message}`);
+                    
+                    // Fallback: Discard index 0 just to pass the turn
                     if (game.players[this.seat].length > 0) {
-                         game.discardFromHand(this.seat, 0);
+                        game.discardFromHand(this.seat, 0);
                     }
                 }
+                
                 broadcastFunc(this.seat);
             }
         }
