@@ -682,7 +682,8 @@ function showScoreModal(round, match, names) {
         const el = document.getElementById(id);
         if (el) el.innerText = val;
     };
-
+    const prev1 = match.team1 - round.team1.total;
+    const prev2 = match.team2 - round.team2.total;
     // 5. Populate Team 1 Column
     setText('row-base-1',    round.team1.basePoints);
     setText('row-red3-1',    round.team1.red3Points);
@@ -690,6 +691,7 @@ function showScoreModal(round, match, names) {
     setText('row-bonus-1',   round.team1.goOutBonus);
     setText('row-deduct-1',  round.team1.deductions);
     setText('row-total-1',   round.team1.total);
+    setText('row-prev-1',    prev1);
     setText('row-cumul-1',   match.team1);
 
     // 6. Populate Team 2 Column
@@ -699,12 +701,10 @@ function showScoreModal(round, match, names) {
     setText('row-bonus-2',   round.team2.goOutBonus);
     setText('row-deduct-2',  round.team2.deductions);
     setText('row-total-2',   round.team2.total);
+    setText('row-prev-2',    prev2);
     setText('row-cumul-2',   match.team2);
 
-    // --- 7. BUTTON RESET LOGIC (The Fix for Stuck Games) ---
-    // We try to find the button by ID. If your HTML doesn't have the ID,
-    // we find it by the onclick attribute or inject a new one.
-    
+    // --- 7. BUTTON RESET LOGIC (The Fix for Stuck Games) ---    
     let nextBtn = document.getElementById('btn-next-round');
     
     // If not found by ID, try to find the existing button in the modal
