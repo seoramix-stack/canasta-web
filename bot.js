@@ -228,19 +228,38 @@ class CanastaBot {
     attemptToOpen(game) {
         let hand = game.players[this.seat];
         let groups = {};
+        let wilds = []; // Store wild indices separately
+
+        // 1. Sort hand into Groups (Ranks) and Wilds
         hand.forEach((c, i) => {
-            if (c.isWild) return;
-            if (!groups[c.rank]) groups[c.rank] = [];
-            groups[c.rank].push(i);
+            if (c.isWild) {
+                wilds.push(i);
+            } else {
+                if (!groups[c.rank]) groups[c.rank] = [];
+                groups[c.rank].push(i);
+            }
         });
-        
+
         let potentialMelds = [];
+        let wildIndex = 0; // Iterator for wilds
+
+        // 2. Build Melds
         for (let r in groups) {
-            if (groups[r].length >= 3) {
-                potentialMelds.push({ indices: groups[r], rank: r });
+            let g = groups[r];
+            
+            // Priority A: Natural Melds (3+ cards of same rank)
+            if (g.length >= 3) {
+                potentialMelds.push({ indices: [...g], rank: r });
+            } 
+            // Priority B: Pair + Wild (2 cards + 1 Wild)
+            else if (g.length === 2 && wildIndex < wilds.length) {
+                let wIdx = wilds[wildIndex];
+                potentialMelds.push({ indices: [...g, wIdx], rank: r });
+                wildIndex++; // Consume used wild
             }
         }
-        
+
+        // 3. Check if we meet the score requirement
         if (potentialMelds.length > 0) {
             let myScore = (this.seat % 2 === 0) ? game.cumulativeScores.team1 : game.cumulativeScores.team2;
             let req = game.getOpeningReq(myScore);
@@ -249,8 +268,10 @@ class CanastaBot {
             potentialMelds.forEach(m => {
                 m.indices.forEach(idx => currentPts += this.getCardPointValue(hand[idx]));
             });
-            
+
+            // 4. Execute Opening if valid
             if (currentPts >= req) {
+                console.log(`[BOT] Seat ${this.seat} Opening with ${currentPts} points (Req: ${req})`);
                 game.processOpening(this.seat, potentialMelds, false);
             }
         }
