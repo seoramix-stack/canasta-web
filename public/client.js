@@ -147,23 +147,23 @@ window.handleMeldClick = (event, targetRank) => {
     // 1. Analyze the cards the player is holding
     const cards = state.selectedIndices.map(i => state.activeData.hand[i]);
     
-    // 2. Check for Mismatch
-    // A mismatch happens if you hold a Natural card that is NOT the target rank.
-    // (Wilds never mismatch, so they will always pass this check and go to 'else')
+    // 2. Check for Mismatch (Holding a Natural that doesn't match the pile)
     const isMismatch = cards.some(c => !c.isWild && c.rank !== targetRank);
 
     if (isMismatch) {
-        // --- SMART FALLBACK ---
-        // You clicked on "Kings" but you are holding "Queens".
-        // You clearly want to make a NEW meld of Queens, but had no empty space to click.
-        // So we redirect this action to the 'New Meld' handler.
         console.log("Mismatch detected: Redirecting to New Meld logic.");
-        meldSelected(); 
+        // FIX: Attempt to start a new meld, but capture if it actually happened
+        const success = meldSelected(); 
+        
+        // If meldSelected didn't successfully start a flow (returned false), 
+        // we MUST clear selection so the user isn't stuck.
+        if (!success) {
+            state.selectedIndices = [];
+            if(state.activeData) UI.renderHand(state.activeData.hand);
+        }
     } else {
+        // Standard Add-to-Meld Logic
         Anim.animateMeld(state.selectedIndices, targetRank, UI.updateUI);
-        // --- ADD TO PILE ---
-        // You are holding Kings or Wilds, and you clicked Kings.
-        // You intended to add to this pile.
         state.socket.emit('act_meld', { 
             seat: state.mySeat, 
             indices: state.selectedIndices, 
@@ -183,18 +183,16 @@ window.startNextRound = () => {
 
 // 1. Click Handler for empty space or background to START a meld
 window.meldSelected = () => {
-    if (!state.activeData) return;
-    if (state.selectedIndices.length === 0) return;
+    if (!state.activeData) return false;
+    if (state.selectedIndices.length === 0) return false;
 
-    // Check if we have already opened
     const myTeamMelds = (state.mySeat % 2 === 0) ? state.activeData.team1Melds : state.activeData.team2Melds;
     const hasOpened = Object.keys(myTeamMelds).length > 0;
 
     if (hasOpened) {
-        // Just a standard meld
-        handleStandardMeld();
+        return handleStandardMeld(); // Now returns true/false
     } else {
-        // Smart Logic: Check if we have enough points to open immediately
+        // Check opening requirements (Round 2 often requires 90 or 120 pts)
         let totalPts = 0;
         const selectedCards = state.selectedIndices.map(i => state.activeData.hand[i]);
         selectedCards.forEach(c => totalPts += getCardValue(c.rank));
@@ -203,10 +201,11 @@ window.meldSelected = () => {
         const req = getOpeningReq(teamScore);
 
         if (totalPts >= req) {
-            handleStandardMeld();
+            return handleStandardMeld();
         } else {
             // Not enough points -> Open Staging Panel
             startStagingMeld();
+            return true; // Successfully started staging
         }
     }
 };
@@ -215,19 +214,23 @@ function handleStandardMeld() {
     const hand = state.activeData.hand;
     const cards = state.selectedIndices.map(i => hand[i]);
     
-    // Auto-detect rank if possible
     let targetRank = null;
     const natural = cards.find(c => !c.isWild);
     
     if (natural) {
         targetRank = natural.rank;
     } else {
-        // All wilds? Ask user
         targetRank = prompt("Rank (e.g., A, 7)?");
         if(targetRank) targetRank = targetRank.toUpperCase().trim();
     }
 
-    if (!targetRank) return;
+    // FIX: If user cancels the prompt, return FALSE so we can clear selection
+    if (!targetRank) {
+        state.selectedIndices = [];
+        UI.renderHand(hand);
+        return false;
+    }
+
     Anim.animateMeld(state.selectedIndices, targetRank, UI.updateUI);
 
     state.socket.emit('act_meld', { 
@@ -235,7 +238,9 @@ function handleStandardMeld() {
         indices: state.selectedIndices, 
         targetRank: targetRank 
     });
+    
     state.selectedIndices = [];
+    return true;
 }
 
 // --- STAGING (OPENING) LOGIC ---

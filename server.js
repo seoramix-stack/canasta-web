@@ -663,7 +663,11 @@ io.on('connection', async (socket) => {
         const needed = game.config.PLAYER_COUNT;
         if (game.nextRoundReady.size >= needed) {
             console.log(`[Round] All ${needed} players ready. Starting next round.`);
-            
+            if (game.cleanupTimer) {
+                clearTimeout(game.cleanupTimer);
+                game.cleanupTimer = null;
+                console.log(`[System] Cleanup timer cancelled for Game ${gameId}`);
+            }
             // Start the round
             game.startNextRound(); 
             

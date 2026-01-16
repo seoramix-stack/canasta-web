@@ -1,6 +1,15 @@
 // bot.js
 
 class CanastaBot {
+    constructor(seat, difficulty = 'hard') {
+        this.seat = seat;
+        this.difficulty = difficulty;
+        
+        // --- STRATEGY MEMORY ---
+        this.seenDiscards = {}; 
+        this.partnerSignaled = false; 
+    }
+
     decideGoOutPermission(game) {
         let hand = game.players[this.seat];
         
@@ -15,14 +24,6 @@ class CanastaBot {
         if (handPenalty > 150) return false;
 
         return true; // "Yes, go ahead!"
-    }
-    constructor(seat, difficulty = 'hard') {
-        this.seat = seat;
-        this.difficulty = difficulty;
-        
-        // --- STRATEGY MEMORY ---
-        this.seenDiscards = {}; 
-        this.partnerSignaled = false; 
     }
 
     observeDiscard(card, playerSeat, game) {
@@ -241,45 +242,57 @@ class CanastaBot {
             let myScore = (this.seat % 2 === 0) ? game.cumulativeScores.team1 : game.cumulativeScores.team2;
             let req = game.getOpeningReq(myScore);
             
-            // Simple check: Do we have enough?
             let currentPts = 0;
             potentialMelds.forEach(m => {
                 m.indices.forEach(idx => currentPts += this.getCardPointValue(hand[idx]));
             });
             
             if (currentPts >= req) {
-                // Execute Open!
-                potentialMelds.forEach(m => {
-                    game.meldCards(this.seat, m.indices, m.rank);
-                });
+                // FIX: Use processOpening to send ALL melds atomically.
+                // This prevents index shifting errors and ensures total points logic holds.
+                game.processOpening(this.seat, potentialMelds, false);
             }
         }
     }
 
     // 3. Create targets for partner (Naturals >= 3)
+    // FIX: Updated to handle Index Invalidation via Loop-Restart
     meldNaturals(game) {
-        let hand = game.players[this.seat];
-        let groups = {};
+        let changed = true;
         
-        // Group indices by rank
-        hand.forEach((c, i) => {
-            if (c.isWild) return;
-            if (!groups[c.rank]) groups[c.rank] = [];
-            groups[c.rank].push(i);
-        });
+        while (changed) {
+            changed = false;
+            let hand = game.players[this.seat];
+            let groups = {};
+            
+            // 1. Re-calculate groups based on CURRENT hand indices
+            hand.forEach((c, i) => {
+                if (c.isWild) return;
+                if (!groups[c.rank]) groups[c.rank] = [];
+                groups[c.rank].push(i);
+            });
 
-        // Loop and meld any group >= 3
-        // Sort keys to prioritize High Cards (A, K, Q...)
-        Object.keys(groups).forEach(rank => {
-            if (groups[rank].length >= 3) {
-                game.meldCards(this.seat, groups[rank], rank);
+            // 2. Find ONE valid group to meld
+            // We only meld ONE group per iteration because melding invalidates indices.
+            // After a successful meld, we break and restart the loop (changed=true).
+            const ranks = Object.keys(groups);
+            
+            // Optional: Sort ranks to prioritize Aces/Kings?
+            // ranks.sort(...) 
+
+            for (let rank of ranks) {
+                if (groups[rank].length >= 3) {
+                    let res = game.meldCards(this.seat, groups[rank], rank);
+                    if (res.success) {
+                        changed = true;
+                        break; // BREAK LOOP: Indices are now garbage. Re-scan.
+                    }
+                }
             }
-        });
+        }
     }
     
     meldToCreateTargets(game) {
-        // Just reuse meldNaturals for now - it does exactly what we want:
-        // Puts 3+ naturals on the table so partner can add wilds.
         this.meldNaturals(game);
     }
 
