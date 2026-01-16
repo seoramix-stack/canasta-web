@@ -1,15 +1,16 @@
 // bot.js
 
 class CanastaBot {
-    constructor(seat, difficulty = 'hard') {
+    constructor(seat) {
         this.seat = seat;
-        this.difficulty = difficulty;
+        // No difficulty modes anymore. Just one "Best Strategy".
         
         // --- STRATEGY MEMORY ---
         this.seenDiscards = {}; 
         this.partnerSignaled = false; 
     }
 
+    // --- PARTNER INTERACTION ---
     decideGoOutPermission(game) {
         let hand = game.players[this.seat];
         
@@ -34,7 +35,6 @@ class CanastaBot {
         this.seenDiscards[card.rank]++;
 
         // 2. Partner Signal Check
-        // FIX: Use dynamic player count to avoid looking for non-existent seats in 2P
         let pCount = game.players.length;
         if (pCount === 4) {
             let partnerSeat = (this.seat + 2) % pCount;
@@ -47,7 +47,7 @@ class CanastaBot {
     async executeTurn(game, broadcastFunc) {
         const delay = (ms) => new Promise(res => setTimeout(res, ms));
         
-        // FIX: Ensure we don't crash if game state is partial
+        // Safety check
         if (!game.players[this.seat]) return;
 
         let realDeckSize = this.getRealDeckSize(game);
@@ -63,14 +63,17 @@ class CanastaBot {
             let myMelds = this.getMyMelds(game);
             
             if (this.canTakePile(game, hand, topCard, myMelds)) {
-                // If last turn, ALWAYS take to maximize melding options
                 if (isLastTurn) {
-                    wantPile = true;
+                    wantPile = true; // Always take on last turn
                 } else {
                     let pileValue = this.evaluatePile(pile);
-                    // Take if valuable OR if it helps us open
+                    // Take if valuable (>50 pts) OR if the pile is small but we need the card
                     if (pileValue > 50) wantPile = true; 
-                    else if (this.difficulty === 'hard' && pile.length < 2) wantPile = false;
+                    
+                    // Smart Bot Logic: Even if low value, take it if it completes a Canasta
+                    if (myMelds[topCard.rank] && myMelds[topCard.rank].length >= 5) {
+                        wantPile = true;
+                    }
                 }
             }
         }
@@ -119,20 +122,15 @@ class CanastaBot {
         }
 
         // 2. NORMAL PLAY
-        let deckSize = this.getRealDeckSize(game);
-        let earlyGame = (deckSize > 37);
-
-        // If we just picked up the pile, we might have a huge hand. 
-        // We should meld naturals to be safe, but keep wilds.
+        // If we just picked up the pile (huge hand), meld naturals to safe points
         if (hand.length > 14) {
              this.meldNaturals(game);
              return;
         }
 
-        if (earlyGame) return; // Strict early game patience
-
-        // Mid-Late Game Logic:
-        // If we haven't opened yet, check if we CAN open to avoid getting stuck
+        // FIX #2: REMOVED "EARLY GAME" LOCK.
+        // If we can open, we SHOULD open.
+        
         if (!hasOpened) {
             this.attemptToOpen(game);
         } else {
@@ -144,6 +142,7 @@ class CanastaBot {
     pickDiscard(game, isLastTurn) {
         let hand = game.players[this.seat];
         let enemyMelds = (this.seat % 2 === 0) ? game.team2Melds : game.team1Melds;
+        let myMelds = this.getMyMelds(game);
         let candidates = [];
 
         hand.forEach((card, index) => {
@@ -154,32 +153,48 @@ class CanastaBot {
                 // Discard highest value to save points
                 score -= this.getCardPointValue(card); 
             } 
-            // --- NORMAL ---
+            // --- NORMAL STRATEGY ---
             else {
+                // A. Base Penalties
                 if (card.isWild) score += 2000; 
                 if (card.isRed3) score += 5000; 
                 
-                // CRITICAL FIX: DO NOT FEED THE ENEMY
-                // If enemy has this rank melded, it is NOT safe. It is deadly.
-                if (enemyMelds[card.rank] && !card.isWild) {
-                     score += 5000; // Massive penalty
+                // B. FIX #1: POINT CONSERVATION
+                // Add the card's own value to the score.
+                // Discarding a 4 (5pts) adds +5. Discarding a King (10pts) adds +10.
+                // Since we sort ascending (lowest score = best discard), this encourages keeping high cards.
+                score += this.getCardPointValue(card); 
+
+                // C. FIX #3: TEAM LOYALTY
+                // Never discard a card that WE are collecting.
+                if (myMelds[card.rank] && !card.isWild) {
+                    score += 5000; 
                 }
 
-                // Partner Freeze Logic
+                // D. Enemy Safety
+                // If enemy has this melded, DO NOT FEED.
+                if (enemyMelds[card.rank] && !card.isWild) {
+                     score += 5000; 
+                }
+
+                // E. Partner Signal (Frozen Pile)
                 if (this.partnerSignaled) {
+                    // If partner froze the pile, ONLY discard 100% safe cards.
                     if (!this.isCardSafe(card, game)) score += 10000; 
                 }
 
-                // "Rule of 8" Safety
+                // F. "Rule of 8" Safety Calculation
+                // If card is mathematically safe, huge bonus (subtraction)
                 if (this.isCardSafe(card, game)) {
-                    score -= 1000; // Encourage discarding safe cards
+                    score -= 1000; 
                 } else {
-                    score += 100; // Risky
+                    score += 100; // Risky discard penalty
                 }
             }
             candidates.push({ index, score });
         });
 
+        // Sort: Lowest score is the best card to throw
         candidates.sort((a, b) => a.score - b.score);
         return candidates[0].index;
     }
@@ -187,26 +202,41 @@ class CanastaBot {
     // --- MELDING LOGIC ---
 
     meldMax(game) {
+        // Greedy algorithm to dump hand
         let changed = true;
         while(changed) {
             changed = false;
             let hand = game.players[this.seat];
             let myMelds = this.getMyMelds(game);
             
+            // Loop backwards to splice safely
             for (let i = hand.length - 1; i >= 0; i--) {
                 let c = hand[i];
+                
+                // 1. Try to add Natural to existing meld
                 if (myMelds[c.rank]) {
                     let res = game.meldCards(this.seat, [i], c.rank);
                     if (res.success) changed = true;
                 }
+                // 2. Try to add Wild
                 else if (c.isWild) {
                     let bestRank = null;
+                    
+                    // FIX #4: PANIC DUMP FOR WILDS
+                    // First priority: Non-completed Canastas (<7 cards)
                     for(let rank in myMelds) {
                         if (myMelds[rank].length < 7) {
                              bestRank = rank; 
                              break; 
                         }
                     }
+                    
+                    // Second priority (Panic): ANY meld. 
+                    // Better to put a Wild on a closed Canasta (+50pts) than keep it in hand (-50pts).
+                    if (!bestRank && Object.keys(myMelds).length > 0) {
+                        bestRank = Object.keys(myMelds)[0];
+                    }
+
                     if (bestRank) {
                         let res = game.meldCards(this.seat, [i], bestRank);
                         if (res.success) changed = true;
@@ -214,6 +244,7 @@ class CanastaBot {
                 }
             }
         }
+        // After dumping singles/wilds, try to form NEW melds
         this.meldNaturals(game);
     }
 
@@ -226,6 +257,7 @@ class CanastaBot {
             groups[c.rank].push(i);
         });
         
+        // Find all natural groups of 3+
         let potentialMelds = [];
         for (let r in groups) {
             if (groups[r].length >= 3) {
@@ -237,21 +269,22 @@ class CanastaBot {
             let myScore = (this.seat % 2 === 0) ? game.cumulativeScores.team1 : game.cumulativeScores.team2;
             let req = game.getOpeningReq(myScore);
             
+            // Calculate total points of these potential melds
             let currentPts = 0;
             potentialMelds.forEach(m => {
                 m.indices.forEach(idx => currentPts += this.getCardPointValue(hand[idx]));
             });
             
+            // If we meet the requirement, OPEN IMMEDIATELY
             if (currentPts >= req) {
-                // Atomic opening
                 game.processOpening(this.seat, potentialMelds, false);
             }
         }
     }
 
     meldNaturals(game) {
+        // Tries to form new melds from hand (3+ naturals)
         let changed = true;
-        
         while (changed) {
             changed = false;
             let hand = game.players[this.seat];
@@ -277,6 +310,7 @@ class CanastaBot {
     }
     
     meldToCreateTargets(game) {
+        // Reuse logic: creates any natural groups it can, to give partner places to play wilds
         this.meldNaturals(game);
     }
 
@@ -289,8 +323,10 @@ class CanastaBot {
     canTakePile(game, hand, topCard, myMelds) {
         if (topCard.isWild || topCard.rank === '3') return false;
         
+        // 1. Can we add to existing meld?
         if (myMelds[topCard.rank]) return true;
 
+        // 2. Do we have 2 naturals in hand?
         let naturals = hand.filter(c => c.rank === topCard.rank && !c.isWild).length;
         if (naturals >= 2) return true;
 
@@ -313,11 +349,9 @@ class CanastaBot {
     }
 
     checkPanicMode(game) {
-        // FIX: Use dynamic player count logic to support 2-Player mode
         let pCount = game.players.length; 
         let oppSeat = (this.seat + 1) % pCount; 
         
-        // Safety Check (should theoretically always exist, but good to have)
         if (!game.players[oppSeat]) return false;
 
         let oppHandSize = game.players[oppSeat].length;
