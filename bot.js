@@ -1,4 +1,5 @@
-// bot.js
+// bot.js force update
+
 class CanastaBot {
     constructor(seat) {
         this.seat = seat;
