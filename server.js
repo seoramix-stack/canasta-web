@@ -998,22 +998,27 @@ function checkBotTurn(gameId) {
         const delay = (game.turnPhase === 'draw') ? 1000 : 0;
 
         setTimeout(() => {
-            bot.executeTurn(game, (updatedSeat) => {
-                // --- FIX START: RELEASE THE LOCK ---
-                game.processingTurnFor = null; 
-                // --- FIX END ---
-
-                if (game.turnPhase === 'game_over') {
-                    console.log(`[BOT] Player ${updatedSeat} ended the round.`);
-                    handleRoundEnd(gameId, io);    
-                } else {
-                    broadcastAll(gameId, updatedSeat); 
-                }
-            }).catch(err => {
-                console.error(`[BOT ERROR] Seat ${curr} crashed:`, err);
-                game.processingTurnFor = null; // Release lock on crash
-            });
-        }, delay);
+    // 1. Run the bot logic
+    bot.executeTurn(game, (updatedSeat) => {
+        // NOTE: We do NOT release 'processingTurnFor' here anymore.
+        // We only broadcast the update. The lock stays active.
+        if (game.turnPhase === 'game_over') {
+            console.log(`[BOT] Player ${updatedSeat} ended the round.`);
+            handleRoundEnd(gameId, io);    
+        } else {
+            broadcastAll(gameId, updatedSeat); 
+        }
+    })
+    // 2. Release the lock ONLY when the bot is fully done (Promise resolves)
+    .then(() => {
+        game.processingTurnFor = null; 
+    })
+    // 3. Release lock if it crashes
+    .catch(err => {
+        console.error(`[BOT ERROR] Seat ${curr} crashed:`, err);
+        game.processingTurnFor = null; 
+    });
+}, delay);
 
     } else {
         game.processingTurnFor = null;
