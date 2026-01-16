@@ -1177,6 +1177,35 @@ setInterval(() => {
 }, 14 * 60 * 1000); 
 
 const PORT = process.env.PORT || 3000;
+// --- MEMORY CLEANUP ---
+// Runs every 5 minutes to remove stuck games older than 30 minutes
+setInterval(() => {
+    const now = Date.now();
+    const STALE_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+    let deletedCount = 0;
+
+    Object.keys(games).forEach(gameId => {
+        const game = games[gameId];
+        // If a game has no "lastActive" timestamp, mark it now
+        if (!game.lastActive) game.lastActive = now;
+        
+        // If inactive for 30+ mins, delete it
+        if (now - game.lastActive > STALE_TIMEOUT) {
+            delete games[gameId];
+            if (gameBots[gameId]) delete gameBots[gameId];
+            deletedCount++;
+        }
+    });
+    
+    if (deletedCount > 0) {
+        console.log(`[CLEANUP] Removed ${deletedCount} stale games to free memory.`);
+        // Force garbage collection if exposed (optional, requires --expose-gc)
+        if (global.gc) global.gc(); 
+    }
+}, 5 * 60 * 1000); 
+
+// Update timestamp on every move
+// (You need to add `games[gameId].lastActive = Date.now()` inside broadcastAll or sendUpdate)
 server.listen(PORT, '0.0.0.0', () => { 
     console.log(`Server running on port ${PORT}`);
     if (DEV_MODE) console.log("⚠️  DEV MODE ACTIVE: DB Disabled. Use ANY login.");
