@@ -447,6 +447,55 @@ io.on('connection', async (socket) => {
         }
     });
 
+    socket.on('act_ask_go_out', (data) => {
+        const gameId = socket.data.gameId;
+        const game = games[gameId];
+        if (!game) return;
+
+        // Validation
+        if (game.config.PLAYER_COUNT !== 4) return socket.emit('error_message', "Only in 4P mode.");
+        if (game.currentPlayer !== data.seat) return socket.emit('error_message', "Not your turn.");
+        if (game.turnPhase !== 'playing') return socket.emit('error_message', "Draw cards first.");
+
+        // Identify Partner
+        const partnerSeat = (data.seat + 2) % 4;
+        game.goOutPermission = 'pending';
+
+        // CHECK IF PARTNER IS BOT
+        if (gameBots[gameId] && gameBots[gameId][partnerSeat]) {
+            // Bot Logic
+            const bot = gameBots[gameId][partnerSeat];
+            const decision = bot.decideGoOutPermission(game); // TRUE or FALSE
+            
+            // Auto-reply
+            game.goOutPermission = decision ? 'granted' : 'denied';
+            
+            // Broadcast result immediately
+            io.to(gameId).emit('ask_result', { seat: partnerSeat, decision: decision });
+        } else {
+            // Human Logic: Find partner's socket
+            io.sockets.sockets.forEach((s) => {
+                if (s.data.gameId === gameId && s.data.seat === partnerSeat) {
+                    s.emit('ask_request', { askingSeat: data.seat });
+                }
+            });
+        }
+    });
+
+    socket.on('act_reply_go_out', (data) => {
+        const gameId = socket.data.gameId;
+        const game = games[gameId];
+        if (!game) return;
+
+        // Ensure it matches the 'pending' state
+        if (game.goOutPermission !== 'pending') return;
+
+        game.goOutPermission = data.decision ? 'granted' : 'denied';
+        
+        // Broadcast result to everyone (so asking player sees it)
+        io.to(gameId).emit('ask_result', { seat: data.seat, decision: data.decision });
+    });
+
     socket.on('act_draw', (data) => {
         const gameId = socket.data.gameId;
         const game = games[gameId]; 
@@ -475,9 +524,38 @@ io.on('connection', async (socket) => {
         const gameId = socket.data.gameId;
         const game = games[gameId];
         if (game) { 
+            // --- 1. GO OUT CHECK (Partner Enforcement) ---
+            const hand = game.players[data.seat];
+            
+            // Check if melding these cards results in an empty hand (Floating)
+            // (If indices.length == hand.length, you are using all your cards)
+            const willGoOut = (hand.length === data.indices.length);
+
+            if (willGoOut && game.goOutPermission === 'denied') {
+                // A. Apply 100 point penalty
+                const teamKey = (data.seat % 2 === 0) ? 'team1' : 'team2';
+                game.cumulativeScores[teamKey] -= 100;
+
+                // B. Notify Everyone
+                const name = (game.names && game.names[data.seat]) ? game.names[data.seat] : `Player ${data.seat+1}`;
+                io.to(gameId).emit('penalty_notification', { 
+                    message: `${name} ignored partner! -100 pts.`
+                });
+
+                // C. Block the Move
+                socket.emit('error_message', "Partner said NO! You cannot go out.");
+                
+                // D. Force Update UI (to show score drop immediately)
+                broadcastAll(gameId);
+                return;
+            }
+            // ---------------------------------------------
+
+            // 2. Perform Standard Meld
             let res = game.meldCards(data.seat, data.indices, data.targetRank); 
+            
             if (res.success && res.message === "GAME_OVER") {
-                handleRoundEnd(gameId, io); // <--- NEW FLOW
+                handleRoundEnd(gameId, io); 
             } else if (res.success) {
                 broadcastAll(gameId, data.seat);
             } else {
@@ -490,9 +568,50 @@ io.on('connection', async (socket) => {
         const gameId = socket.data.gameId;
         const game = games[gameId];
         if (game) { 
+            // 1. PRE-CHECK: Is player trying to go out after being denied?
+            let hand = game.players[data.seat];
+            let willGoOut = (hand.length === 1); // If 1 card and discarding it -> 0 left
+
+                // --- PENALTY CHECK 1: IGNORING "NO" ---
+            // You are trying to Go Out, but Partner said NO.
+            if (willGoOut && game.goOutPermission === 'denied') {
+                const teamKey = (data.seat % 2 === 0) ? 'team1' : 'team2';
+                game.cumulativeScores[teamKey] -= 100;
+
+                const name = (game.names && game.names[data.seat]) ? game.names[data.seat] : `Player ${data.seat+1}`;
+                io.to(gameId).emit('penalty_notification', { 
+                    message: `${name} ignored partner's NO! -100 pts.`
+                });
+                
+                // REJECT THE MOVE: You must keep the card.
+                socket.emit('error_message', "Partner said NO! You cannot go out.");
+                broadcastAll(gameId); 
+                return; 
+            }
+
+            // --- PENALTY CHECK 2: IGNORING "YES" (THE MISSING LOGIC) ---
+            // You are NOT going out (will have cards left), but Partner said YES.
+            if (!willGoOut && game.goOutPermission === 'granted') {
+                const teamKey = (data.seat % 2 === 0) ? 'team1' : 'team2';
+                game.cumulativeScores[teamKey] -= 100;
+
+                const name = (game.names && game.names[data.seat]) ? game.names[data.seat] : `Player ${data.seat+1}`;
+                io.to(gameId).emit('penalty_notification', { 
+                    message: `${name} failed to go out! -100 pts.`
+                });
+                
+                // We ALLOW the discard, but apply the penalty.
+                // (Because you physically cannot go out, so the game must continue).
+            }
+
+            // Normal Execution
             let res = game.discardFromHand(data.seat, data.index); 
+            
+            // Reset permission state if turn ends
+            if (res.success) game.goOutPermission = null; 
+
             if (res.success && res.message === "GAME_OVER") {
-                handleRoundEnd(gameId, io); // <--- NEW FLOW
+                handleRoundEnd(gameId, io); 
             } else if (res.success) {
                 broadcastAll(gameId, data.seat);
             } else {

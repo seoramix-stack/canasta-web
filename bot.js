@@ -1,6 +1,21 @@
 // bot.js
 
 class CanastaBot {
+    decideGoOutPermission(game) {
+        let hand = game.players[this.seat];
+        
+        // 1. If I have a Red 3 in hand, NEVER let partner go out. Massive penalty.
+        if (hand.some(c => c.isRed3)) return false;
+
+        // 2. Calculate penalty of my hand
+        let handPenalty = 0;
+        hand.forEach(c => handPenalty += this.getCardPointValue(c));
+
+        // 3. Threshold: If I hold > 150 points, say NO.
+        if (handPenalty > 150) return false;
+
+        return true; // "Yes, go ahead!"
+    }
     constructor(seat, difficulty = 'hard') {
         this.seat = seat;
         this.difficulty = difficulty;

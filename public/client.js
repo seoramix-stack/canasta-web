@@ -436,6 +436,31 @@ function initSocket(token) {
             btn.style.cursor = "default";
         }
     });
+    state.socket.on('ask_request', (data) => {
+    // "Partner, may I go out?"
+    document.getElementById('modal-partner-ask').style.display = 'flex';
+});
+
+state.socket.on('ask_result', (data) => {
+    // Show toast/alert to everyone
+    // data.decision is true (YES) or false (NO)
+    const msg = data.decision ? "PARTNER SAID: YES ✅" : "PARTNER SAID: NO ❌";
+    
+    // Simple toast notification
+    const toast = document.createElement('div');
+    toast.style.cssText = "position:absolute; top:20%; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.8); color:white; padding:15px 30px; border-radius:30px; font-size:20px; z-index:4000; border:2px solid #f1c40f;";
+    toast.innerText = msg;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+});
+
+state.socket.on('penalty_notification', (data) => {
+    const el = document.getElementById('modal-penalty');
+    document.getElementById('penalty-msg').innerText = data.message;
+    el.style.display = 'flex';
+    // Hide after 3s automatically
+    setTimeout(() => el.style.display = 'none', 3000);
+});
     state.socket.on('connect', () => console.log("Connected"));
     state.socket.on('ready_status', (data) => {
         // data.readySeats is an array of seat numbers who clicked start (e.g., [0, 2])
@@ -945,4 +970,23 @@ window.openProfile = async () => {
     } catch (e) {
         console.error("Failed to load profile", e);
     }
+};
+
+window.askToGoOut = () => {
+    // Close menu
+    window.toggleGameMenu();
+    
+    if (state.currentPlayerCount !== 4) {
+        alert("Asking is only for 4-player games.");
+        return;
+    }
+    
+    // UI Feedback
+    alert("Asking partner...");
+    state.socket.emit('act_ask_go_out', { seat: state.mySeat });
+};
+
+window.replyGoOut = (decision) => {
+    document.getElementById('modal-partner-ask').style.display = 'none';
+    state.socket.emit('act_reply_go_out', { seat: state.mySeat, decision: decision });
 };
