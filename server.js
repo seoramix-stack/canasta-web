@@ -933,6 +933,8 @@ function broadcastAll(gameId, activeSeat) {
     const game = games[gameId]; 
     if (!game) return;
 
+    game.lastActive = Date.now();
+
     const pile = game.discardPile;
     const topCard = pile.length > 0 ? pile[pile.length-1] : null;
     const prevCard = pile.length > 1 ? pile[pile.length-2] : null;
