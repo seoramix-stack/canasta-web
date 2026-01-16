@@ -993,28 +993,23 @@ function checkBotTurn(gameId) {
     if (bot) {
         game.processingTurnFor = curr;
         
-        // --- NEW: Add 1s delay only at the START of the turn (Draw Phase) ---
-        // This ensures visual pause after the previous player's discard.
         const delay = (game.turnPhase === 'draw') ? 1000 : 0;
 
         setTimeout(() => {
-            // Add .catch to handle errors gracefully
             bot.executeTurn(game, (updatedSeat) => {
+                // --- FIX START: RELEASE THE LOCK ---
+                game.processingTurnFor = null; 
+                // --- FIX END ---
+
                 if (game.turnPhase === 'game_over') {
                     console.log(`[BOT] Player ${updatedSeat} ended the round.`);
-                    game.processingTurnFor = null; 
                     handleRoundEnd(gameId, io);    
                 } else {
                     broadcastAll(gameId, updatedSeat); 
                 }
             }).catch(err => {
                 console.error(`[BOT ERROR] Seat ${curr} crashed:`, err);
-                // CRITICAL FIX: Release the lock so the game doesn't freeze
-                game.processingTurnFor = null; 
-                
-                // Optional: Force a random discard to keep game moving
-                // game.discardFromHand(curr, 0);
-                // broadcastAll(gameId, curr);
+                game.processingTurnFor = null; // Release lock on crash
             });
         }, delay);
 

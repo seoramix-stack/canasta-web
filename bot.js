@@ -101,7 +101,16 @@ class CanastaBot {
             let cardToThrow = game.players[this.seat][discardIndex];
             this.observeDiscard(cardToThrow, this.seat, game); 
             
-            game.discardFromHand(this.seat, discardIndex);
+            // --- FIX START: CHECK SUCCESS & FALLBACK ---
+            let res = game.discardFromHand(this.seat, discardIndex);
+            
+            if (!res.success) {
+                console.log(`[BOT WARNING] Seat ${this.seat} failed to discard index ${discardIndex}: ${res.message}`);
+                // Fallback: Panic discard (Throw the first card found)
+                if (game.players[this.seat].length > 0) {
+                    game.discardFromHand(this.seat, 0);
+                }
+            }
             broadcastFunc(this.seat);
         }
     }
