@@ -93,7 +93,8 @@ window.connectToGame = (mode) => {
     state.socket.emit('request_join', { 
         mode: mode, 
         difficulty: state.currentBotDiff,
-        playerCount: state.currentPlayerCount // <--- SENT HERE
+        playerCount: state.currentPlayerCount,
+        ruleset: state.currentRuleset
     });
 };
 
@@ -114,10 +115,6 @@ window.sendReady = () => {
     state.socket.emit('act_ready', { seat: state.mySeat });
 };
 
-window.drawCard = () => {
-    state.socket.emit('act_draw', { seat: state.mySeat });
-};
-
 window.toggleSelect = (idx) => {
     if (state.selectedIndices.includes(idx)) {
         state.selectedIndices = state.selectedIndices.filter(i => i !== idx);
@@ -130,7 +127,18 @@ window.toggleSelect = (idx) => {
 
 window.handleDiscardClick = () => {
     if (state.selectedIndices.length === 1) {
-        // --- FIX START ---
+        // Prevent optimistic discard if it's not the playing phase (e.g. need to draw)
+        if (!state.activeData || state.activeData.phase !== 'playing') {
+            // Shake the deck or show a toast to indicate "Draw First"
+            const deck = document.getElementById('draw-area');
+            if(deck) {
+                deck.style.transform = "translateX(5px)";
+                setTimeout(() => deck.style.transform = "none", 100);
+            }
+            // Optional: Alert user
+            // alert("You must draw a card first!"); 
+            return;
+        }
         // 1. Get the card data so we can animate it
         const idx = state.selectedIndices[0];
         const card = state.activeData.hand[idx];
@@ -1018,4 +1026,15 @@ window.askToGoOut = () => {
 window.replyGoOut = (decision) => {
     document.getElementById('modal-partner-ask').style.display = 'none';
     state.socket.emit('act_reply_go_out', { seat: state.mySeat, decision: decision });
+};
+let isDrawing = false;
+
+window.drawCard = () => {
+    if (isDrawing) return; // Block double clicks locally
+    isDrawing = true;
+    
+    // Re-enable after 1 second (safe timeout)
+    setTimeout(() => { isDrawing = false; }, 1000);
+
+    state.socket.emit('act_draw', { seat: state.mySeat });
 };

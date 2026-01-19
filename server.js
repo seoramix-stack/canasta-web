@@ -293,9 +293,8 @@ io.on('connection', async (socket) => {
         }
 
         if (data.mode === 'bot') {
-            // Default to 4 if not specified
-            const pCount = data.playerCount || 4;
-            await startBotGame(socket, data.difficulty || 'medium', pCount); 
+            const pCount = parseInt(data.playerCount) || 4;
+            await startBotGame(socket, data.difficulty || 'medium', pCount, data.ruleset || 'standard'); 
         } else {
             joinGlobalGame(socket, data);
         }
@@ -304,7 +303,7 @@ io.on('connection', async (socket) => {
     socket.on('request_create_private', (data) => {
         // 1. Validate Input (Room Name is the ID)
         const requestedId = data.gameId ? data.gameId.trim() : "";
-        const pCount = data.playerCount || 4; 
+        const pCount = parseInt(data.playerCount) || 4;
         const ruleset = data.ruleset || 'standard'; 
 
         if (!requestedId) return socket.emit('error_message', "Please enter a Room Name.");
@@ -581,11 +580,23 @@ io.on('connection', async (socket) => {
         const result = game.drawFromDeck(data.seat);
         // CHECK FOR DECK EMPTY GAME OVER
         if (result.success && result.message === "GAME_OVER_DECK_EMPTY") {
-            handleRoundEnd(gameId, io); // <--- NEW FLOW
+            handleRoundEnd(gameId, io);
         } else if (result.success) {
             broadcastAll(gameId, data.seat);
+            } else {
+            // If the error is "Wrong phase!" but it IS the player's turn and phase IS 'playing',
+            // it means they already succeeded in drawing (likely a double click).
+            // Instead of showing an error, just re-send the game state to sync them up.
+            if (result.message === "Wrong phase!" && 
+                game.currentPlayer === data.seat && 
+                game.turnPhase === 'playing') {
+                
+                // Resend state to this socket only
+                sendUpdate(gameId, socket.id, data.seat);
         } else {
-            socket.emit('error_message', result.message);
+                // Genuine error
+                socket.emit('error_message', result.message);
+            }
         }
     });
     
@@ -825,18 +836,15 @@ io.on('connection', async (socket) => {
         if (gameId) {
             await socket.leave(gameId); 
             if (game && game.isPrivate && game.isLobby) {
-            const seat = socket.data.seat;
-            if (seat !== undefined && seat !== null) {
-                console.log(`[LOBBY] Seat ${seat} freed in Game ${gameId}`);
-                game.names[seat] = null; // Clear the name
-                
-                // Remove from ready seats if they clicked ready
-                if (game.readySeats) game.readySeats.delete(seat);
-
-                // Notify others in the lobby
-                broadcastLobby(gameId);
+                const seat = socket.data.seat;
+                if (seat !== undefined && seat !== null) {
+                    console.log(`[LOBBY] Seat ${seat} freed in Game ${gameId}`);
+                    game.names[seat] = null;
+                    if (game.readySeats) game.readySeats.delete(seat);
+                    broadcastLobby(gameId);
+                }
             }
-        }
+
             if (game && game.isPrivate && game.matchIsOver) {
                 console.log(`[CLEANUP] Private Match ${gameId} finished and player left. Deleting room.`);
                 delete games[gameId];
@@ -864,8 +872,9 @@ function generateGameId() {
     return 'game_' + Math.random().toString(36).substr(2, 9);
 }
 
-async function startBotGame(humanSocket, difficulty, playerCount = 4) {
+async function startBotGame(humanSocket, difficulty, playerCount = 4, ruleset = 'standard') {
     const gameId = generateGameId();
+    const pCountInt = parseInt(playerCount);
     
     // --- PHASE 3: DYNAMIC CONFIG ---
     // 2-Player Standard: 15 Cards, 2 to Draw (Draw count handled by default config)
@@ -873,6 +882,14 @@ async function startBotGame(humanSocket, difficulty, playerCount = 4) {
     const gameConfig = (playerCount === 2) 
         ? { PLAYER_COUNT: 2, HAND_SIZE: 15 } 
         : { PLAYER_COUNT: 4, HAND_SIZE: 11 };
+
+    if (ruleset === 'easy') {
+        gameConfig.DRAW_COUNT = 1;
+        gameConfig.MIN_CANASTAS_OUT = 1;
+    } else {
+        gameConfig.DRAW_COUNT = 2;
+        gameConfig.MIN_CANASTAS_OUT = 2;
+    }
 
     games[gameId] = new CanastaGame(gameConfig);
     games[gameId].resetMatch();
@@ -910,12 +927,13 @@ async function startBotGame(humanSocket, difficulty, playerCount = 4) {
 
     games[gameId].currentPlayer = 0;
     games[gameId].roundStarter = 0;
+    // Force immediate update
     sendUpdate(gameId, humanSocket.id, 0);
 }
 
 function joinGlobalGame(socket, data) {
     // 1. Determine Details
-    const pCount = (data && data.playerCount === 2) ? 2 : 4;
+    const pCount = (data && parseInt(data.playerCount) === 2) ? 2 : 4;
     const mode = (data && data.mode === 'rated') ? 'rated' : 'casual';
     
     // 2. Generate Queue Key (e.g. 'rated_4' or 'casual_2')

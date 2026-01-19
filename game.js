@@ -122,6 +122,7 @@ class CanastaGame {
     setupRound() {
         this.deck = shuffle(createCanastaDeck());
         this.discardPile = [];
+        const pCount = this.config.PLAYER_COUNT;
         this.players = Array.from({ length: this.config.PLAYER_COUNT }, () => []);
         this.team1Melds = {}; this.team2Melds = {};
         this.team1Red3s = []; this.team2Red3s = [];

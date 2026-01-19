@@ -71,6 +71,15 @@
         <button class="diff-btn p-count-btn selected" onclick="selectPlayerCount(4, this)">4 PLAYERS</button>
     </div>
 
+    <div style="margin-bottom: 10px; color: #bdc3c7; font-size: 14px; margin-top: 15px;">RULES</div>
+    <div class="diff-grid">
+        <button class="diff-btn rules-btn selected" onclick="selectRuleset('standard', this)" style="font-size: 12px; padding: 10px;">
+            DRAW 2<br>2 OUT
+        </button>
+        <button class="diff-btn rules-btn" onclick="selectRuleset('easy', this)" style="font-size: 12px; padding: 10px;">
+            DRAW 1<br>1 OUT
+        </button>
+    </div>
     <button class="menu-btn primary" onclick="connectToGame('bot')" style="margin-top: 20px;">START MATCH</button>
     <button class="menu-btn text-only" onclick="navTo('screen-home')">BACK</button>
 </div>

@@ -112,8 +112,7 @@ export function updateUI(data) {
     if (data.currentPlayer === -1 && data.phase !== 'game_over') {
         if(readyModal) {
             readyModal.style.display = 'flex';
-            
-            // --- FIX START: Reset Modal State ---
+
             // Force the "Start Game" button to be visible
             const step1 = document.getElementById('ready-step-1');
             if (step1) step1.style.display = 'block';
@@ -121,7 +120,6 @@ export function updateUI(data) {
             // Force the "Waiting" spinner to be hidden
             const step2 = document.getElementById('ready-step-2');
             if (step2) step2.style.display = 'none';
-            // --- FIX END ---
         }
 
         for (let i = 0; i < 4; i++) {
@@ -177,8 +175,10 @@ export function updateUI(data) {
             document.getElementById('name-me').innerText = data.names[s] || "";
             document.getElementById('name-partner').innerText = data.names[oppSeat] || ""; 
             
-            // Hide Side HUDs
-            const hide = (id) => { if(document.getElementById(id)) document.getElementById(id).style.opacity = '0'; };
+            const hide = (id) => { 
+                const el = document.getElementById(id);
+                if(el) el.style.display = 'none'; 
+            };
             hide('hud-left');
             hide('hud-right');
             
@@ -207,9 +207,12 @@ export function updateUI(data) {
             document.getElementById('name-left').innerText = data.names[(s + 1) % 4];
             document.getElementById('name-right').innerText = data.names[(s + 3) % 4];
             
-            // Show All HUDs
             ['hud-left', 'hud-right', 'hud-partner'].forEach(id => {
-                if(document.getElementById(id)) document.getElementById(id).style.opacity = '1';
+                const el = document.getElementById(id);
+                if(el) {
+                    el.style.display = 'flex';
+                    el.style.opacity = '1';
+                }
             });
         }
         

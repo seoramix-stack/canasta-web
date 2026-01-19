@@ -344,9 +344,9 @@ export function handleServerAnimations(oldData, newData, renderCallback) {
         if (i === state.mySeat) continue; 
 
         // CHANGE: Compare handBacks arrays instead of handSizes numbers
-        const oldBacks = oldData.handBacks ? oldData.handBacks[i] : [];
-        const newBacks = newData.handBacks ? newData.handBacks[i] : [];
-
+        const oldBacks = (oldData.handBacks && oldData.handBacks[i]) ? oldData.handBacks[i] : [];
+        const newBacks = (newData.handBacks && newData.handBacks[i]) ? newData.handBacks[i] : [];
+        
         // If the new hand has more cards than before
         if (newBacks.length > oldBacks.length) {
             const handDiv = getHandDiv(i);
