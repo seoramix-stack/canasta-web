@@ -164,7 +164,7 @@ app.get('/api/leaderboard', async (req, res) => {
     try {
         const topPlayers = await User.find({})
             .sort({ 'stats.rating': -1 }) // Sort Descending by Rating
-            .limit(100)                   // Top 100 only
+            .limit(10)                   // Top 10 only
             .select('username stats.rating stats.wins stats.losses -_id'); // Only safe fields
 
         res.json({ success: true, leaderboard: topPlayers });

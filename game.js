@@ -291,7 +291,13 @@ class CanastaGame {
         for (let c of cards) {
             if (c.rank !== rank && !c.isWild) return { success: false, message: "Mixed ranks!" };
         }
-        
+        let simulatedPile = existingMeld ? [...existingMeld, ...cards] : [...cards];
+        if (simulatedPile.length >= 7) {
+            let naturalCount = simulatedPile.filter(c => !c.isWild).length;
+            if (naturalCount < 4) {
+                return { success: false, message: "Invalid: A Canasta must have at least 4 natural cards." };
+            }
+        }
         // --- PHASE 2 UPDATE: Check Config for Canastas Needed ---
         let cardsRemaining = hand.length - cards.length;
         
@@ -458,7 +464,14 @@ class CanastaGame {
                 if (cards.some(c => c.isWild)) return { success: false, message: "Black 3s cannot contain Wilds." };
                 if ((hand.length - usedIndices.size) !== 0) return { success: false, message: "Black 3s allowed only when going out." };
             }
+            // Construct the effective pile for this specific meld
+            let effectivePile = [...cards];
+            if (wantPickup && index === 0) effectivePile.push(topCard);
 
+            if (effectivePile.length >= 7) {
+                let natCount = effectivePile.filter(c => !c.isWild).length;
+                if (natCount < 4) return { success: false, message: `Meld ${meldRank} is invalid. Canastas need 4+ naturals.` };
+            }
             let wildCount = 0;
             for (let c of cards) {
                 if (!c.isWild && c.rank !== meldRank) return { success: false, message: "Mixed ranks in " + meldRank };
