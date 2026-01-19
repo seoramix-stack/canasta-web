@@ -903,7 +903,7 @@ async function startBotGame(humanSocket, difficulty, playerCount = 4, ruleset = 
         games[gameId].names = [userName, "Bot 1"];
         
         // Spawn 1 Bot at Seat 1
-        gameBots[gameId][1] = new CanastaBot(1, difficulty);
+        gameBots[gameId][1] = new CanastaBot(1, difficulty, '2p');
         
     } else {
         // 4P: Human (Seat 0) vs Bots (Seats 1, 2, 3)
@@ -911,7 +911,7 @@ async function startBotGame(humanSocket, difficulty, playerCount = 4, ruleset = 
         
         // Spawn 3 Bots
         for (let i = 1; i <= 3; i++) {
-            gameBots[gameId][i] = new CanastaBot(i, difficulty);
+            gameBots[gameId][i] = new CanastaBot(i, difficulty, '4p');
         }
     }
 

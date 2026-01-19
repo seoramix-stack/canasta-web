@@ -248,6 +248,7 @@ class CanastaGame {
         indicesToRemove.sort((a,b) => b-a).forEach(i => hand.splice(i, 1));
         if (pile.length > 0) hand.push(...pile);
         
+        this.checkRed3s(playerIndex);
         this.sortHand(playerIndex);
         this.turnPhase = "playing";
         return { success: true, method: method };
@@ -516,7 +517,10 @@ class CanastaGame {
         // --- EXECUTION ---
         if (wantPickup) {
             let pile = this.discardPile.splice(0, this.discardPile.length);
+            pile.pop(); 
+        
             this.players[seat].push(...pile);
+            this.checkRed3s(seat);
         }
 
         meldsData.forEach((m, index) => {
