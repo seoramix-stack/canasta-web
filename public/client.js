@@ -686,7 +686,6 @@ state.socket.on('penalty_notification', (data) => {
         state.mySeat = data.seat;
     UI.navTo('screen-lobby');
     document.getElementById('lobby-room-id').innerText = data.gameId;
-    document.getElementById('lobby-pin').innerText = data.pin;
     document.getElementById('lobby-host-controls').style.display = 'block';
     document.getElementById('lobby-wait-msg').style.display = 'none';
     
@@ -794,18 +793,14 @@ function updateTimerDOM() {
 // --- PRIVATE ROOM LOGIC ---
 
 window.doCreateRoom = () => {
-    const roomName = document.getElementById('create-room-name').value; // Get Name
-    const pin = document.getElementById('create-pin').value;
+    const roomName = document.getElementById('create-room-name').value; 
     
-    // Validation
+    // Validation: Only Room Name required
     if (!roomName) return alert("Please enter a Room Name");
-    if (!pin || pin.length !== 4) return alert("Enter a 4-digit PIN");
     
-    // --- UPDATE: Send playerCount from state ---
-    // (We reuse the state.currentPlayerCount set by the button click)
     state.socket.emit('request_create_private', { 
         gameId: roomName, 
-        pin: pin,
+        // No PIN sent
         playerCount: state.currentPlayerCount || 4, 
         ruleset: state.currentRuleset || 'standard'
     });
@@ -813,10 +808,11 @@ window.doCreateRoom = () => {
 
 window.doJoinPrivate = () => {
     const gameId = document.getElementById('join-id').value;
-    const pin = document.getElementById('join-pin').value;
-    if(!gameId || !pin) return alert("Fill all fields");
+    
+    // Validation: Only Game ID required
+    if(!gameId) return alert("Please enter the Room Name");
 
-    state.socket.emit('request_join_private', { gameId, pin });
+    state.socket.emit('request_join_private', { gameId });
 };
 
 // --- FRIENDS LOGIC ---

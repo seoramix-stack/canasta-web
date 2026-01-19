@@ -302,32 +302,29 @@ io.on('connection', async (socket) => {
     });
 
     socket.on('request_create_private', (data) => {
-        // 1. Validate Input
-        const requestedId = data.gameId.trim();
-        const pin = data.pin;
+        // 1. Validate Input (Room Name is the ID)
+        const requestedId = data.gameId ? data.gameId.trim() : "";
         const pCount = data.playerCount || 4; 
-        const ruleset = data.ruleset || 'standard'; // <--- Get Ruleset
+        const ruleset = data.ruleset || 'standard'; 
 
-        if (!requestedId || !pin) return socket.emit('error_message', "Invalid data.");
+        if (!requestedId) return socket.emit('error_message', "Please enter a Room Name.");
         
+        // 2. Check if Room ID is taken
         if (games[requestedId]) {
-            return socket.emit('error_message', "Room name already exists. Choose another.");
+            return socket.emit('error_message', "Room Name already exists. Try another.");
         }
 
         const gameId = requestedId; 
         
-        // 2. Determine Base Config (Hand Size)
+        // 3. Determine Base Config
         let config = (pCount === 2) 
             ? { PLAYER_COUNT: 2, HAND_SIZE: 15 } 
             : { PLAYER_COUNT: 4, HAND_SIZE: 11 };
 
-        // 3. Apply Ruleset Overrides
         if (ruleset === 'easy') {
-            // Easy Mode: Draw 1, Need 1 Canasta to go out
             config.DRAW_COUNT = 1;
             config.MIN_CANASTAS_OUT = 1;
         } else {
-            // Standard Mode: Draw 2, Need 2 Canastas to go out
             config.DRAW_COUNT = 2;
             config.MIN_CANASTAS_OUT = 2;
         }
@@ -336,9 +333,9 @@ io.on('connection', async (socket) => {
         games[gameId] = new CanastaGame(config);
         games[gameId].isPrivate = true;
         games[gameId].isLobby = true;
-        games[gameId].pin = pin;
         games[gameId].host = socket.id;
         games[gameId].readySeats = new Set();
+        games[gameId].matchIsOver = false; // Flag to track completion for cleanup
         
         games[gameId].names = Array(pCount).fill(null);
         games[gameId].names[0] = socket.handshake.auth.username || "Host";
@@ -348,21 +345,20 @@ io.on('connection', async (socket) => {
         socket.data.gameId = gameId;
         socket.data.seat = 0; 
         
-        socket.emit('private_created', { gameId: gameId, pin: pin, seat: 0 });
+        // Send success (Removed PIN from payload)
+        socket.emit('private_created', { gameId: gameId, seat: 0 });
         broadcastLobby(gameId);
     });
 
     socket.on('request_join_private', (data) => {
-        const { gameId, pin } = data;
+        const { gameId } = data;
         const game = games[gameId];
 
         if (!game) return socket.emit('error_message', "Game not found.");
-        if (game.pin !== pin) return socket.emit('error_message', "Invalid PIN.");
         if (!game.isPrivate) return socket.emit('error_message', "Not a private game.");
         
         // Find the first empty seat (null)
         let seat = game.names.findIndex(n => n === null);
-        
         if (seat === -1) return socket.emit('error_message', "Room is full.");
 
         // Join
@@ -800,6 +796,7 @@ io.on('connection', async (socket) => {
     socket.on('leave_game', async () => { 
         const gameId = socket.data.gameId;
         const token = socket.handshake.auth.token;
+        const game = games[gameId];
         
         // --- NEW CLEANUP LOGIC ---
         // Loop through all queue keys ('rated_2', 'rated_4', 'casual_2', etc.)
@@ -827,6 +824,24 @@ io.on('connection', async (socket) => {
         // Leave the socket room
         if (gameId) {
             await socket.leave(gameId); 
+            if (game && game.isPrivate && game.isLobby) {
+            const seat = socket.data.seat;
+            if (seat !== undefined && seat !== null) {
+                console.log(`[LOBBY] Seat ${seat} freed in Game ${gameId}`);
+                game.names[seat] = null; // Clear the name
+                
+                // Remove from ready seats if they clicked ready
+                if (game.readySeats) game.readySeats.delete(seat);
+
+                // Notify others in the lobby
+                broadcastLobby(gameId);
+            }
+        }
+            if (game && game.isPrivate && game.matchIsOver) {
+                console.log(`[CLEANUP] Private Match ${gameId} finished and player left. Deleting room.`);
+                delete games[gameId];
+                if (gameBots[gameId]) delete gameBots[gameId];
+            }
         }
     });
     
@@ -1138,6 +1153,7 @@ async function handleRoundEnd(gameId, io) {
     // 5. CASE A: MATCH OVER (5000+ points)
     if (result.isMatchOver) {
         console.log(`[MATCH END] Game ${gameId} won by ${result.winner}`);
+        game.matchIsOver = true;
 
         // Prepare Data Holder for Client
         let ratingUpdates = {}; // Will hold { seatIndex: { newRating, delta } }
