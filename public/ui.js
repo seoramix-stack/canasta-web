@@ -85,7 +85,25 @@ export function updateUI(data) {
     if (data.maxPlayers) {
         state.currentPlayerCount = data.maxPlayers;
     }
-    
+    const lobbyList = document.getElementById('lobby-players');
+    if (lobbyList && data.names) {
+        lobbyList.innerHTML = ""; // Clear existing list
+        
+        data.names.forEach(name => {
+            const row = document.createElement('div');
+            // Simple styling for the list item
+            row.style.cssText = "padding: 8px; border-bottom: 1px solid #555; font-size: 16px; color: white;";
+            
+            // Dim text if it's still a placeholder
+            if (name === "Waiting...") {
+                row.style.color = "#7f8c8d";
+                row.style.fontStyle = "italic";
+            }
+            
+            row.innerText = name;
+            lobbyList.appendChild(row);
+        });
+    }
     // Safety check
     if(!document.getElementById('game-ui')) return;
 
@@ -730,5 +748,70 @@ function showScoreModal(round, match, names) {
         nextBtn.style.opacity = "1";
         nextBtn.style.cursor = "pointer";
         nextBtn.onclick = window.startNextRound;
+    }
+}
+// ui.js
+
+export function renderLobbySeats(data, mySeat) {
+    // Ensure we are on the lobby screen
+    navTo('screen-lobby');
+
+    const container = document.getElementById('lobby-players');
+    container.innerHTML = ""; 
+    container.style.display = "flex";
+    container.style.flexWrap = "wrap";
+    container.style.gap = "10px";
+    container.style.justifyContent = "center";
+
+    // Host Controls
+    const hostControls = document.getElementById('lobby-host-controls');
+    // Simple check: If I am in seat 0, I am host (default logic)
+    // Or simpler: The server won't execute the command if I'm not host.
+    // Let's just show the button if I am Seat 0 for now.
+    if (mySeat === 0) {
+        hostControls.style.display = 'block';
+        // Rebind the button to the NEW function
+        const btn = hostControls.querySelector('button');
+        btn.onclick = window.hostStartGame;
+        btn.innerText = "START MATCH";
+    } else {
+        hostControls.style.display = 'none';
+        document.getElementById('lobby-wait-msg').style.display = 'block';
+    }
+
+    // Render 4 Slots
+    for (let i = 0; i < data.maxPlayers; i++) {
+        const name = data.names[i];
+        const isMe = (i === mySeat);
+        const isEmpty = (name === null);
+
+        const slot = document.createElement('div');
+        slot.style.cssText = `
+            width: 45%; 
+            height: 80px; 
+            background: ${isEmpty ? 'rgba(255,255,255,0.1)' : '#2c3e50'}; 
+            border: 2px solid ${isMe ? '#f1c40f' : '#555'}; 
+            border-radius: 8px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            cursor: ${isEmpty ? 'pointer' : 'default'};
+            transition: all 0.2s;
+        `;
+
+        // Teams Label
+        let teamLabel = (i % 2 === 0) ? "TEAM 1" : "TEAM 2";
+        
+        if (isEmpty) {
+            slot.innerHTML = `<div style="color:#7f8c8d; font-size:12px;">${teamLabel}</div><div style="color:#aaa;">OPEN SEAT</div>`;
+            slot.onclick = () => window.switchSeat(i);
+            slot.onmouseover = () => slot.style.background = 'rgba(255,255,255,0.2)';
+            slot.onmouseout = () => slot.style.background = 'rgba(255,255,255,0.1)';
+        } else {
+            slot.innerHTML = `
+                <div style="color:#f1c40f; font-size:10px; font-weight:bold;">${teamLabel}</div>
+                <div style="color:white; font-weight:bold; font-size:16px;">${name} ${isMe ? '(YOU)' : ''}</div>
+            `;
+        }
+
+        container.appendChild(slot);
     }
 }

@@ -188,6 +188,81 @@ io.on('connection', async (socket) => {
         }
     }
 
+    // --- LOBBY ACTIONS ---
+
+    socket.on('act_switch_seat', (targetSeat) => {
+        const gameId = socket.data.gameId;
+        const game = games[gameId];
+        const currentSeat = socket.data.seat;
+
+        if (!game || !game.isLobby) return;
+        if (targetSeat < 0 || targetSeat >= game.config.PLAYER_COUNT) return;
+        if (game.names[targetSeat] !== null) return; // Seat taken
+
+        // Swap Names
+        game.names[targetSeat] = game.names[currentSeat];
+        game.names[currentSeat] = null;
+        
+        // Update Socket Data
+        socket.data.seat = targetSeat;
+        socket.emit('seat_changed', { newSeat: targetSeat });
+        
+        // Update Session if exists
+        const token = socket.handshake.auth.token;
+        if (token && playerSessions[token]) {
+            playerSessions[token].seat = targetSeat;
+        }
+
+        // If I was host (Seat 0), I am still host logic-wise, 
+        // but for simplicity in this code, let's say Seat 0 is always "Admin".
+        // If Host moves, we might lose control. 
+        // FIX: Keep game.host = socket.id so seat doesn't matter for permissions.
+
+        broadcastLobby(gameId);
+    });
+
+    socket.on('act_host_start', () => {
+        const gameId = socket.data.gameId;
+        const game = games[gameId];
+        
+        if (!game || !game.isLobby) return;
+        if (game.host !== socket.id) return; // Only Host can start
+
+        // Check if all seats have names
+        const filledSeats = game.names.filter(n => n !== null).length;
+        if (filledSeats < game.config.PLAYER_COUNT) {
+            return socket.emit('error_message', "Wait for all players!");
+        }
+
+        console.log(`[LOBBY] Host starting Game ${gameId}`);
+
+        // 1. DEAL CARDS NOW
+        game.resetMatch(); 
+        game.isLobby = false;
+
+        // 2. MOVE EVERYONE TO GAME SCREEN
+        io.sockets.sockets.forEach((s) => {
+            if (s.data.gameId === gameId) {
+                // Ensure socket data matches current lobby seat
+                // (In case of race conditions, but switch_seat handles it)
+                sendUpdate(gameId, s.id, s.data.seat);
+            }
+        });
+    });
+
+    // Helper function at bottom of server.js
+    function broadcastLobby(gameId) {
+        const game = games[gameId];
+        if (!game) return;
+        
+        io.to(gameId).emit('lobby_update', {
+            names: game.names,
+            hostSeat: 0, // Simplified: Seat 0 is visually the "top"
+            maxPlayers: game.config.PLAYER_COUNT,
+            isHost: false // Client will check their own ID
+        });
+    }
+
     // --- RECONNECTION LOGIC ---
     const session = playerSessions[token];
 
@@ -259,13 +334,13 @@ io.on('connection', async (socket) => {
 
         // 4. Initialize Game
         games[gameId] = new CanastaGame(config);
-        games[gameId].resetMatch();
         games[gameId].isPrivate = true;
+        games[gameId].isLobby = true;
         games[gameId].pin = pin;
         games[gameId].host = socket.id;
         games[gameId].readySeats = new Set();
         
-        games[gameId].names = Array(pCount).fill("Waiting...");
+        games[gameId].names = Array(pCount).fill(null);
         games[gameId].names[0] = socket.handshake.auth.username || "Host";
         
         // Join Host
@@ -273,8 +348,8 @@ io.on('connection', async (socket) => {
         socket.data.gameId = gameId;
         socket.data.seat = 0; 
         
-        socket.emit('private_created', { gameId: gameId, pin: pin });
-        sendUpdate(gameId, socket.id, 0);
+        socket.emit('private_created', { gameId: gameId, pin: pin, seat: 0 });
+        broadcastLobby(gameId);
     });
 
     socket.on('request_join_private', (data) => {
@@ -285,19 +360,10 @@ io.on('connection', async (socket) => {
         if (game.pin !== pin) return socket.emit('error_message', "Invalid PIN.");
         if (!game.isPrivate) return socket.emit('error_message', "Not a private game.");
         
-        // Find empty seat
-        let seat = -1;
-        const socketsInRoom = io.sockets.adapter.rooms.get(gameId);
-        const playerCount = socketsInRoom ? socketsInRoom.size : 0;
+        // Find the first empty seat (null)
+        let seat = game.names.findIndex(n => n === null);
         
-        // --- UPDATE: Check against Game Configuration ---
-        const maxPlayers = game.config.PLAYER_COUNT; // Uses the game's internal config
-
-        if (currentCount >= maxPlayers) {
-            return socket.emit('error_message', "Room is full.");
-        }
-
-        seat = playerCount; // 0 is taken, so 1, 2, 3...
+        if (seat === -1) return socket.emit('error_message', "Room is full.");
 
         // Join
         socket.join(gameId);
@@ -308,7 +374,18 @@ io.on('connection', async (socket) => {
         const pName = socket.handshake.auth.username || `Player ${seat+1}`;
         game.names[seat] = pName;
 
+        const token = socket.handshake.auth.token;
+        if (token) {
+            // Save the guest's session so the server remembers them
+            playerSessions[token] = { 
+                gameId: gameId, 
+                seat: seat, 
+                username: pName 
+            };
+        }
+
         // Broadcast to everyone in room
+        broadcastLobby(gameId);
         broadcastAll(gameId);
         socket.emit('joined_private_success', { gameId, seat });
         
@@ -443,7 +520,12 @@ io.on('connection', async (socket) => {
              game.turnPhase = 'draw'; 
              game.processingTurnFor = null;
             
-             broadcastAll(gameId, game.currentPlayer); 
+             // 1. Force everyone to the game screen (Client listens for 'deal_hand' to switch screens)
+             io.sockets.sockets.forEach((s) => {
+                 if (s.data.gameId === gameId) {
+                     sendUpdate(gameId, s.id, s.data.seat);
+                 }
+             });
         }
     });
 

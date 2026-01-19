@@ -4,6 +4,13 @@ import { state, saveSession, logout } from './state.js';
 import * as UI from './ui.js';
 import * as Anim from './animations.js';
 
+window.switchSeat = (targetSeat) => {
+    if (state.socket) state.socket.emit('act_switch_seat', targetSeat);
+};
+
+window.hostStartGame = () => {
+    if (state.socket) state.socket.emit('act_host_start');
+};
 window.hardReset = () => {
     localStorage.clear();
     location.reload();
@@ -438,9 +445,17 @@ function getOpeningReq(score) {
 function initSocket(token) {
     if (state.socket) return; 
     const storedUser = localStorage.getItem("canasta_user"); 
-
+    
     state.socket = io({
         auth: { token: token, username: storedUser }
+    });
+    state.socket.on('lobby_update', (data) => {
+        // This triggers the UI update whenever someone joins or switches seats
+        UI.renderLobbySeats(data, state.mySeat);
+    });
+    state.socket.on('seat_changed', (data) => {
+        state.mySeat = data.newSeat;
+        // We don't need to call render here because 'lobby_update' usually follows immediately
     });
     state.socket.on('next_round_ack', () => {
         // Change the button on the Scoreboard to show we are waiting
@@ -668,6 +683,7 @@ state.socket.on('penalty_notification', (data) => {
     state.socket.on('error_message', (msg) => alert(msg));
     
     state.socket.on('private_created', (data) => {
+        state.mySeat = data.seat;
     UI.navTo('screen-lobby');
     document.getElementById('lobby-room-id').innerText = data.gameId;
     document.getElementById('lobby-pin').innerText = data.pin;
@@ -686,6 +702,7 @@ state.socket.on('rematch_update', (data) => {
 });
 
 state.socket.on('joined_private_success', (data) => {
+    state.mySeat = data.seat;
     UI.navTo('screen-lobby');
     document.getElementById('lobby-room-id').innerText = data.gameId;
     document.getElementById('lobby-host-controls').style.display = 'none';
