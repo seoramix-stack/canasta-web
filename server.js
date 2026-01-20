@@ -759,19 +759,22 @@ io.on('connection', async (socket) => {
         const gameId = socket.data.gameId;
         const token = socket.handshake.auth.token;
         const game = games[gameId];
+        
+        // 1. Remove from matchmaking queue
         matchmakingService.removeSocketFromQueue(socket.id);
-});
 
         console.log(`[Leave] User requesting to leave Game ${gameId}`);
         
-        // Remove from session tracking
+        // 2. Remove from session tracking
         if (token && playerSessions[token]) delete playerSessions[token];
         socket.data.gameId = null;
         socket.data.seat = null;
         
-        // Leave the socket room
+        // 3. Leave the socket room & Clean up
         if (gameId) {
             await socket.leave(gameId); 
+            
+            // Handle Lobby Leave
             if (game && game.isPrivate && game.isLobby) {
                 const seat = socket.data.seat;
                 if (seat !== undefined && seat !== null) {
@@ -782,12 +785,14 @@ io.on('connection', async (socket) => {
                 }
             }
 
+            // Handle Private Match Cleanup
             if (game && game.isPrivate && game.matchIsOver) {
                 console.log(`[CLEANUP] Private Match ${gameId} finished and player left. Deleting room.`);
                 delete games[gameId];
                 if (gameBots[gameId]) delete gameBots[gameId];
             }
         }
+    });
     });
 
 // --- HELPER FUNCTIONS ---
