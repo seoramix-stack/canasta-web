@@ -977,59 +977,62 @@ function joinGlobalGame(socket, data) {
     const pCount = (data && parseInt(data.playerCount) === 2) ? 2 : 4;
     const mode = (data && data.mode === 'rated') ? 'rated' : 'casual';
     
-    // 2. Generate Queue Key (e.g. 'rated_4' or 'casual_2')
+    // 2. Generate Queue Key
     const queueKey = `${mode}_${pCount}`;
     const queue = matchmakingQueues[queueKey];
 
-    // 3. Avoid duplicates
-    if (queue.find(s => s.id === socket.id)) return;
+    // 3. Avoid duplicates (FIXED: access s.socket.id)
+    if (queue.find(s => s.socket.id === socket.id)) return;
 
     // 4. Add to specific queue
     queue.push({
-    socket: socket,
-    joinTime: Date.now()
-});
-
-    // 5. Notify players in THIS queue
-    queue.forEach(p => {
-    const s = p.socket ? p.socket : p; 
-    s.emit('queue_status', { 
-        playersFound: queue.length, 
-        totalNeeded: pCount // <--- CHANGE THIS (was requiredPlayers)
+        socket: socket,
+        joinTime: Date.now()
     });
-});
+
+    // 5. Notify players
+    queue.forEach(p => {
+        const s = p.socket ? p.socket : p; 
+        s.emit('queue_status', { 
+            playersFound: queue.length, 
+            totalNeeded: pCount 
+        });
+    });
 
     // 6. Check if Full
     if (queue.length >= pCount) {
-        const players = queue.splice(0, pCount);
+        // 'players' is an array of objects: [{ socket, joinTime }, ...]
+        const playersWrappers = queue.splice(0, pCount);
         const gameId = generateGameId();
         
-        // --- CONFIGURATION ---
         const gameConfig = (pCount === 2) 
             ? { PLAYER_COUNT: 2, HAND_SIZE: 15 } 
             : { PLAYER_COUNT: 4, HAND_SIZE: 11 };
 
         games[gameId] = new CanastaGame(gameConfig);
         games[gameId].resetMatch();
-        
-        // --- CRITICAL FIX: Only set isRated for Rated Mode ---
         games[gameId].isRated = (mode === 'rated'); 
         
         games[gameId].readySeats = new Set();
         games[gameId].currentPlayer = -1;
         games[gameId].names = Array(pCount).fill("Player");
 
-        players.forEach((p, i) => {
-            p.join(gameId); 
-            p.data.seat = i;
-            p.data.gameId = gameId;
+        // --- CRITICAL FIX START ---
+        // Iterate through the wrappers to get the real sockets
+        playersWrappers.forEach((pObj, i) => {
+            const pSocket = pObj.socket; // Extract the real socket
 
-            const pName = p.handshake.auth.username || `Player ${i+1}`;
+            pSocket.join(gameId); 
+            pSocket.data.seat = i;
+            pSocket.data.gameId = gameId;
+
+            const pName = pSocket.handshake.auth.username || `Player ${i+1}`;
             games[gameId].names[i] = pName;
 
-            const token = p.handshake.auth.token;
+            const token = pSocket.handshake.auth.token;
             if (!games[gameId].playerTokens) games[gameId].playerTokens = {};
-    if (token) games[gameId].playerTokens[i] = token;
+            if (token) games[gameId].playerTokens[i] = token;
+            
             if (token) {
                  const cachedName = playerSessions[token] ? playerSessions[token].username : null;
                  playerSessions[token] = { 
@@ -1038,8 +1041,9 @@ function joinGlobalGame(socket, data) {
                      username: cachedName 
                  }; 
             }
-            sendUpdate(gameId, p.id, i);
+            sendUpdate(gameId, pSocket.id, i);
         });
+        // --- CRITICAL FIX END ---
         
         console.log(`[MATCH] Started ${pCount}-Player ${mode.toUpperCase()} Game ${gameId}`);
     }
