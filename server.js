@@ -993,9 +993,9 @@ function joinGlobalGame(socket, data) {
     // 5. Notify players
     queue.forEach(p => {
         const s = p.socket ? p.socket : p; 
-        s.emit('queue_status', { 
-            playersFound: queue.length, 
-            totalNeeded: pCount 
+        s.emit('queue_update', { 
+            count: queue.length,      // Changed from playersFound
+            needed: pCount            // Changed from totalNeeded
         });
     });
 
