@@ -1,4 +1,9 @@
 // server.js
+const BOT_NAMES = [
+    "Alex", "Sarah", "Mike", "Jessica", "David", "Emily", 
+    "Chris", "Anna", "Robert", "Laura", "James", "Linda"
+];
+
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
@@ -1376,23 +1381,24 @@ async function startBackfillGame(humanSocket, totalPlayers, mode) {
 
     games[gameId] = new CanastaGame(config);
     games[gameId].resetMatch();
-    games[gameId].isRated = (mode === 'rated'); // Important: Mark if it counts for rank
+    games[gameId].isRated = (mode === 'rated'); 
     
     // Initialize Arrays
     games[gameId].names = Array(totalPlayers).fill(null);
     gameBots[gameId] = {};
 
-    // 1. Setup the Human (Always Seat 0 for simplicity, or randomize if you prefer)
+    // 1. Setup the Human
+    // Join the socket room immediately so they get updates
+    await humanSocket.join(gameId); 
+    
     const humanSeat = 0;
     const humanName = humanSocket.handshake.auth.username || "Player";
-    
     games[gameId].names[humanSeat] = humanName;
     
-    await humanSocket.join(gameId);
+    // Track Human Session
     humanSocket.data.gameId = gameId;
     humanSocket.data.seat = humanSeat;
 
-    // Track session
     const token = humanSocket.handshake.auth.token;
     if (token) {
         playerSessions[token] = { gameId, seat: humanSeat, username: humanName };
@@ -1400,25 +1406,26 @@ async function startBackfillGame(humanSocket, totalPlayers, mode) {
         games[gameId].playerTokens[humanSeat] = token;
     }
 
-    // 2. Fill Empty Seats with "Fake" Humans (Bots)
-    // Use a list of realistic names so the player feels less lonely
-    const botNames = ["Alex", "Sarah", "Mike", "Jessica", "David", "Emily"];
-    
+    // 2. Fill Empty Seats with "Phantom" Bots
     for (let i = 0; i < totalPlayers; i++) {
-        if (i === humanSeat) continue; // Skip human
+        if (i === humanSeat) continue; 
 
-        // Pick a random name
-        const randomName = botNames[Math.floor(Math.random() * botNames.length)];
+        // A. Pick a random name
+        let randomName = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)];
         games[gameId].names[i] = randomName;
 
-        // Create the Bot
-        // Use 'hard' difficulty so they provide a challenge in Ranked
-        // Pass '2p' or '4p' correctly based on totalPlayers
+        // B. Instantiate the Logic
         const type = (totalPlayers === 2) ? '2p' : '4p';
         gameBots[gameId][i] = new CanastaBot(i, 'hard', type);
     }
 
-    // 3. Start the Game
+    // 3. Handle Ranked Downgrade
+    if (mode === 'rated') {
+        humanSocket.emit('error_message', "Queue time exceeded. Starting practice match (Unranked).");
+        games[gameId].isRated = false; 
+    }
+
+    // 4. Start Game
     games[gameId].currentPlayer = 0; 
     games[gameId].roundStarter = 0;
     
