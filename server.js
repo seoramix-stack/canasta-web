@@ -1390,91 +1390,95 @@ setInterval(() => {
     const MAX_WAIT_TIME = 30000; // 30 Seconds
     const now = Date.now();
 
-    // Check all queues (rated_2, rated_4, casual_2, casual_4)
+    // Check all queues
     Object.keys(matchmakingQueues).forEach(key => {
         const queue = matchmakingQueues[key];
         
-        // We iterate backwards so we can remove items safely
-        for (let i = queue.length - 1; i >= 0; i--) {
-            const playerObj = queue[i];
+        if (queue.length === 0) return;
+
+        // Check the OLDEST player (Index 0 is always the one waiting longest)
+        const oldestPlayer = queue[0];
+        
+        if (now - oldestPlayer.joinTime > MAX_WAIT_TIME) {
+            // 1. Determine configuration
+            const [mode, countStr] = key.split('_');
+            const pCount = parseInt(countStr);
+
+            // 2. FLUSH THE QUEUE: Take everyone waiting (up to the max players)
+            // This ensures Humans get paired together before adding bots
+            const humansToGroup = queue.splice(0, pCount);
             
-            if (now - playerObj.joinTime > MAX_WAIT_TIME) {
-                // 1. Remove player from queue
-                queue.splice(i, 1);
-                
-                // 2. Determine configuration based on queue key
-                // key is like 'rated_4' or 'casual_2'
-                const [mode, countStr] = key.split('_');
-                const pCount = parseInt(countStr);
-                
-                // 3. Start a hybrid game for this lonely player
-                console.log(`[Backfill] Player ${playerObj.socket.id} waited too long in ${key}. Spawning bots.`);
-                startBackfillGame(playerObj.socket, pCount, mode);
-            }
+            console.log(`[Backfill] Queue ${key} timeout. Grouping ${humansToGroup.length} humans with bots.`);
+            
+            // 3. Start ONE game for this group
+            startBackfillGame(humansToGroup, pCount, mode);
         }
     });
-}, 5000); // Run every 5 seconds    
+}, 5000); // Run every 5 seconds   
 
-async function startBackfillGame(humanSocket, totalPlayers, mode) {
+async function startBackfillGame(humanObjects, totalPlayers, mode) {
     const gameId = generateGameId();
     
-    // Config: Standard rules, but ensure we set correct hand size
+    // Config
     const config = (totalPlayers === 2) 
         ? { PLAYER_COUNT: 2, HAND_SIZE: 15 } 
         : { PLAYER_COUNT: 4, HAND_SIZE: 11 };
 
     games[gameId] = new CanastaGame(config);
     games[gameId].resetMatch();
-    games[gameId].isRated = (mode === 'rated'); 
     
-    // Initialize Arrays
+    // Downgrade to Unranked if bots are involved
+    // (You can choose to keep it rated if you want, but usually bot games are unranked)
+    games[gameId].isRated = false; 
+    
     games[gameId].names = Array(totalPlayers).fill(null);
     gameBots[gameId] = {};
 
-    // 1. Setup the Human
-    // Join the socket room immediately so they get updates
-    await humanSocket.join(gameId); 
-    
-    const humanSeat = 0;
-    const humanName = humanSocket.handshake.auth.username || "Player";
-    games[gameId].names[humanSeat] = humanName;
-    
-    // Track Human Session
-    humanSocket.data.gameId = gameId;
-    humanSocket.data.seat = humanSeat;
+    // 1. SETUP HUMANS (Seats 0 to N)
+    // We use a for...of loop to handle async socket joins cleanly
+    for (let i = 0; i < humanObjects.length; i++) {
+        const humanSocket = humanObjects[i].socket;
+        const humanSeat = i;
+        const humanName = humanSocket.handshake.auth.username || `Player ${i+1}`;
 
-    const token = humanSocket.handshake.auth.token;
-    if (token) {
-        playerSessions[token] = { gameId, seat: humanSeat, username: humanName };
-        if (!games[gameId].playerTokens) games[gameId].playerTokens = {};
-        games[gameId].playerTokens[humanSeat] = token;
+        await humanSocket.join(gameId); 
+        
+        games[gameId].names[humanSeat] = humanName;
+        humanSocket.data.gameId = gameId;
+        humanSocket.data.seat = humanSeat;
+
+        // Session Tracking
+        const token = humanSocket.handshake.auth.token;
+        if (token) {
+            playerSessions[token] = { gameId, seat: humanSeat, username: humanName };
+            if (!games[gameId].playerTokens) games[gameId].playerTokens = {};
+            games[gameId].playerTokens[humanSeat] = token;
+        }
+
+        // Notify user
+        humanSocket.emit('error_message', "Queue time exceeded. Filling remaining spots with bots.");
     }
 
-    // 2. Fill Empty Seats with "Phantom" Bots
-    for (let i = 0; i < totalPlayers; i++) {
-        if (i === humanSeat) continue; 
-
-        // A. Pick a random name
+    // 2. SETUP BOTS (Seats N to Total)
+    const type = (totalPlayers === 2) ? '2p' : '4p';
+    
+    for (let i = humanObjects.length; i < totalPlayers; i++) {
+        // Pick random name
         let randomName = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)];
         games[gameId].names[i] = randomName;
 
-        // B. Instantiate the Logic
-        const type = (totalPlayers === 2) ? '2p' : '4p';
+        // Instantiate Bot
         gameBots[gameId][i] = new CanastaBot(i, 'hard', type);
     }
 
-    // 3. Handle Ranked Downgrade
-    if (mode === 'rated') {
-        humanSocket.emit('error_message', "Queue time exceeded. Starting practice match (Unranked).");
-        games[gameId].isRated = false; 
-    }
-
-    // 4. Start Game
+    // 3. START GAME
     games[gameId].currentPlayer = 0; 
     games[gameId].roundStarter = 0;
     
-    console.log(`[Backfill] Started Hybrid ${totalPlayers}P Game ${gameId}`);
+    console.log(`[Backfill] Started Hybrid ${totalPlayers}P Game ${gameId} with ${humanObjects.length} Humans`);
     
-    // Send update to the human
-    sendUpdate(gameId, humanSocket.id, humanSeat);
+    // 4. Send updates to ALL humans
+    humanObjects.forEach((h, index) => {
+        sendUpdate(gameId, h.socket.id, index);
+    });
 }
