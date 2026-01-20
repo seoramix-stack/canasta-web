@@ -15,7 +15,14 @@ const { calculateEloChange } = require('./elo');
 const app = express();
 app.use(express.json());
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+    cors: {
+        origin: ["https://canastamaster.club", "http://canastamaster.club"], // Allow your domain
+        methods: ["GET", "POST"],
+        credentials: true
+    },
+    transports: ['websocket', 'polling'] // Force support for both
+});
 
 app.use(express.static('public')); 
 
@@ -192,6 +199,28 @@ io.on('connection', async (socket) => {
             playerSessions[token].username = handshakeUser;
         }
     }
+
+    socket.on('disconnect', () => {
+    console.log(`[Disconnect] ${socket.id}`);
+    
+    // Reuse the same cleanup logic as leave_game to remove them from queues
+    Object.keys(matchmakingQueues).forEach(key => {
+        const q = matchmakingQueues[key];
+        const idx = q.findIndex(s => (s.socket ? s.socket.id : s.id) === socket.id);
+        
+        if (idx !== -1) {
+            q.splice(idx, 1);
+            const needed = parseInt(key.split('_')[1]);
+            q.forEach(p => {
+                const s = p.socket ? p.socket : p;
+                s.emit('queue_update', { count: q.length, needed: needed });
+            });
+        }
+    });
+
+    // Remove from session tracking (Optional, mostly handled by session exp)
+    // if (playerSessions[token]) delete playerSessions[token];
+});
 
     // --- LOBBY ACTIONS ---
 
@@ -817,18 +846,24 @@ io.on('connection', async (socket) => {
         // --- NEW CLEANUP LOGIC ---
         // Loop through all queue keys ('rated_2', 'rated_4', 'casual_2', etc.)
         Object.keys(matchmakingQueues).forEach(key => {
-            const q = matchmakingQueues[key];
-            const idx = q.findIndex(s => s.id === socket.id);
-            if (idx !== -1) {
-                q.splice(idx, 1);
-                
-                // Parse the needed count from the key (e.g. 'rated_4' -> 4)
-                const needed = parseInt(key.split('_')[1]);
-                
-                // Notify remaining players in THAT queue
-                q.forEach(p => p.emit('queue_update', { count: q.length, needed: needed }));
-            }
+    const q = matchmakingQueues[key];
+    
+    // 1. Correctly find the index by checking s.socket.id
+    const idx = q.findIndex(s => (s.socket ? s.socket.id : s.id) === socket.id);
+    
+    if (idx !== -1) {
+        q.splice(idx, 1);
+        
+        // Parse the needed count
+        const needed = parseInt(key.split('_')[1]);
+        
+        // 2. Correctly emit to remaining sockets
+        q.forEach(p => {
+            const s = p.socket ? p.socket : p;
+            s.emit('queue_update', { count: q.length, needed: needed });
         });
+    }
+});
 
         console.log(`[Leave] User requesting to leave Game ${gameId}`);
         
@@ -857,19 +892,20 @@ io.on('connection', async (socket) => {
             }
         }
     });
-    
-    socket.on('disconnect', () => {
-        // --- NEW CLEANUP LOGIC ---
-        Object.keys(matchmakingQueues).forEach(key => {
-            const q = matchmakingQueues[key];
-            const idx = q.findIndex(s => s.id === socket.id);
-            if (idx !== -1) {
-                q.splice(idx, 1);
-                // No need to emit update here usually, but you can if you want real-time queue counts for others
-            }
-        });
     });
-});
+    
+    function removeSocketFromQueue(socketId) {
+    Object.keys(matchmakingQueues).forEach(key => {
+        let queue = matchmakingQueues[key];
+        
+        // Find index by checking p.socket.id
+        const index = queue.findIndex(p => (p.socket ? p.socket.id : p.id) === socketId);
+        
+        if (index !== -1) {
+            queue.splice(index, 1); // Remove them
+        }
+    });
+}
 
 // --- HELPER FUNCTIONS ---
 
@@ -956,8 +992,12 @@ function joinGlobalGame(socket, data) {
 
     // 5. Notify players in THIS queue
     queue.forEach(p => {
-        p.emit('queue_update', { count: queue.length, needed: pCount });
+    const s = p.socket ? p.socket : p; 
+    s.emit('queue_status', { 
+        playersFound: queue.length, 
+        totalNeeded: pCount // <--- CHANGE THIS (was requiredPlayers)
     });
+});
 
     // 6. Check if Full
     if (queue.length >= pCount) {
