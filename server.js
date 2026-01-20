@@ -944,7 +944,10 @@ function joinGlobalGame(socket, data) {
     if (queue.find(s => s.id === socket.id)) return;
 
     // 4. Add to specific queue
-    queue.push(socket);
+    queue.push({
+    socket: socket,
+    joinTime: Date.now()
+});
 
     // 5. Notify players in THIS queue
     queue.forEach(p => {
@@ -1333,3 +1336,94 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
     if (DEV_MODE) console.log("⚠️  DEV MODE ACTIVE: DB Disabled. Use ANY login.");
 });
+
+setInterval(() => {
+    const MAX_WAIT_TIME = 30000; // 30 Seconds
+    const now = Date.now();
+
+    // Check all queues (rated_2, rated_4, casual_2, casual_4)
+    Object.keys(matchmakingQueues).forEach(key => {
+        const queue = matchmakingQueues[key];
+        
+        // We iterate backwards so we can remove items safely
+        for (let i = queue.length - 1; i >= 0; i--) {
+            const playerObj = queue[i];
+            
+            if (now - playerObj.joinTime > MAX_WAIT_TIME) {
+                // 1. Remove player from queue
+                queue.splice(i, 1);
+                
+                // 2. Determine configuration based on queue key
+                // key is like 'rated_4' or 'casual_2'
+                const [mode, countStr] = key.split('_');
+                const pCount = parseInt(countStr);
+                
+                // 3. Start a hybrid game for this lonely player
+                console.log(`[Backfill] Player ${playerObj.socket.id} waited too long in ${key}. Spawning bots.`);
+                startBackfillGame(playerObj.socket, pCount, mode);
+            }
+        }
+    });
+}, 5000); // Run every 5 seconds    
+
+async function startBackfillGame(humanSocket, totalPlayers, mode) {
+    const gameId = generateGameId();
+    
+    // Config: Standard rules, but ensure we set correct hand size
+    const config = (totalPlayers === 2) 
+        ? { PLAYER_COUNT: 2, HAND_SIZE: 15 } 
+        : { PLAYER_COUNT: 4, HAND_SIZE: 11 };
+
+    games[gameId] = new CanastaGame(config);
+    games[gameId].resetMatch();
+    games[gameId].isRated = (mode === 'rated'); // Important: Mark if it counts for rank
+    
+    // Initialize Arrays
+    games[gameId].names = Array(totalPlayers).fill(null);
+    gameBots[gameId] = {};
+
+    // 1. Setup the Human (Always Seat 0 for simplicity, or randomize if you prefer)
+    const humanSeat = 0;
+    const humanName = humanSocket.handshake.auth.username || "Player";
+    
+    games[gameId].names[humanSeat] = humanName;
+    
+    await humanSocket.join(gameId);
+    humanSocket.data.gameId = gameId;
+    humanSocket.data.seat = humanSeat;
+
+    // Track session
+    const token = humanSocket.handshake.auth.token;
+    if (token) {
+        playerSessions[token] = { gameId, seat: humanSeat, username: humanName };
+        if (!games[gameId].playerTokens) games[gameId].playerTokens = {};
+        games[gameId].playerTokens[humanSeat] = token;
+    }
+
+    // 2. Fill Empty Seats with "Fake" Humans (Bots)
+    // Use a list of realistic names so the player feels less lonely
+    const botNames = ["Alex", "Sarah", "Mike", "Jessica", "David", "Emily"];
+    
+    for (let i = 0; i < totalPlayers; i++) {
+        if (i === humanSeat) continue; // Skip human
+
+        // Pick a random name
+        const randomName = botNames[Math.floor(Math.random() * botNames.length)];
+        games[gameId].names[i] = randomName;
+
+        // Create the Bot
+        // Use 'hard' difficulty so they provide a challenge in Ranked
+        // Pass '2p' or '4p' correctly based on totalPlayers
+        const type = (totalPlayers === 2) ? '2p' : '4p';
+        gameBots[gameId][i] = new CanastaBot(i, 'hard', type);
+    }
+
+    // 3. Start the Game
+    games[gameId].currentPlayer = 0; 
+    games[gameId].roundStarter = 0;
+    
+    console.log(`[Backfill] Started Hybrid ${totalPlayers}P Game ${gameId}`);
+    
+    // Send update to the human
+    sendUpdate(gameId, humanSocket.id, humanSeat);
+}
