@@ -1,9 +1,4 @@
 // server.js
-const BOT_NAMES = [
-    "Alex", "Sarah", "Mike", "Jessica", "David", "Emily", 
-    "Chris", "Anna", "Robert", "Laura", "James", "Linda"
-];
-
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
@@ -41,90 +36,29 @@ if (!MONGO_URI) {
         .catch(err => console.error("[DB] Connection Error:", err));
 }
 
-// --- 3. USER SCHEMA (Only if NOT in Dev Mode) ---
+// --- 3. DATABASE MODELS ---
 let User;
 if (!DEV_MODE) {
-    const userSchema = new mongoose.Schema({
-        username: { type: String, required: true, unique: true },
-        password: { type: String, required: true },
-        token: String,
-        isOnline: { type: Boolean, default: false },
-        stats: {
-            wins: { type: Number, default: 0 },
-            losses: { type: Number, default: 0 },
-            rating: { type: Number, default: 1200 }
-        },
-        // NEW: Social Arrays
-        friends: [{ type: String }],      // Array of Usernames
-        blocked: [{ type: String }]       // Array of Usernames
-    });
-    User = mongoose.model('User', userSchema);
+    // Import the model from the new file
+    User = require('./models/user');
 }
 
-// --- AUTH ROUTES ---
-app.post('/api/register', async (req, res) => {
-    const { username, password } = req.body;
-    
-    // [DEV MODE BYPASS]
-    if (DEV_MODE) {
-        const token = 'dev_token_' + Math.random().toString(36).substr(2, 9);
-        console.log(`[DEV-AUTH] Register Mock: ${username}`);
-        return res.json({ success: true, token: token, username: username });
-    }
-
-    if (!username || !password) return res.json({ success: false, message: "Missing fields" });
-
-    try {
-        const existing = await User.findOne({ username });
-        if (existing) return res.json({ success: false, message: "Username taken" });
-
-        const token = 'user_' + Math.random().toString(36).substr(2, 9);
-        const newUser = new User({ username, password, token });
-        await newUser.save();
-
-        console.log(`[AUTH] Registered: ${username}`);
-        res.json({ success: true, token: token, username: username });
-    } catch (e) {
-        console.error("Register Error:", e);
-        res.status(500).json({ success: false, message: "Server Error" });
-    }
-});
-
-app.post('/api/login', async (req, res) => {
-    const { username, password } = req.body;
-
-    // [DEV MODE BYPASS]
-    if (DEV_MODE) {
-        const token = 'dev_token_' + Math.random().toString(36).substr(2, 9);
-        console.log(`[DEV-AUTH] Login Mock: ${username}`);
-        return res.json({ success: true, token: token, username: username });
-    }
-
-    try {
-        const user = await User.findOne({ username });
-        if (user && user.password === password) {
-            console.log(`[AUTH] Login: ${username}`);
-            res.json({ success: true, token: user.token, username: username });
-        } else {
-            res.json({ success: false, message: "Invalid credentials" });
-        }
-    } catch (e) {
-        res.status(500).json({ success: false, message: "Server Error" });
-    }
-});
+// --- 4. ROUTE MOUNTING ---
+const authRoutes = require('./routes/auth');
+// Mount the routes at '/api', passing in User and the DEV_MODE flag
+app.use('/api', authRoutes(User, DEV_MODE));
 
 // --- GLOBAL STATE ---
 
 const games = {};      
 const gameBots = {};   
 const playerSessions = {};
-const matchmakingQueues = {
-    'rated_2': [],
-    'rated_4': [],
-    'casual_2': [],
-    'casual_4': []
-};
-// server.js - Add this route
+const matchmakingService = require('./services/matchmaking')(
+    games, 
+    gameBots, 
+    playerSessions, 
+    sendUpdate // This function is hoisted, so passing it here is safe
+);
 
 app.get('/api/profile', async (req, res) => {
     // 1. Get token from headers
@@ -202,25 +136,8 @@ io.on('connection', async (socket) => {
 
     socket.on('disconnect', () => {
     console.log(`[Disconnect] ${socket.id}`);
-    
-    // Reuse the same cleanup logic as leave_game to remove them from queues
-    Object.keys(matchmakingQueues).forEach(key => {
-        const q = matchmakingQueues[key];
-        const idx = q.findIndex(s => (s.socket ? s.socket.id : s.id) === socket.id);
-        
-        if (idx !== -1) {
-            q.splice(idx, 1);
-            const needed = parseInt(key.split('_')[1]);
-            q.forEach(p => {
-                const s = p.socket ? p.socket : p;
-                s.emit('queue_update', { count: q.length, needed: needed });
-            });
-        }
+    matchmakingService.removeSocketFromQueue(socket.id);
     });
-
-    // Remove from session tracking (Optional, mostly handled by session exp)
-    // if (playerSessions[token]) delete playerSessions[token];
-});
 
     // --- LOBBY ACTIONS ---
 
@@ -330,7 +247,7 @@ io.on('connection', async (socket) => {
             const pCount = parseInt(data.playerCount) || 4;
             await startBotGame(socket, data.difficulty || 'medium', pCount, data.ruleset || 'standard'); 
         } else {
-            joinGlobalGame(socket, data);
+            matchmakingService.joinGlobalGame(socket, data);
         }
     });
 
@@ -842,27 +759,7 @@ io.on('connection', async (socket) => {
         const gameId = socket.data.gameId;
         const token = socket.handshake.auth.token;
         const game = games[gameId];
-        
-        // --- NEW CLEANUP LOGIC ---
-        // Loop through all queue keys ('rated_2', 'rated_4', 'casual_2', etc.)
-        Object.keys(matchmakingQueues).forEach(key => {
-    const q = matchmakingQueues[key];
-    
-    // 1. Correctly find the index by checking s.socket.id
-    const idx = q.findIndex(s => (s.socket ? s.socket.id : s.id) === socket.id);
-    
-    if (idx !== -1) {
-        q.splice(idx, 1);
-        
-        // Parse the needed count
-        const needed = parseInt(key.split('_')[1]);
-        
-        // 2. Correctly emit to remaining sockets
-        q.forEach(p => {
-            const s = p.socket ? p.socket : p;
-            s.emit('queue_update', { count: q.length, needed: needed });
-        });
-    }
+        matchmakingService.removeSocketFromQueue(socket.id);
 });
 
         console.log(`[Leave] User requesting to leave Game ${gameId}`);
@@ -892,20 +789,6 @@ io.on('connection', async (socket) => {
             }
         }
     });
-    });
-    
-    function removeSocketFromQueue(socketId) {
-    Object.keys(matchmakingQueues).forEach(key => {
-        let queue = matchmakingQueues[key];
-        
-        // Find index by checking p.socket.id
-        const index = queue.findIndex(p => (p.socket ? p.socket.id : p.id) === socketId);
-        
-        if (index !== -1) {
-            queue.splice(index, 1); // Remove them
-        }
-    });
-}
 
 // --- HELPER FUNCTIONS ---
 
@@ -970,83 +853,6 @@ async function startBotGame(humanSocket, difficulty, playerCount = 4, ruleset = 
     games[gameId].roundStarter = 0;
     // Force immediate update
     sendUpdate(gameId, humanSocket.id, 0);
-}
-
-function joinGlobalGame(socket, data) {
-    // 1. Determine Details
-    const pCount = (data && parseInt(data.playerCount) === 2) ? 2 : 4;
-    const mode = (data && data.mode === 'rated') ? 'rated' : 'casual';
-    
-    // 2. Generate Queue Key
-    const queueKey = `${mode}_${pCount}`;
-    const queue = matchmakingQueues[queueKey];
-
-    // 3. Avoid duplicates (FIXED: access s.socket.id)
-    if (queue.find(s => s.socket.id === socket.id)) return;
-
-    // 4. Add to specific queue
-    queue.push({
-        socket: socket,
-        joinTime: Date.now()
-    });
-
-    // 5. Notify players
-    queue.forEach(p => {
-        const s = p.socket ? p.socket : p; 
-        s.emit('queue_update', { 
-            count: queue.length,      // Changed from playersFound
-            needed: pCount            // Changed from totalNeeded
-        });
-    });
-
-    // 6. Check if Full
-    if (queue.length >= pCount) {
-        // 'players' is an array of objects: [{ socket, joinTime }, ...]
-        const playersWrappers = queue.splice(0, pCount);
-        const gameId = generateGameId();
-        
-        const gameConfig = (pCount === 2) 
-            ? { PLAYER_COUNT: 2, HAND_SIZE: 15 } 
-            : { PLAYER_COUNT: 4, HAND_SIZE: 11 };
-
-        games[gameId] = new CanastaGame(gameConfig);
-        games[gameId].resetMatch();
-        games[gameId].isRated = (mode === 'rated'); 
-        
-        games[gameId].readySeats = new Set();
-        games[gameId].currentPlayer = -1;
-        games[gameId].names = Array(pCount).fill("Player");
-
-        // --- CRITICAL FIX START ---
-        // Iterate through the wrappers to get the real sockets
-        playersWrappers.forEach((pObj, i) => {
-            const pSocket = pObj.socket; // Extract the real socket
-
-            pSocket.join(gameId); 
-            pSocket.data.seat = i;
-            pSocket.data.gameId = gameId;
-
-            const pName = pSocket.handshake.auth.username || `Player ${i+1}`;
-            games[gameId].names[i] = pName;
-
-            const token = pSocket.handshake.auth.token;
-            if (!games[gameId].playerTokens) games[gameId].playerTokens = {};
-            if (token) games[gameId].playerTokens[i] = token;
-            
-            if (token) {
-                 const cachedName = playerSessions[token] ? playerSessions[token].username : null;
-                 playerSessions[token] = { 
-                     gameId: gameId, 
-                     seat: i,
-                     username: cachedName 
-                 }; 
-            }
-            sendUpdate(gameId, pSocket.id, i);
-        });
-        // --- CRITICAL FIX END ---
-        
-        console.log(`[MATCH] Started ${pCount}-Player ${mode.toUpperCase()} Game ${gameId}`);
-    }
 }
 
 function getFreezingCard(game) {
@@ -1385,100 +1191,3 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
     if (DEV_MODE) console.log("⚠️  DEV MODE ACTIVE: DB Disabled. Use ANY login.");
 });
-
-setInterval(() => {
-    const MAX_WAIT_TIME = 30000; // 30 Seconds
-    const now = Date.now();
-
-    // Check all queues
-    Object.keys(matchmakingQueues).forEach(key => {
-        const queue = matchmakingQueues[key];
-        
-        if (queue.length === 0) return;
-
-        // Check the OLDEST player (Index 0 is always the one waiting longest)
-        const oldestPlayer = queue[0];
-        
-        if (now - oldestPlayer.joinTime > MAX_WAIT_TIME) {
-            // 1. Determine configuration
-            const [mode, countStr] = key.split('_');
-            const pCount = parseInt(countStr);
-
-            // 2. FLUSH THE QUEUE: Take everyone waiting (up to the max players)
-            // This ensures Humans get paired together before adding bots
-            const humansToGroup = queue.splice(0, pCount);
-            
-            console.log(`[Backfill] Queue ${key} timeout. Grouping ${humansToGroup.length} humans with bots.`);
-            
-            // 3. Start ONE game for this group
-            startBackfillGame(humansToGroup, pCount, mode);
-        }
-    });
-}, 5000); // Run every 5 seconds   
-
-async function startBackfillGame(humanObjects, totalPlayers, mode) {
-    const gameId = generateGameId();
-    
-    // Config
-    const config = (totalPlayers === 2) 
-        ? { PLAYER_COUNT: 2, HAND_SIZE: 15 } 
-        : { PLAYER_COUNT: 4, HAND_SIZE: 11 };
-
-    games[gameId] = new CanastaGame(config);
-    games[gameId].resetMatch();
-    
-    // Downgrade to Unranked if bots are involved
-    // (You can choose to keep it rated if you want, but usually bot games are unranked)
-    games[gameId].isRated = false; 
-    
-    games[gameId].names = Array(totalPlayers).fill(null);
-    gameBots[gameId] = {};
-
-    // 1. SETUP HUMANS (Seats 0 to N)
-    // We use a for...of loop to handle async socket joins cleanly
-    for (let i = 0; i < humanObjects.length; i++) {
-        const humanSocket = humanObjects[i].socket;
-        const humanSeat = i;
-        const humanName = humanSocket.handshake.auth.username || `Player ${i+1}`;
-
-        await humanSocket.join(gameId); 
-        
-        games[gameId].names[humanSeat] = humanName;
-        humanSocket.data.gameId = gameId;
-        humanSocket.data.seat = humanSeat;
-
-        // Session Tracking
-        const token = humanSocket.handshake.auth.token;
-        if (token) {
-            playerSessions[token] = { gameId, seat: humanSeat, username: humanName };
-            if (!games[gameId].playerTokens) games[gameId].playerTokens = {};
-            games[gameId].playerTokens[humanSeat] = token;
-        }
-
-        // Notify user
-        humanSocket.emit('error_message', "Queue time exceeded. Filling remaining spots with bots.");
-    }
-
-    // 2. SETUP BOTS (Seats N to Total)
-    const type = (totalPlayers === 2) ? '2p' : '4p';
-    
-    for (let i = humanObjects.length; i < totalPlayers; i++) {
-        // Pick random name
-        let randomName = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)];
-        games[gameId].names[i] = randomName;
-
-        // Instantiate Bot
-        gameBots[gameId][i] = new CanastaBot(i, 'hard', type);
-    }
-
-    // 3. START GAME
-    games[gameId].currentPlayer = 0; 
-    games[gameId].roundStarter = 0;
-    
-    console.log(`[Backfill] Started Hybrid ${totalPlayers}P Game ${gameId} with ${humanObjects.length} Humans`);
-    
-    // 4. Send updates to ALL humans
-    humanObjects.forEach((h, index) => {
-        sendUpdate(gameId, h.socket.id, index);
-    });
-}
