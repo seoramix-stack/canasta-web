@@ -1102,3 +1102,45 @@ window.drawCard = () => {
 
     state.socket.emit('act_draw', { seat: state.mySeat });
 };
+
+// --- INACTIVITY WARNING UI HELPERS ---
+
+function showInactivityWarning() {
+    // 1. Try to find the existing warning element
+    let el = document.getElementById('inactivity-warning');
+    
+    // 2. If it doesn't exist, create it dynamically
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'inactivity-warning';
+        el.style.cssText = `
+            position: fixed; 
+            top: 20%; 
+            left: 50%; 
+            transform: translateX(-50%); 
+            background: rgba(231, 76, 60, 0.95); 
+            color: white; 
+            padding: 20px 40px; 
+            border-radius: 8px; 
+            z-index: 9999; 
+            font-weight: bold; 
+            font-size: 18px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            border: 2px solid white;
+            text-align: center;
+            display: none; 
+        `;
+        el.innerHTML = "⚠️ <b>WARNING!</b><br>You are inactive. Make a move or you will forfeit in 15s!";
+        document.body.appendChild(el);
+    }
+    
+    // 3. Show it
+    el.style.display = 'block';
+}
+
+function hideInactivityWarning() {
+    const el = document.getElementById('inactivity-warning');
+    if (el) {
+        el.style.display = 'none';
+    }
+}
