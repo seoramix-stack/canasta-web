@@ -15,7 +15,7 @@ window.hardReset = () => {
     localStorage.clear();
     location.reload();
 };
-
+let afkSeconds = 0; // Tracks seconds since last action
 // --- 1. INITIALIZATION ---
 if (state.playerToken && state.playerUsername) {
     initSocket(state.playerToken);
@@ -560,7 +560,9 @@ state.socket.on('penalty_notification', (data) => {
     state.socket.on('update_game', (data) => {
     // 1. Define the full update callback
     const performFullUpdate = () => UI.updateUI(data);
-
+    // RESET AFK TIMER because an action happened
+        afkSeconds = 0; 
+        hideInactivityWarning(); // Remove warning if it was showing
     if (state.activeData) {
         // 2. Pass the FULL update function to animations
         Anim.handleServerAnimations(state.activeData, data, performFullUpdate);
@@ -583,69 +585,114 @@ state.socket.on('penalty_notification', (data) => {
 
     state.socket.on('match_over', (data) => {
         setTimeout(() => {
-            state.discardAnimationActive = false; // Force unlock
-            state.meldAnimationActive = false;    // Force unlock
+            // 1. Cleanup Animations
+            state.discardAnimationActive = false; 
+            state.meldAnimationActive = false;    
             document.querySelectorAll('.flying-card').forEach(el => el.remove());
 
-            // 1. Force close the Score Modal so it doesn't block the Victory screen
+            // 2. Close the Round-End Score Modal (so it doesn't block Victory)
             const scoreModal = document.getElementById('score-modal');
             if (scoreModal) scoreModal.style.display = 'none';
 
-            // 2. Populate Victory Data
-            const vicTitle = document.getElementById('vic-title');
-            const vicSub = document.getElementById('vic-sub');
-            const finalS1 = document.getElementById('final-s1');
-            const finalS2 = document.getElementById('final-s2');
+            // --- 3. SETUP VICTORY SCREEN ---
             
+            // A. Set Team/Player Names in Table Headers
             const name1 = (data.names && data.names[0]) ? data.names[0] : "TEAM 1";
             const name2 = (data.names && data.names[1]) ? data.names[1] : "TEAM 2";
-
-            // Update the score table labels
-            const lbl1 = document.getElementById('vic-name-1');
-            const lbl2 = document.getElementById('vic-name-2');
+            const amITeam1 = (state.mySeat === 0 || state.mySeat === 2);
+            
+            const lbl1 = document.getElementById('vic-header-1');
+            const lbl2 = document.getElementById('vic-header-2');
             
             if (state.currentPlayerCount === 2) {
-                // 2-Player Mode: Show exact usernames
+                // 2-Player: Use exact names
                 if (lbl1) lbl1.innerText = name1;
                 if (lbl2) lbl2.innerText = name2;
             } else {
-                // 4-Player Mode: Use "MY TEAM" / "OPPONENTS"
-                const amITeam1 = (state.mySeat === 0 || state.mySeat === 2);
-                
-                // lbl1 corresponds to Team 1's score row
+                // 4-Player: Use "My Team" vs "Opponents"
                 if (lbl1) lbl1.innerText = amITeam1 ? "MY TEAM" : "OPPONENTS";
-                
-                // lbl2 corresponds to Team 2's score row
                 if (lbl2) lbl2.innerText = amITeam1 ? "OPPONENTS" : "MY TEAM";
             }
+
+            // B. Populate The Detailed Table
+            const round = data.lastRoundScores; // Sent from server
+            const match = data.scores;          // Cumulative totals
             
+            // Helper to safely set text
+            const setText = (id, val) => {
+                const el = document.getElementById(id);
+                if (el) el.innerText = val;
+            };
+
+            if (round) {
+                // --- TEAM 1 COLUMN ---
+                setText('vic-base-1',    round.team1.basePoints);
+                setText('vic-red3-1',    round.team1.red3Points);
+                setText('vic-canasta-1', round.team1.canastaBonus);
+                setText('vic-bonus-1',   round.team1.goOutBonus);
+                setText('vic-deduct-1',  round.team1.deductions);
+                setText('vic-round-1',   round.team1.total);
+                
+                // --- TEAM 2 COLUMN ---
+                setText('vic-base-2',    round.team2.basePoints);
+                setText('vic-red3-2',    round.team2.red3Points);
+                setText('vic-canasta-2', round.team2.canastaBonus);
+                setText('vic-bonus-2',   round.team2.goOutBonus);
+                setText('vic-deduct-2',  round.team2.deductions);
+                setText('vic-round-2',   round.team2.total);
+
+                // --- PREVIOUS SCORE CALCULATION ---
+                // (Match Total - Round Total = Score Before This Round)
+                const prev1 = match.team1 - round.team1.total;
+                const prev2 = match.team2 - round.team2.total;
+                
+                setText('vic-prev-1', prev1);
+                setText('vic-prev-2', prev2);
+            }
+
+            // C. Final Grand Totals
+            setText('vic-total-1', match.team1);
+            setText('vic-total-2', match.team2);
+
+            // D. Set Victory Title / Message
+            const vicTitle = document.getElementById('vic-title');
+            const vicSub = document.getElementById('vic-sub');
+
             if (data.winner) {
                 if (data.winner === 'draw') {
                     vicTitle.innerText = "DRAW!";
+                    vicTitle.style.color = "#ffffff";
                     vicSub.innerText = "IT'S A TIE";
                 } else {
                     if (state.currentPlayerCount === 2) {
                         const wName = (data.winner === 'team1') ? name1 : name2;
                         vicTitle.innerText = "VICTORY!";
+                        vicTitle.style.color = "#f1c40f"; // Gold
                         vicSub.innerText = `${wName} WINS!`;
                     } else {
                         const winTeam = (data.winner === 'team1') ? "TEAM 1" : "TEAM 2";
-                        vicTitle.innerText = "VICTORY!";
+                        // Did I win?
+                        const myWin = (data.winner === 'team1' && amITeam1) || (data.winner === 'team2' && !amITeam1);
+                        
+                        vicTitle.innerText = myWin ? "VICTORY!" : "DEFEAT";
+                        vicTitle.style.color = myWin ? "#f1c40f" : "#e74c3c"; // Gold vs Red
                         vicSub.innerText = `${winTeam} WINS THE MATCH`;
                     }
                 }
             }
 
-            if (data.scores) {
-                if (finalS1) finalS1.innerText = data.scores.team1;
-                if (finalS2) finalS2.innerText = data.scores.team2;
+            if (data.reason === 'forfeit') {
+            vicSub.innerText = `${winTeam} WINS (OPPONENT FORFEIT)`;
+            vicSub.style.color = "#e74c3c"; // Red text for emphasis
+            } else {
+            vicSub.innerText = `${winTeam} WINS THE MATCH`;
             }
+            // E. Handle Ratings (Existing Logic)
             const rateBox = document.getElementById('victory-ratings');
             if (data.ratings && Object.keys(data.ratings).length > 0) {
                 rateBox.style.display = 'block';
                 rateBox.innerHTML = '<div style="font-size:12px; color:#aaa; margin-bottom:5px;">RATING UPDATES</div>';
 
-                // Determine which seats to show based on player count
                 const seatsToShow = (state.currentPlayerCount === 2) ? [0, 1] : [0, 1, 2, 3];
 
                 seatsToShow.forEach(seat => {
@@ -657,7 +704,7 @@ state.socket.on('penalty_notification', (data) => {
                         const sign = isPos ? '+' : '';
 
                         const row = document.createElement('div');
-                        row.style.cssText = "display:flex; justify-content:space-between; margin-bottom:4px; font-size:14px;";
+                        row.style.cssText = "display:flex; justify-content:space-between; margin-bottom:4px; font-size:14px; color: white;";
                         row.innerHTML = `
                             <span>${name}</span>
                             <span>
@@ -669,20 +716,20 @@ state.socket.on('penalty_notification', (data) => {
                     }
                 });
             } else {
-                rateBox.style.display = 'none'; // Hide if unrated or dev mode
+                rateBox.style.display = 'none';
             }
+
+            // F. Setup Rematch Button
             const btn = document.getElementById('btn-victory-start');
             if (btn) {
-                btn.id = "btn-victory-start"; 
                 btn.innerText = "WANT A REMATCH?"; 
                 btn.onclick = window.requestRematch; 
                 btn.disabled = false;
                 btn.style.opacity = "1";
                 btn.style.cursor = "pointer";
             }
-            // --------------------------------
 
-            // 3. Navigate to Victory Screen
+            // 4. Finally, Show the Screen
             UI.navTo('screen-victory');
             
         }, 100);
@@ -737,34 +784,51 @@ if (nameEl) nameEl.innerText = pName;
 
 // --- TIMER LOGIC ---
 
-function startTimerSystem(shouldReset = true) {
+function startTimerSystem(shouldReset = false) {
     if (state.timerInterval) clearInterval(state.timerInterval);
 
+    // RESTORE: 12 Minute Bank (720s)
     if (shouldReset) {
         state.seatTimers = { 0: 720, 1: 720, 2: 720, 3: 720 };
+        afkSeconds = 0; // Reset AFK tracker
     }
     updateTimerDOM(); 
 
     state.timerInterval = setInterval(() => {
         if (!state.gameStarted || state.currentTurnSeat === -1) return;
 
-        // Check if the current player has time left
+        // 1. MAIN GAME TIMER (The Bank)
         if (state.seatTimers[state.currentTurnSeat] > 0) {
             state.seatTimers[state.currentTurnSeat]--;
-            updateTimerDOM();
+            updateTimerDOM(); // Updates the visual clock (12:00)
         }
 
-        // --- NEW: CHECK FOR GAME OVER (0 SECONDS) ---
-        if (state.seatTimers[state.currentTurnSeat] === 0) {
-            clearInterval(state.timerInterval); // Stop the clock
-            
-            // If it is MY turn and I hit 0, I must tell the server I lost.
-            // (We check 'mySeat' so only 1 person sends the signal)
-            if (state.currentTurnSeat === state.mySeat) {
-                console.log("Time ran out! Sending timeout...");
-                state.socket.emit('act_timeout');
+        // 2. INACTIVITY MONITOR (The Hidden Clock)
+        // Only track AFK for the player whose turn it is
+        if (state.currentTurnSeat === state.mySeat) {
+            afkSeconds++;
+
+            // WARNING at 45 Seconds (15s left)
+            if (afkSeconds === 45) {
+                showInactivityWarning();
             }
+
+            // FORFEIT at 60 Seconds
+            if (afkSeconds >= 60) {
+                console.log("Inactivity limit reached. Auto-forfeit.");
+                state.socket.emit('act_timeout'); // Tell server I gave up
+                clearInterval(state.timerInterval);
+            }
+        } else {
+             // If it's not my turn, I check if the opponent is AFK?
+             // Actually, let the server or the opponent's client handle their own emit.
+             // OR: As an opponent, I can count their AFK time too and claim the win.
+             
+             // Opponent tracking logic (Optional but good for fallback):
+             // afkSeconds++;
+             // if (afkSeconds >= 62) state.socket.emit('act_timeout'); 
         }
+
     }, 1000);
 }
 

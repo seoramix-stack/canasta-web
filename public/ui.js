@@ -818,3 +818,40 @@ export function renderLobbySeats(data, mySeat) {
         container.appendChild(slot);
     }
 }
+function showInactivityWarning() {
+    // Check if it already exists
+    let warningEl = document.getElementById('afk-warning');
+    if (!warningEl) {
+        warningEl = document.createElement('div');
+        warningEl.id = 'afk-warning';
+        warningEl.style.cssText = `
+            position: absolute; 
+            top: 20%; 
+            left: 50%; 
+            transform: translateX(-50%);
+            background: rgba(231, 76, 60, 0.9); 
+            color: white; 
+            padding: 15px 30px; 
+            border-radius: 50px; 
+            font-size: 18px; 
+            font-weight: bold; 
+            z-index: 9999;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            animation: pulse 1s infinite;
+            border: 2px solid white;
+        `;
+        // Add simple pulse animation
+        const styleSheet = document.createElement("style");
+        styleSheet.innerText = `@keyframes pulse { 0% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-50%) scale(1.05); } 100% { transform: translateX(-50%) scale(1); } }`;
+        document.head.appendChild(styleSheet);
+        
+        warningEl.innerText = "⚠️ 15 SECONDS TO MOVE!";
+        document.body.appendChild(warningEl);
+    }
+    warningEl.style.display = 'block';
+}
+
+function hideInactivityWarning() {
+    const el = document.getElementById('afk-warning');
+    if (el) el.style.display = 'none';
+}

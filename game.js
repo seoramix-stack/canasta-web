@@ -28,6 +28,8 @@ class CanastaGame {
         
         this.finalScores = null;
         this.cumulativeScores = { team1: 0, team2: 0 }; 
+        this.lastActionTime = Date.now(); 
+        this.disconnectedPlayers = {}; // Track who is offline
 
         // STATIC DATA (Moved here for performance)
         this.RANK_VALUES = {
@@ -40,6 +42,7 @@ class CanastaGame {
             "3": 0, "4": 1, "5": 2, "6": 3, "7": 4, "8": 5, "9": 6, 
             "10": 7, "J": 8, "Q": 9, "K": 10, "A": 11, "2": 12, "Joker": 13 
         };
+        this.lastActionTime = Date.now();
     }
 
     // --- HELPERS ---
@@ -135,6 +138,7 @@ class CanastaGame {
         for (let i = 0; i < this.config.PLAYER_COUNT; i++) {
         this.players[i] = this.deck.splice(0, this.config.HAND_SIZE);
         this.checkRed3s(i);
+        this.lastActionTime = Date.now();
     }
 
         // Setup Discard
@@ -181,6 +185,7 @@ class CanastaGame {
 
         this.sortHand(playerIndex);
         this.turnPhase = "playing";
+        this.lastActionTime = Date.now();
         return { success: true };
     }
 
@@ -230,6 +235,20 @@ class CanastaGame {
             if (score < req) return { success: false, message: `Points (${score}) < Req (${req}). Use 'Staging'.` };
         }
 
+        // --- 🔴 CRITICAL FIX: Prevent Illegal Floating (Infinite Loop Bug) ---
+        // We calculate if this move results in 0 cards BEFORE executing it.
+        let cardsUsed = (method === 'natural' || method === 'mixed') ? 2 : 0;
+        let newHandSize = hand.length - cardsUsed + this.discardPile.length;
+
+        if (newHandSize === 0) {
+            let canastaCount = Object.values(teamMelds).filter(p => p.length >= 7).length;
+            // If you float (0 cards) but don't have the required Canastas, this move is ILLEGAL.
+            if (canastaCount < this.config.MIN_CANASTAS_OUT) {
+                return { success: false, message: "Cannot pickup: Would float without required Canastas." };
+            }
+        }
+        // --- 🔴 FIX END ---
+
         let pile = this.discardPile.splice(0, this.discardPile.length);
         let pickupCard = pile.pop(); 
         if (!teamMelds[rank]) teamMelds[rank] = [];
@@ -250,7 +269,17 @@ class CanastaGame {
         
         this.checkRed3s(playerIndex);
         this.sortHand(playerIndex);
+
+        // If the player successfully floated (legally), end the round NOW.
+        if (this.players[playerIndex].length === 0) {
+            this.turnPhase = "game_over";
+            this.finalScores = this.calculateScores(playerIndex);
+            console.log(`ROUND OVER: Player ${playerIndex} floated via Pickup.`);
+            return { success: true, message: "GAME_OVER", method: method };
+        }
+
         this.turnPhase = "playing";
+        this.lastActionTime = Date.now();
         return { success: true, method: method };
     }
 
@@ -343,7 +372,7 @@ class CanastaGame {
             console.log(`ROUND OVER: Player ${playerIndex} went out (Floating).`);
             return { success: true, message: "GAME_OVER" };
         }
-
+        this.lastActionTime = Date.now();
         return { success: true };
     }
 
@@ -351,6 +380,9 @@ class CanastaGame {
         if (playerIndex !== this.currentPlayer || this.turnPhase !== "playing") return { success: false, message: "Draw first!" };
 
         let hand = this.players[playerIndex];
+        if (cardIndex < 0 || cardIndex >= hand.length) {
+            return { success: false, message: "Invalid card index." };
+        }
         let card = hand[cardIndex];
         let teamMelds = (playerIndex % 2 === 0) ? this.team1Melds : this.team2Melds;
 
@@ -370,11 +402,14 @@ class CanastaGame {
             console.log(`ROUND OVER: Player ${playerIndex} went out.`);
             return { success: true, message: "GAME_OVER" };
         }
-
+        if (res.success) { 
+             this.lastActionTime = Date.now(); // Update time
+        }
         hand.splice(cardIndex, 1);
         this.discardPile.push(card);
         this.turnPhase = "draw";
         this.currentPlayer = (this.currentPlayer + 1) % this.config.PLAYER_COUNT;
+        this.lastActionTime = Date.now();
         return { success: true };
     }
 

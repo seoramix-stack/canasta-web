@@ -1,15 +1,40 @@
 // server.js
 require('dotenv').config();
+const jwt = require('jsonwebtoken'); // Add this
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+     console.error("FATAL ERROR: JWT_SECRET is not defined.");
+     process.exit(1);
+}
 const express = require('express');
+// 1. IMPORT RATE LIMITER
+const rateLimit = require('express-rate-limit'); 
+
+const app = express();
+app.use(express.json());
+
+// 2. CONFIGURE LIMITER
+// Allow max 20 requests per 15 minutes from the same IP
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 20, 
+    message: { success: false, message: "Too many attempts, please try again later." }
+});
+
+// 3. APPLY TO AUTH ROUTES
+// (Place this before your app.use('/api', ...) or route definitions)
+app.use('/api/register', authLimiter);
+app.use('/api/login', authLimiter);
+
 const http = require('http');
 const { Server } = require('socket.io');
 const mongoose = require('mongoose'); 
 const { CanastaGame } = require('./game'); 
 const { CanastaBot } = require('./bot');
 const { calculateEloChange } = require('./elo');
-const app = express();
 app.use(express.json());
 const server = http.createServer(app);
+const disconnectTimers = {};
 const io = new Server(server, {
     cors: {
         origin: ["https://canastamaster.club", "http://canastamaster.club"], // Allow your domain
@@ -122,21 +147,77 @@ app.get('/api/leaderboard', async (req, res) => {
 
 // --- SOCKET CONNECTION ---
 io.on('connection', async (socket) => {
-    console.log('User connected:', socket.id);
+    // console.log('User connected:', socket.id);
     const token = socket.handshake.auth.token;
-    const handshakeUser = socket.handshake.auth.username;
+    
+    let validUser = null;
+
+    // 1. VERIFY JWT
     if (token) {
-        if (!playerSessions[token]) {
-            playerSessions[token] = {};
+        try {
+            // This throws an error if the token is fake or expired
+            const decoded = jwt.verify(token, JWT_SECRET);
+            validUser = decoded.username;
+            
+            // If verified, link or create session
+            if (!playerSessions[token]) {
+                playerSessions[token] = { username: validUser };
+            }
+            // Update username in session just in case
+            playerSessions[token].username = validUser;
+            
+        } catch (err) {
+            console.log(`[AUTH FAIL] Invalid Token for socket ${socket.id}`);
+            // Optional: socket.disconnect() if you want to be strict
         }
-        if (handshakeUser) {
-            playerSessions[token].username = handshakeUser;
+    }
+    if (session) {
+        if (games[session.gameId]) {
+            // ... existing reconnect logic ...
+
+            // CANCEL THE TIMER if they return!
+            const timerKey = `${session.gameId}_${session.seat}`;
+            if (disconnectTimers[timerKey]) {
+                console.log(`[Reconnect] Player ${session.seat} returned! Forfeit cancelled.`);
+                clearTimeout(disconnectTimers[timerKey]);
+                delete disconnectTimers[timerKey];
+                
+                // Unmark disconnect status
+                if(games[session.gameId].disconnectedPlayers) {
+                     delete games[session.gameId].disconnectedPlayers[session.seat];
+                }
+            }
         }
+    }
+    // 2. FALLBACK FOR HANDSHAKE USERNAME (If no token or dev mode)
+    const handshakeUser = socket.handshake.auth.username;
+    if (token && playerSessions[token] && !playerSessions[token].username && handshakeUser) {
+        playerSessions[token].username = handshakeUser;
     }
 
     socket.on('disconnect', () => {
-    console.log(`[Disconnect] ${socket.id}`);
-    matchmakingService.removeSocketFromQueue(socket.id);
+        console.log(`[Disconnect] ${socket.id}`);
+        matchmakingService.removeSocketFromQueue(socket.id);
+
+        const gameId = socket.data.gameId;
+        const seat = socket.data.seat;
+
+        // 1. Check if user was in an active game
+        if (gameId && games[gameId] && !games[gameId].matchIsOver) {
+            console.log(`[Game ${gameId}] Player ${seat} disconnected. Starting 60s timer.`);
+            
+            // 2. Mark in game state (optional, for UI status)
+            games[gameId].disconnectedPlayers[seat] = true;
+
+            // 3. Start 60-Second Forfeit Timer
+            // We store it by username or seat, using a unique key
+            const timerKey = `${gameId}_${seat}`;
+            
+            disconnectTimers[timerKey] = setTimeout(() => {
+                console.log(`[Forfeit] Player ${seat} failed to reconnect. Ending Game ${gameId}.`);
+                handleForfeit(gameId, seat); // <--- We will write this function next
+            }, 60000); // 1 Minute
+        }
     });
 
     // --- LOBBY ACTIONS ---
@@ -731,28 +812,21 @@ io.on('connection', async (socket) => {
         const game = games[gameId];
         if (!game) return;
 
-        // Security: Ensure the player claiming timeout is actually the one whose turn it is
-        if (game.currentPlayer !== socket.data.seat) return;
+        const now = Date.now();
+        const INACTIVITY_LIMIT = 60 * 1000; // 1 Minute
+        const timeSinceAction = now - game.lastActionTime;
 
-        console.log(`[TIMEOUT] Player ${socket.data.seat} ran out of time.`);
+        // 1. Validate the timeout (Security)
+        if (timeSinceAction < INACTIVITY_LIMIT) {
+            console.log(`[TIMEOUT DENIED] Player Active. Last action: ${timeSinceAction}ms ago.`);
+            return;
+        }
 
-        // 1. Determine Winner (Opposing Team)
-        // Seat 0 & 2 = Team 1 | Seat 1 & 3 = Team 2
-        const loserTeam = (socket.data.seat % 2 === 0) ? "team1" : "team2";
-        const winner = (loserTeam === "team1") ? "team2" : "team1";
+        console.log(`[TIMEOUT] Game ${gameId} ended. Player ${game.currentPlayer} AFK.`);
 
-        // 2. Broadcast Match Over
-        io.to(gameId).emit('match_over', {
-            winner: winner,
-            scores: game.cumulativeScores,
-            reason: "timeout"
-        });
-
-        // 3. Cleanup
-        setTimeout(() => {
-            delete games[gameId];
-            delete gameBots[gameId];
-        }, 5000); // Short delay to allow clients to receive the message
+        // 2. Trigger the Forfeit Logic
+        // This function handles the Math, the Ratings, AND the 'match_over' broadcast.
+        handleForfeit(gameId, game.currentPlayer); 
     });
 
     socket.on('leave_game', async () => { 
@@ -1122,6 +1196,7 @@ async function handleRoundEnd(gameId, io) {
         io.to(gameId).emit('match_over', {
             winner: result.winner,
             scores: game.cumulativeScores,
+            lastRoundScores: game.finalScores,
             reason: "score_limit",
             names: game.names,
             ratings: ratingUpdates
@@ -1196,3 +1271,117 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
     if (DEV_MODE) console.log("⚠️  DEV MODE ACTIVE: DB Disabled. Use ANY login.");
 });
+async function handleForfeit(gameId, loserSeat) {
+    const game = games[gameId];
+    if (!game) return;
+
+    // 1. Identify Teams
+    // Team 1 = Seats 0 & 2 | Team 2 = Seats 1 & 3
+    // If loserSeat is 0 or 2, Team 1 is the "Loser Team"
+    const isTeam1Loser = (loserSeat === 0 || loserSeat === 2);
+    const winnerTeam = isTeam1Loser ? "team2" : "team1";
+    
+    console.log(`[FORFEIT] Game ${gameId} ended. Leaver: Seat ${loserSeat}. Winner: ${winnerTeam}`);
+    game.matchIsOver = true;
+
+    // 2. Notify Clients Immediately
+    io.to(gameId).emit('match_over', {
+        winner: winnerTeam,
+        scores: game.cumulativeScores,
+        reason: "forfeit", // Client handles this as "Opponent Disconnected"
+        names: game.names
+    });
+
+    // 3. ELO CALCULATION
+    // Only run if not in Dev Mode and the game is Rated
+    if (!DEV_MODE && game.isRated) {
+        try {
+            const playerCount = game.config.PLAYER_COUNT;
+            const players = {};
+            
+            // A. Retrieve User Docs for all players
+            for (let i = 0; i < playerCount; i++) {
+                const token = game.playerTokens ? game.playerTokens[i] : null;
+                if (token) {
+                    const user = await User.findOne({ token: token });
+                    if (user) players[i] = user;
+                }
+            }
+
+            // B. Calculate Team Averages (Default to 1200 if missing)
+            const r1 = (players[0]?.stats.rating + players[2]?.stats.rating) / 2 || 1200; 
+            const r2 = (players[1]?.stats.rating + players[3]?.stats.rating) / 2 || 1200; 
+
+            // C. CALCULATE BASE DELTA USING YOUR ELO.JS
+            // We simulate a 5000 - 0 score to trigger your logic's "Stomp" multiplier.
+            // If Team 1 lost, we pass s1=0, s2=5000. 
+            // calculateEloChange returns T1's change (which will be negative).
+            let baseDelta;
+            if (isTeam1Loser) {
+                baseDelta = calculateEloChange(r1, r2, 0, 5000); 
+            } else {
+                baseDelta = calculateEloChange(r1, r2, 5000, 0);
+            }
+            
+            // baseDelta is now the "Natural" change for the losing team (e.g., -25)
+            // The winning team naturally gains the inverse (e.g., +25)
+
+            // D. Apply Updates with Special Rules
+            const LEAVER_PENALTY_MULTIPLIER = 1.5; // 50% extra penalty for quitting
+            const updates = {};
+            
+            for (let i = 0; i < playerCount; i++) {
+                if (!players[i]) continue;
+
+                // Is this player on the losing team?
+                const amIOnLosingTeam = (isTeam1Loser && (i === 0 || i === 2)) || 
+                                        (!isTeam1Loser && (i === 1 || i === 3));
+
+                if (amIOnLosingTeam) {
+                    if (i === loserSeat) {
+                        // === RULE 1: THE LEAVER (MAX PENALTY) ===
+                        // They take the Natural Loss * 1.5
+                        const penalty = Math.round(baseDelta * LEAVER_PENALTY_MULTIPLIER);
+                        players[i].stats.rating += penalty; // (Adding a negative number)
+                        players[i].stats.losses++;
+                        updates[i] = { delta: penalty, newRating: players[i].stats.rating };
+                    } else {
+                        // === RULE 2: THE PARTNER (IMMUNITY) ===
+                        // They get 0 change. They do NOT get a loss stat (fairness).
+                        updates[i] = { delta: 0, newRating: players[i].stats.rating };
+                    }
+                } else {
+                    // === RULE 3: THE WINNERS ===
+                    // They gain the standard "Stomp" amount.
+                    // Since baseDelta is negative (loss), we subtract it to get positive.
+                    // OR: if baseDelta was calculated for T1 and T1 won, it's positive.
+                    // Let's rely on the math:
+                    
+                    // If T1 lost, baseDelta is -X. T2 (Winners) should get +X.
+                    // If T2 lost, baseDelta is +X (T1 gain). T2 (Losers) should get -X.
+                    
+                    // Simple Logic: Winners always gain Math.abs(baseDelta)
+                    const winPoints = Math.abs(baseDelta);
+                    
+                    players[i].stats.rating += winPoints;
+                    players[i].stats.wins++;
+                    updates[i] = { delta: winPoints, newRating: players[i].stats.rating };
+                }
+
+                await players[i].save();
+            }
+
+            // E. Send Updates to Client
+            io.to(gameId).emit('rating_update', updates);
+
+        } catch (e) {
+            console.error("Forfeit Elo Error:", e);
+        }
+    }
+
+    // 4. Cleanup Game from Memory
+    setTimeout(() => {
+        delete games[gameId];
+        delete gameBots[gameId];
+    }, 10000);
+}

@@ -15,5 +15,5 @@ const userSchema = new mongoose.Schema({
     friends: [{ type: String }],
     blocked: [{ type: String }] 
 });
-
+userSchema.index({ 'stats.rating': -1 });
 module.exports = mongoose.model('User', userSchema);

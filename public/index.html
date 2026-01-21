@@ -235,29 +235,72 @@
 </div>
 
 <div id="screen-victory" class="app-screen">
-            <div class="victory-content">
-                <div style="font-size: 80px;">🏆</div>
-                <h1 id="vic-title">VICTORY!</h1>
-                <p id="vic-sub">TEAM 1 WINS THE MATCH</p>
-                
-                <div class="final-score-box">
-    <div class="fs-row">
-        <span id="vic-name-1">TEAM 1</span>
-        <span id="final-s1">5200</span>
-    </div>
-    <div class="fs-row">
-        <span id="vic-name-2">TEAM 2</span>
-        <span id="final-s2">4800</span>
+    <div class="victory-content">
+        <div style="font-size: 80px;">🏆</div>
+        <h1 id="vic-title">VICTORY!</h1>
+        <p id="vic-sub">TEAM 1 WINS THE MATCH</p>
+        
+        <div class="score-box" style="background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.2); width: 100%; max-width: 500px; margin: 0 auto 20px auto;">
+            <table class="score-table" style="color: white; margin: 0;">
+                <thead>
+                    <tr>
+                        <th style="background: rgba(241, 196, 15, 0.2); color: #f1c40f;">Category</th>
+                        <th id="vic-header-1" style="background: rgba(241, 196, 15, 0.2); color: #f1c40f;">Team 1</th>
+                        <th id="vic-header-2" style="background: rgba(241, 196, 15, 0.2); color: #f1c40f;">Team 2</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Base Points</td>
+                        <td id="vic-base-1">0</td>
+                        <td id="vic-base-2">0</td>
+                    </tr>
+                    <tr>
+                        <td>Red 3s</td>
+                        <td id="vic-red3-1">0</td>
+                        <td id="vic-red3-2">0</td>
+                    </tr>
+                    <tr>
+                        <td>Canastas</td>
+                        <td id="vic-canasta-1">0</td>
+                        <td id="vic-canasta-2">0</td>
+                    </tr>
+                    <tr>
+                        <td>Go Out Bonus</td>
+                        <td id="vic-bonus-1">0</td>
+                        <td id="vic-bonus-2">0</td>
+                    </tr>
+                    <tr>
+                        <td>Deductions</td>
+                        <td id="vic-deduct-1">0</td>
+                        <td id="vic-deduct-2">0</td>
+                    </tr>
+                    <tr style="border-top: 1px solid #555;">
+                        <td>Round Total</td>
+                        <td id="vic-round-1">0</td>
+                        <td id="vic-round-2">0</td>
+                    </tr>
+                    <tr style="color: #bdc3c7; font-size: 13px; background: rgba(255,255,255,0.05);">
+                        <td>+ Previous Score</td>
+                        <td id="vic-prev-1">0</td>
+                        <td id="vic-prev-2">0</td>
+                    </tr>
+                    <tr class="total-row" style="background: #f1c40f; color: #2c3e50; font-size: 18px;">
+                        <td>FINAL SCORE</td>
+                        <td id="vic-total-1">0</td>
+                        <td id="vic-total-2">0</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div id="victory-ratings" style="margin-bottom: 20px; width: 280px; margin: 0 auto 20px auto; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; display:none;">
+        </div>
+
+        <button id="btn-victory-start" class="menu-btn primary" onclick="connectToGame('bot')">START NEW MATCH</button>
+        <button class="menu-btn secondary" onclick="navTo('screen-home')">BACK TO MENU</button>
     </div>
 </div>
-<div id="victory-ratings" style="margin-bottom: 20px; width: 280px; margin: 0 auto 20px auto; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; display:none;">
-    </div>
-
-                <button id="btn-victory-start" class="menu-btn primary" onclick="connectToGame('bot')">START NEW MATCH</button>
-                
-                <button class="menu-btn secondary" onclick="navTo('screen-home')">BACK TO MENU</button>
-            </div>
-        </div>
     <div id="screen-game" class="app-screen game-bg">
         <div id="status" class="game-status">Connecting...</div>
         <div id="queue-modal" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:2000; flex-direction:column; align-items:center; justify-content:center;">
