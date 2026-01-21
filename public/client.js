@@ -614,6 +614,12 @@ state.socket.on('penalty_notification', (data) => {
             // A. Set Team/Player Names in Table Headers
             const name1 = (data.names && data.names[0]) ? data.names[0] : "TEAM 1";
             const name2 = (data.names && data.names[1]) ? data.names[1] : "TEAM 2";
+            const winLabel =
+            data.winner === 'team1'
+                ? (state.currentPlayerCount === 2 ? name1 : "TEAM 1")
+                : data.winner === 'team2'
+                ? (state.currentPlayerCount === 2 ? name2 : "TEAM 2")
+                : "";
             const amITeam1 = (state.mySeat === 0 || state.mySeat === 2);
             
             const lbl1 = document.getElementById('vic-header-1');
@@ -685,22 +691,22 @@ state.socket.on('penalty_notification', (data) => {
                         vicTitle.style.color = "#f1c40f"; // Gold
                         vicSub.innerText = `${wName} WINS!`;
                     } else {
-                        const winTeam = (data.winner === 'team1') ? "TEAM 1" : "TEAM 2";
+                        
                         // Did I win?
                         const myWin = (data.winner === 'team1' && amITeam1) || (data.winner === 'team2' && !amITeam1);
                         
                         vicTitle.innerText = myWin ? "VICTORY!" : "DEFEAT";
                         vicTitle.style.color = myWin ? "#f1c40f" : "#e74c3c"; // Gold vs Red
-                        vicSub.innerText = `${winTeam} WINS THE MATCH`;
+                        vicSub.innerText = `${winLabel} WINS THE MATCH`;
                     }
                 }
             }
 
             if (data.reason === 'forfeit') {
-            vicSub.innerText = `${winTeam} WINS (OPPONENT FORFEIT)`;
+            vicSub.innerText = `${winLabel} WINS (OPPONENT FORFEIT)`;
             vicSub.style.color = "#e74c3c"; // Red text for emphasis
             } else {
-            vicSub.innerText = `${winTeam} WINS THE MATCH`;
+            vicSub.innerText = `${winLabel} WINS THE MATCH`;
             }
             // E. Handle Ratings (Existing Logic)
             const rateBox = document.getElementById('victory-ratings');
