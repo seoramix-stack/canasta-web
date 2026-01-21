@@ -402,9 +402,7 @@ class CanastaGame {
             console.log(`ROUND OVER: Player ${playerIndex} went out.`);
             return { success: true, message: "GAME_OVER" };
         }
-        if (res.success) { 
-             this.lastActionTime = Date.now(); // Update time
-        }
+            
         hand.splice(cardIndex, 1);
         this.discardPile.push(card);
         this.turnPhase = "draw";
