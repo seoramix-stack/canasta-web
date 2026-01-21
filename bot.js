@@ -1,4 +1,4 @@
-// bot.js - v7.1: Memory, Multi-Mode & 4 Distinct Strategies
+// bot.js - v7.2: Fixed 'executeTurn' Compatibility
 class CanastaBot {
     constructor(seat, difficulty, type = '4p', ruleset = 'standard', injectedDna = null) {
         this.seat = seat;
@@ -14,7 +14,9 @@ class CanastaBot {
             playersLastHandSize: {}   // To help detect who picked up in 4P
         };
 
-        // --- 1. 2-PLAYER STANDARD (Defensive 1v1) ---
+        // --- STRATEGY DEFINITIONS (DNA) ---
+        
+        // 1. 2-Player Standard
         const DNA_2P_STD = {
             DISCARD_WILD_PENALTY: 1732,
             FEED_ENEMY_MELD: 2071,
@@ -25,10 +27,10 @@ class CanastaBot {
             MELD_IF_LOSING_BONUS: -0.19,
             BREAK_PAIR_PENALTY: 200,
             DISCARD_JUNK_BONUS: 10,
-            GO_OUT_THRESHOLD: 0 // Irrelevant in 2P
+            GO_OUT_THRESHOLD: 0 
         };
 
-        // --- 2. 4-PLAYER STANDARD (Teamwork & Defense) ---
+        // 2. 4-Player Standard 
         const DNA_4P_STD = { 
             DISCARD_WILD_PENALTY: 1732,
             FEED_ENEMY_MELD: 3012,
@@ -39,24 +41,24 @@ class CanastaBot {
             MELD_IF_LOSING_BONUS: -0.19,
             BREAK_PAIR_PENALTY: 200,
             DISCARD_JUNK_BONUS: 10,
-            GO_OUT_THRESHOLD: 500 // Deny partner going out if > 500 pts
+            GO_OUT_THRESHOLD: 500 
         };
 
-        // --- 3. 2-PLAYER EASY (Aggressive Race) ---
+        // 3. 2-Player Easy 
         const DNA_2P_EASY = {
             DISCARD_WILD_PENALTY: 500,
             FEED_ENEMY_MELD: 1000,
             DISCARD_SINGLE_BONUS: 50,
-            MELD_AGGRESSION: 1.2,       // Very Aggressive
-            PICKUP_THRESHOLD: 1,        // Pickup easily
+            MELD_AGGRESSION: 1.2,       
+            PICKUP_THRESHOLD: 1,        
             MELD_IF_WINNING_BONUS: 0,
             MELD_IF_LOSING_BONUS: 0,
             BREAK_PAIR_PENALTY: 50,
             DISCARD_JUNK_BONUS: 20,
-            GO_OUT_THRESHOLD: 0         // Irrelevant in 2P
+            GO_OUT_THRESHOLD: 0         
         };
 
-        // --- 4. 4-PLAYER EASY (Aggressive Teamwork) ---
+        // 4. 4-Player Easy 
         const DNA_4P_EASY = {
             DISCARD_WILD_PENALTY: 500,
             FEED_ENEMY_MELD: 1000,
@@ -67,10 +69,10 @@ class CanastaBot {
             MELD_IF_LOSING_BONUS: 0,
             BREAK_PAIR_PENALTY: 50,
             DISCARD_JUNK_BONUS: 20,
-            GO_OUT_THRESHOLD: 1000      // Higher threshold allowed in Easy mode
+            GO_OUT_THRESHOLD: 1000      
         };
 
-        // --- LOGIC TO SELECT CORRECT DNA ---
+        // --- SELECT DNA ---
         if (injectedDna) {
             this.dna = injectedDna;
         } else {
@@ -78,71 +80,65 @@ class CanastaBot {
                 if (ruleset === 'easy') this.dna = DNA_2P_EASY;
                 else this.dna = DNA_2P_STD;
             } else {
-                // 4-Player
                 if (ruleset === 'easy') this.dna = DNA_4P_EASY;
                 else this.dna = DNA_4P_STD;
             }
         }
     }
 
-    // --- MAIN GAME LOOP ---
-    
-    playTurnSync(game) { 
-        // 1. Observe & Update Memory
-        this.updateMemory(game);
+    // --- CRITICAL FIX: The Interface Server.js Expects ---
+    async executeTurn(game, callback) {
+        // 1. Run the synchronous logic
+        this.playTurnSync(game);
 
-        // 2. Decide to Draw
+        // 2. Trigger the callback (server uses this to broadcast updates)
+        if (callback) callback(this.seat);
+
+        // 3. Return true (Promise) to satisfy the .then() in server.js
+        return true;
+    }
+
+    // --- MAIN LOGIC ---
+    playTurnSync(game) { 
+        this.updateMemory(game);
         this.decideDraw(game);
 
-        // 3. Partner Communication (4P Only)
-        // In real games, this is async. Here we simulate the "Ask".
         if (game.config.PLAYER_COUNT === 4) {
             const partnerSeat = (this.seat + 2) % 4;
             const partnerHand = game.players[partnerSeat];
-            
-            // Calculate Partner's potential points
             const partnerHandPoints = partnerHand.reduce((sum, c) => sum + this.getCardValue(c), 0);
-            
-            // Logic: Deny if partner has too many points in hand (based on DNA threshold)
             game.goOutPermission = (partnerHandPoints > this.dna.GO_OUT_THRESHOLD) ? 'denied' : 'granted';
         } else {
-            game.goOutPermission = 'granted'; // 2P always allowed
+            game.goOutPermission = 'granted'; 
         }
         
-        // 4. Meld
         this.tryMelding(game);
         
-        // 5. Discard
         if (game.players[this.seat].length > 0) {
             let discardIndex = this.pickDiscard(game);
             game.discardFromHand(this.seat, discardIndex);
         }
 
-        // 6. Save State for Next Turn
         this.saveStateSnapshot(game);
     }
 
     // --- MEMORY SYSTEM LOGIC ---
-
     updateMemory(game) {
         if (!this.memory.initialized || (game.discardPile.length === 0 && this.memory.lastDiscardPile.length === 0)) {
             this.resetMemory(game);
             return;
         }
 
-        // A. Detect Pickups
         const currentPile = game.discardPile;
         const lastPile = this.memory.lastDiscardPile;
 
         if (currentPile.length < lastPile.length) {
-            // Someone picked up the pile!
             const pickedUpCards = [...lastPile];
             let pickerSeat = -1;
 
             if (game.config.PLAYER_COUNT === 2) {
                 pickerSeat = (this.seat + 1) % 2;
             } else {
-                // Guess who picked up based on hand size growth
                 let maxGrowth = -999;
                 for (let i = 0; i < game.config.PLAYER_COUNT; i++) {
                     if (i === this.seat) continue;
@@ -160,25 +156,20 @@ class CanastaBot {
             }
         }
 
-        // B. Cleanup Memory (Remove cards played/discarded by enemies)
         for (let pIndex = 0; pIndex < game.config.PLAYER_COUNT; pIndex++) {
             if (pIndex === this.seat) continue;
             if (!this.memory.knownHands[pIndex]) continue;
 
             const enemyMelds = (pIndex % 2 === 0) ? game.team1Melds : game.team2Melds;
 
-            // 1. Remove Melded Cards
             this.memory.knownHands[pIndex] = this.memory.knownHands[pIndex].filter(knownCard => {
                 const meld = enemyMelds[knownCard.rank];
-                if (!meld) return true; // Not melded yet
-                // Simple heuristic: If meld exists, assume known card was used
+                if (!meld) return true; 
                 return false; 
             });
 
-            // 2. Remove Discarded Card
             if (game.discardPile.length > 0) {
                  const topCard = game.discardPile[game.discardPile.length - 1];
-                 // If previous player was this opponent
                  let prevPlayer = (this.seat - 1 + game.config.PLAYER_COUNT) % game.config.PLAYER_COUNT;
                  if (pIndex === prevPlayer) {
                      const matchIdx = this.memory.knownHands[pIndex].findIndex(c => c.rank === topCard.rank);
@@ -235,27 +226,21 @@ class CanastaBot {
             if (card.isWild) score += this.dna.DISCARD_WILD_PENALTY;
             if (card.isRed3) score += 99999; 
 
-            // --- STANDARD LOGIC ---
             if (enemyMelds[card.rank]) {
                 if (isEndGame || pileValue > 300) score += (this.dna.FEED_ENEMY_MELD * 5); 
                 else score += this.dna.FEED_ENEMY_MELD;
             }
 
-            // --- MEMORY LOGIC ---
-            // "Do I know for a fact the next player has this card?"
             const knownHand = this.memory.knownHands[nextPlayerSeat] || [];
             const enemyHasPair = knownHand.filter(c => c.rank === card.rank).length >= 2;
             const enemyHasSingle = knownHand.filter(c => c.rank === card.rank).length >= 1;
 
             if (enemyHasPair) {
-                // They have a pair, this gives them a clean canasta/meld!
                 score += (this.dna.FEED_ENEMY_MELD * 2.5);
             } else if (enemyHasSingle) {
-                // They have one, this gives them a pair (allowing them to pick up).
                 score += (this.dna.FEED_ENEMY_MELD * 0.8);
             }
 
-            // --- SELF LOGIC ---
             let matches = hand.filter(c => c.rank === card.rank).length;
             if (matches >= 2) {
                 if (pileValue > 200) score += (this.dna.BREAK_PAIR_PENALTY * 3);
@@ -270,10 +255,9 @@ class CanastaBot {
             if (Math.abs(a.score - b.score) > 1) return a.score - b.score;
             return this.getCardValue(a.card) - this.getCardValue(b.card);
         });
-        if (!candidates || candidates.length === 0) {
-    console.error(`[BOT ERROR] Seat ${this.seat} has no valid discard candidates! Hand size: ${hand.length}`);
-    return 0; // Fallback to first card
-}
+
+        // SAFETY CHECK
+        if (!candidates || candidates.length === 0) return 0;
 
         return candidates[0].index;
     }
@@ -383,6 +367,18 @@ class CanastaBot {
                 }
             }
         }
+    }
+    
+    // Partner Communication simulation
+    decideGoOutPermission(game) {
+        // Logic: Should I let my partner go out?
+        const partnerSeat = (this.seat + 2) % 4;
+        const myHand = game.players[this.seat];
+        const myPoints = myHand.reduce((sum, c) => sum + this.getCardValue(c), 0);
+        
+        // If I have too many points in hand, I might say NO.
+        // But if I have very few, say YES.
+        return (myPoints < this.dna.GO_OUT_THRESHOLD);
     }
 
     getCardValue(card) {
