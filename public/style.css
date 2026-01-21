@@ -582,3 +582,21 @@ h2 {
     pointer-events: none; /* Allows clicking through it */
     z-index: -1; /* Places it BEHIND the cards */
 }
+#inactivity-warning {
+    position: fixed;
+    top: 20%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(231, 76, 60, 0.95);
+    color: white;
+    padding: 20px 40px;
+    border-radius: 8px;
+    z-index: 10000;
+    font-weight: bold;
+    font-size: 18px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    border: 2px solid white;
+    text-align: center;
+    pointer-events: none; /* CRITICAL: Allows clicks to pass through */
+    display: none;        /* Hidden by default */
+}

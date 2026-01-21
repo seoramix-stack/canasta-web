@@ -16,6 +16,20 @@ window.hardReset = () => {
     location.reload();
 };
 let afkSeconds = 0; // Tracks seconds since last action
+function resetActivity() {
+    afkSeconds = 0;
+    const warningEl = document.getElementById('inactivity-warning');
+    if (warningEl) {
+        warningEl.style.display = 'none'; 
+    }
+}
+
+// NEW: Listeners to detect any activity
+document.addEventListener('mousemove', resetActivity);
+document.addEventListener('mousedown', resetActivity);
+document.addEventListener('touchstart', resetActivity);
+document.addEventListener('keydown', resetActivity);
+document.addEventListener('click', resetActivity);
 // --- 1. INITIALIZATION ---
 if (state.playerToken && state.playerUsername) {
     initSocket(state.playerToken);
@@ -1105,36 +1119,24 @@ window.drawCard = () => {
 
 // --- INACTIVITY WARNING UI HELPERS ---
 
+// client.js - Replace your existing showInactivityWarning function
+
 function showInactivityWarning() {
-    // 1. Try to find the existing warning element
     let el = document.getElementById('inactivity-warning');
     
-    // 2. If it doesn't exist, create it dynamically
+    // Create element if it doesn't exist (only happens once)
     if (!el) {
         el = document.createElement('div');
-        el.id = 'inactivity-warning';
-        el.style.cssText = `
-            position: fixed; 
-            top: 20%; 
-            left: 50%; 
-            transform: translateX(-50%); 
-            background: rgba(231, 76, 60, 0.95); 
-            color: white; 
-            padding: 20px 40px; 
-            border-radius: 8px; 
-            z-index: 9999; 
-            font-weight: bold; 
-            font-size: 18px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-            border: 2px solid white;
-            text-align: center;
-            display: none; 
-        `;
-        el.innerHTML = "⚠️ <b>WARNING!</b><br>You are inactive. Make a move or you will forfeit in 15s!";
+        el.id = 'inactivity-warning'; // CSS file will style this now
         document.body.appendChild(el);
     }
-    
-    // 3. Show it
+
+    // Set content and show
+    el.innerHTML = `
+        <div style="font-size: 30px; margin-bottom: 10px;">⏳</div>
+        <div>ARE YOU STILL THERE?</div>
+        <div style="font-size: 12px; margin-top: 5px;">Move or touch to continue</div>
+    `;
     el.style.display = 'block';
 }
 
