@@ -16,12 +16,12 @@ window.hardReset = () => {
     location.reload();
 };
 let afkSeconds = 0; // Tracks seconds since last action
+let timeoutSent = false;
 function resetActivity() {
-    afkSeconds = 0;
-    const warningEl = document.getElementById('inactivity-warning');
-    if (warningEl) {
-        warningEl.style.display = 'none'; 
-    }
+  afkSeconds = 0;
+  timeoutSent = false;
+  const warningEl = document.getElementById('inactivity-warning');
+  if (warningEl) warningEl.style.display = 'none';
 }
 
 // NEW: Listeners to detect any activity
@@ -576,6 +576,7 @@ state.socket.on('penalty_notification', (data) => {
     const performFullUpdate = () => UI.updateUI(data);
     // RESET AFK TIMER because an action happened
         afkSeconds = 0; 
+        timeoutSent = false;
         hideInactivityWarning(); // Remove warning if it was showing
     if (state.activeData) {
         // 2. Pass the FULL update function to animations
@@ -800,7 +801,8 @@ if (nameEl) nameEl.innerText = pName;
 
 function startTimerSystem(shouldReset = false) {
     if (state.timerInterval) clearInterval(state.timerInterval);
-
+        timeoutSent = false;   // <--- add this
+        afkSeconds = 0;    
     // RESTORE: 12 Minute Bank (720s)
     if (shouldReset) {
         state.seatTimers = { 0: 720, 1: 720, 2: 720, 3: 720 };
@@ -828,11 +830,12 @@ function startTimerSystem(shouldReset = false) {
             }
 
             // FORFEIT at 60 Seconds
-            if (afkSeconds >= 60) {
-                console.log("Inactivity limit reached. Auto-forfeit.");
-                state.socket.emit('act_timeout'); // Tell server I gave up
-                clearInterval(state.timerInterval);
-            }
+            if (afkSeconds >= 60 && !timeoutSent) {
+            console.log("Inactivity limit reached. Requesting auto-forfeit.");
+            timeoutSent = true;
+            state.socket.emit('act_timeout');
+            // Do NOT clear the main interval, it drives the 12-minute bank timer
+}
         } else {
              // If it's not my turn, I check if the opponent is AFK?
              // Actually, let the server or the opponent's client handle their own emit.
