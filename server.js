@@ -175,6 +175,7 @@ io.on('connection', async (socket) => {
             // Optional: socket.disconnect() if you want to be strict
         }
     }
+    const session = playerSessions[token];
     if (session) {
         if (games[session.gameId]) {
             // ... existing reconnect logic ...
@@ -300,8 +301,6 @@ io.on('connection', async (socket) => {
     }
 
     // --- RECONNECTION LOGIC ---
-    const session = playerSessions[token];
-
     if (session) {
         if (games[session.gameId]) {
             socket.data.gameId = session.gameId;
