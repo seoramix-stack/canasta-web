@@ -1278,103 +1278,106 @@ async function handleForfeit(gameId, loserSeat) {
     const game = games[gameId];
     if (!game) return;
 
-    // 1. Identify Teams
-    // Team 1 = Seats 0 & 2 | Team 2 = Seats 1 & 3
-    // If loserSeat is 0 or 2, Team 1 is the "Loser Team"
-    const isTeam1Loser = (loserSeat === 0 || loserSeat === 2);
+    const playerCount = game.config.PLAYER_COUNT;
+
+    // Identify loser team
+    // 2P: Team1 = seat 0, Team2 = seat 1
+    // 4P: Team1 = seats 0 & 2, Team2 = seats 1 & 3
+    const isTeam1Loser = (playerCount === 4)
+        ? (loserSeat === 0 || loserSeat === 2)
+        : (loserSeat === 0);
+
     const winnerTeam = isTeam1Loser ? "team2" : "team1";
-    
+
     console.log(`[FORFEIT] Game ${gameId} ended. Leaver: Seat ${loserSeat}. Winner: ${winnerTeam}`);
     game.matchIsOver = true;
 
-    // 2. Notify Clients Immediately
+    // 1) Notify clients immediately
     io.to(gameId).emit('match_over', {
         winner: winnerTeam,
         scores: game.cumulativeScores,
-        reason: "forfeit", // Client handles this as "Opponent Disconnected"
+        reason: "forfeit",
         names: game.names
     });
 
-    // 3. ELO CALCULATION
-    // Only run if not in Dev Mode and the game is Rated
+    // 2) ELO CALCULATION (Ranked only)
     if (!DEV_MODE && game.isRated) {
         try {
-            const playerCount = game.config.PLAYER_COUNT;
             const players = {};
-            
-            // A. Retrieve User Docs for all players
+
+            // A. Retrieve user docs for all seats
             for (let i = 0; i < playerCount; i++) {
-                const token = game.playerTokens ? game.playerTokens[i] : null;
-                if (token) {
-                    const user = await User.findOne({ token: token });
-                    if (user) players[i] = user;
-                }
+                const token = (game.playerTokens && game.playerTokens[i]) ? game.playerTokens[i] : null;
+                if (!token) continue;
+                const user = await User.findOne({ token });
+                if (user) players[i] = user;
             }
 
-            // B. Calculate Team Averages (Default to 1200 if missing)
-            const r1 = (players[0]?.stats.rating + players[2]?.stats.rating) / 2 || 1200; 
-            const r2 = (players[1]?.stats.rating + players[3]?.stats.rating) / 2 || 1200; 
-
-            // C. CALCULATE BASE DELTA USING YOUR ELO.JS
-            // We simulate a 5000 - 0 score to trigger your logic's "Stomp" multiplier.
-            // If Team 1 lost, we pass s1=0, s2=5000. 
-            // calculateEloChange returns T1's change (which will be negative).
-            let baseDelta;
-            if (isTeam1Loser) {
-                baseDelta = calculateEloChange(r1, r2, 0, 5000); 
+            // B. Team average ratings (fallback 1200 per missing seat)
+            let team1Rating, team2Rating;
+            if (playerCount === 2) {
+                team1Rating = (players[0]?.stats.rating ?? 1200);
+                team2Rating = (players[1]?.stats.rating ?? 1200);
             } else {
-                baseDelta = calculateEloChange(r1, r2, 5000, 0);
+                const p0 = (players[0]?.stats.rating ?? 1200);
+                const p2 = (players[2]?.stats.rating ?? 1200);
+                const p1 = (players[1]?.stats.rating ?? 1200);
+                const p3 = (players[3]?.stats.rating ?? 1200);
+                team1Rating = (p0 + p2) / 2;
+                team2Rating = (p1 + p3) / 2;
             }
-            
-            // baseDelta is now the "Natural" change for the losing team (e.g., -25)
-            // The winning team naturally gains the inverse (e.g., +25)
 
-            // D. Apply Updates with Special Rules
-            const LEAVER_PENALTY_MULTIPLIER = 1.5; // 50% extra penalty for quitting
+            // C. Compute a base loss using a "stomp" score, then apply special rules
+            // calculateEloChange returns Team1's change.
+            const team1Won = !isTeam1Loser;
+            const s1 = team1Won ? 5000 : 0;
+            const s2 = team1Won ? 0 : 5000;
+
+            const team1Delta = calculateEloChange(team1Rating, team2Rating, s1, s2);
+
+            // Convert to the losing team's "natural" loss (always negative)
+            const baseLoss = Math.round(team1Won ? -team1Delta : team1Delta);
+
+            const LEAVER_PENALTY_MULTIPLIER = 1.5; // 50% extra penalty for the quitter
             const updates = {};
-            
-            for (let i = 0; i < playerCount; i++) {
-                if (!players[i]) continue;
 
-                // Is this player on the losing team?
-                const amIOnLosingTeam = (isTeam1Loser && (i === 0 || i === 2)) || 
-                                        (!isTeam1Loser && (i === 1 || i === 3));
+            for (let seat = 0; seat < playerCount; seat++) {
+                if (!players[seat]) continue;
 
-                if (amIOnLosingTeam) {
-                    if (i === loserSeat) {
-                        // === RULE 1: THE LEAVER (MAX PENALTY) ===
-                        // They take the Natural Loss * 1.5
-                        const penalty = Math.round(baseDelta * LEAVER_PENALTY_MULTIPLIER);
-                        players[i].stats.rating += penalty; // (Adding a negative number)
-                        players[i].stats.losses++;
-                        updates[i] = { delta: penalty, newRating: players[i].stats.rating };
+                // Is this seat on the losing team?
+                const onLosingTeam = (playerCount === 2)
+                    ? (seat === loserSeat)
+                    : ((isTeam1Loser && (seat === 0 || seat === 2)) ||
+                       (!isTeam1Loser && (seat === 1 || seat === 3)));
+
+                if (onLosingTeam) {
+                    if (seat === loserSeat) {
+                        // Rule 1: The inactive/leaving player gets the full penalty
+                        const penalty = Math.round(baseLoss * LEAVER_PENALTY_MULTIPLIER); // negative
+                        players[seat].stats.rating += penalty;
+                        players[seat].stats.losses++;
+                        updates[seat] = { delta: penalty, newRating: players[seat].stats.rating };
+                    } else if (playerCount === 4) {
+                        // Rule 2: In 4P ranked, the partner gets no rating penalty
+                        // (and no loss stat)
+                        updates[seat] = { delta: 0, newRating: players[seat].stats.rating };
                     } else {
-                        // === RULE 2: THE PARTNER (IMMUNITY) ===
-                        // They get 0 change. They do NOT get a loss stat (fairness).
-                        updates[i] = { delta: 0, newRating: players[i].stats.rating };
+                        // Should never happen in 2P, but keep a safe default
+                        players[seat].stats.rating += baseLoss;
+                        players[seat].stats.losses++;
+                        updates[seat] = { delta: baseLoss, newRating: players[seat].stats.rating };
                     }
                 } else {
-                    // === RULE 3: THE WINNERS ===
-                    // They gain the standard "Stomp" amount.
-                    // Since baseDelta is negative (loss), we subtract it to get positive.
-                    // OR: if baseDelta was calculated for T1 and T1 won, it's positive.
-                    // Let's rely on the math:
-                    
-                    // If T1 lost, baseDelta is -X. T2 (Winners) should get +X.
-                    // If T2 lost, baseDelta is +X (T1 gain). T2 (Losers) should get -X.
-                    
-                    // Simple Logic: Winners always gain Math.abs(baseDelta)
-                    const winPoints = Math.abs(baseDelta);
-                    
-                    players[i].stats.rating += winPoints;
-                    players[i].stats.wins++;
-                    updates[i] = { delta: winPoints, newRating: players[i].stats.rating };
+                    // Rule 3: Winners gain the standard win amount
+                    const winPoints = Math.abs(baseLoss);
+                    players[seat].stats.rating += winPoints;
+                    players[seat].stats.wins++;
+                    updates[seat] = { delta: winPoints, newRating: players[seat].stats.rating };
                 }
 
-                await players[i].save();
+                await players[seat].save();
             }
 
-            // E. Send Updates to Client
             io.to(gameId).emit('rating_update', updates);
 
         } catch (e) {
@@ -1382,7 +1385,7 @@ async function handleForfeit(gameId, loserSeat) {
         }
     }
 
-    // 4. Cleanup Game from Memory
+    // 3) Cleanup game from memory
     setTimeout(() => {
         delete games[gameId];
         delete gameBots[gameId];
