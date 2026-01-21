@@ -56,6 +56,10 @@ if (!MONGO_URI) {
     console.log("👉  [SYSTEM] Stats will not be saved.");
     DEV_MODE = true;
 } else {
+    if (MONGO_URI) {
+    // Show the first 25 chars to verify protocol/user, hide the password part
+    console.log("DEBUG: Connection String starts with:", MONGO_URI.substring(0, 25) + "...");
+}
     mongoose.connect(MONGO_URI)
         .then(() => console.log("[DB] Connected to MongoDB"))
         .catch(err => console.error("[DB] Connection Error:", err));
