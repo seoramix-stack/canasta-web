@@ -270,6 +270,10 @@ class CanastaBot {
             if (Math.abs(a.score - b.score) > 1) return a.score - b.score;
             return this.getCardValue(a.card) - this.getCardValue(b.card);
         });
+        if (!candidates || candidates.length === 0) {
+    console.error(`[BOT ERROR] Seat ${this.seat} has no valid discard candidates! Hand size: ${hand.length}`);
+    return 0; // Fallback to first card
+}
 
         return candidates[0].index;
     }
