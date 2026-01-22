@@ -600,3 +600,37 @@ h2 {
     pointer-events: none; /* CRITICAL: Allows clicks to pass through */
     display: none;        /* Hidden by default */
 }
+#inactivity-warning .warning-icon {
+    font-size: 30px;
+    margin-bottom: 10px;
+}
+
+#inactivity-warning .warning-countdown {
+    font-size: 22px;
+    color: var(--accent-color); /* Uses your existing Gold variable */
+    margin-top: 10px;
+    font-weight: 900;
+}
+
+#inactivity-warning .warning-hint {
+    font-size: 12px;
+    margin-top: 5px;
+}
+.setting-item {
+    margin: 15px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: sans-serif;
+}
+
+#botSpeedRange {
+    cursor: pointer;
+    width: 150px;
+}
+
+#speedValue {
+    font-weight: bold;
+    color: #2c3e50;
+    min-width: 60px;
+}

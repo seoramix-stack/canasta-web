@@ -29,6 +29,7 @@ class CanastaGame {
         this.finalScores = null;
         this.cumulativeScores = { team1: 0, team2: 0 }; 
         this.lastActionTime = Date.now(); 
+        this.bankTimers = { 0: 720, 1: 720, 2: 720, 3: 720 };
         this.disconnectedPlayers = {}; // Track who is offline
 
         // STATIC DATA (Moved here for performance)
@@ -235,19 +236,16 @@ class CanastaGame {
             if (score < req) return { success: false, message: `Points (${score}) < Req (${req}). Use 'Staging'.` };
         }
 
-        // --- 🔴 CRITICAL FIX: Prevent Illegal Floating (Infinite Loop Bug) ---
         // We calculate if this move results in 0 cards BEFORE executing it.
         let cardsUsed = (method === 'natural' || method === 'mixed') ? 2 : 0;
         let newHandSize = hand.length - cardsUsed + this.discardPile.length;
 
-        if (newHandSize === 0) {
-            let canastaCount = Object.values(teamMelds).filter(p => p.length >= 7).length;
-            // If you float (0 cards) but don't have the required Canastas, this move is ILLEGAL.
-            if (canastaCount < this.config.MIN_CANASTAS_OUT) {
-                return { success: false, message: "Cannot pickup: Would float without required Canastas." };
-            }
-        }
-        // --- 🔴 FIX END ---
+        if (newHandSize <= 1) {
+    let canastaCount = Object.values(teamMelds).filter(p => p.length >= 7).length;
+    if (canastaCount < this.config.MIN_CANASTAS_OUT) {
+        return { success: false, message: `Need ${this.config.MIN_CANASTAS_OUT} Canastas to meld down to ${newHandSize} cards.` };
+    }
+}
 
         let pile = this.discardPile.splice(0, this.discardPile.length);
         let pickupCard = pile.pop(); 
@@ -309,7 +307,7 @@ class CanastaGame {
         if (rank === "3") {
             if (cards.some(c => c.isWild)) return { success: false, message: "Cannot use Wilds with Black 3s." };
             let remaining = hand.length - cards.length;
-            if (remaining > 1) { 
+            if (remaining > 0) { 
                 return { success: false, message: "Black 3s allowed only when going out." }; 
             }
         }
@@ -340,15 +338,11 @@ class CanastaGame {
             currentCanastas++;
         }
 
-        // --- CRITICAL FIX: PREVENT GETTING STUCK WITH 1 CARD ---
         // If you don't have the Canastas to win, you MUST keep at least 2 cards:
         // 1 to discard + 1 to keep holding.
         if (currentCanastas < this.config.MIN_CANASTAS_OUT) {
-            if (cardsRemaining === 0) {
-                 return { success: false, message: `Need ${this.config.MIN_CANASTAS_OUT} Canastas to Float (go out without discard)!` };
-            }
             if (cardsRemaining === 1) {
-                 return { success: false, message: `Cannot meld down to 1 card without ${this.config.MIN_CANASTAS_OUT} Canastas!` };
+                return { success: false, message: `Cannot meld down to 1 card without ${this.config.MIN_CANASTAS_OUT} Canastas!` };
             }
         }
 
@@ -402,7 +396,7 @@ class CanastaGame {
             console.log(`ROUND OVER: Player ${playerIndex} went out.`);
             return { success: true, message: "GAME_OVER" };
         }
-            
+
         hand.splice(cardIndex, 1);
         this.discardPile.push(card);
         this.turnPhase = "draw";
@@ -541,7 +535,7 @@ class CanastaGame {
             if (existingLen + addedLen >= 7 && existingLen < 7) canastaCount++;
         });
 
-        if (cardsRemaining === 0) {
+        if (cardsRemaining <= 1) {
              if (canastaCount < this.config.MIN_CANASTAS_OUT) {
                  return { success: false, message: `Need ${this.config.MIN_CANASTAS_OUT} Canastas to go out!` };
              }

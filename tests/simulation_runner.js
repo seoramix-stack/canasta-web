@@ -70,11 +70,11 @@ function runSingleGame(gameId) {
 
     // Initialize 4 Hard Bots
     const bots = [
-        new ChaosBot(0, 'hard', '2p'), 
-        new CanastaBot(1, 'hard', '2p'), 
-        new CanastaBot(2, 'hard', '4p'),
-        new CanastaBot(3, 'hard', '4p')
-    ];
+  new ChaosBot(0, 'hard', '4p'),
+  new CanastaBot(1, 'hard', '4p'),
+  new CanastaBot(2, 'hard', '4p'),
+  new CanastaBot(3, 'hard', '4p'),
+];
 
     let turns = 0;
     stats.gamesPlayed++;

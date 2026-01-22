@@ -1,318 +1,429 @@
-// bot.js - v8.0: Fail-Safe Architecture
+// bot.js - v7.1: Memory, Multi-Mode & 4 Distinct Strategies
+const fs = require('fs');
+const path = require('path');
+
+// Safe loading of production DNA
+let PRODUCTION_DNA = null;
+const dnaPath = path.join(__dirname, 'production-dna.json');
+if (fs.existsSync(dnaPath)) {
+    PRODUCTION_DNA = JSON.parse(fs.readFileSync(dnaPath, 'utf8'));
+}
 
 class CanastaBot {
-    constructor(seat, difficulty = 'hard', type = '4p') {
-        this.seat = seat;
-        this.difficulty = difficulty;
-        this.type = type; 
-        
-        // --- MEMORY ---
-        this.seenDiscards = {}; 
-        this.partnerSignaled = false; 
+    constructor(seat, difficulty, type = '4p', ruleset = 'standard', injectedDna = null) {
+    this.seat = seat;
+    this.difficulty = difficulty;
+    this.type = type;       // '2p' or '4p'
+    this.ruleset = ruleset; // 'standard' or 'easy'
+    this.turboMode = false;
+
+    // --- 1. MEMORY SYSTEM INITIALIZATION ---
+    this.memory = {
+        initialized: false,
+        lastDiscardPile: [],
+        knownHands: {},
+        playersLastHandSize: {}
+    };
+
+    // --- 2. LOAD EXTERNAL DNA (If available) ---
+    let masterDna = null;
+    try {
+        // Attempt to load the merged DNA file created by your training
+        const dnaPath = path.join(__dirname, 'production-dna.json');
+        if (fs.existsSync(dnaPath)) {
+            masterDna = JSON.parse(fs.readFileSync(dnaPath, 'utf8'));
+        }
+    } catch (e) {
+        console.log("No production-dna.json found, using hardcoded defaults.");
     }
 
-    // --- MAIN TURN EXECUTION ---
-    async executeTurn(game, broadcastFunc) {
-        const delay = (ms) => new Promise(res => setTimeout(res, ms));
-
-        try {
-            // 1. PHASE: DRAW
-            await this.performDrawPhase(game);
-            if (broadcastFunc) broadcastFunc(this.seat);
-            await delay(1000);
-
-            // 2. PHASE: MELD (Wrapped in Try/Catch so it doesn't kill the turn)
-            try {
-                this.performMeldingPhase(game);
-                if (broadcastFunc) broadcastFunc(this.seat);
-                await delay(800);
-            } catch (err) {
-                console.error(`[BOT ${this.seat}] Melding Crash (Recovering...):`, err);
-            }
-
-            // 3. PHASE: DISCARD (Guaranteed to run)
-            this.performDiscardPhase(game, broadcastFunc);
-            
-        } catch (err) {
-            console.error(`[BOT ${this.seat}] FATAL TURN ERROR:`, err);
-            // Emergency fallback: If everything failed, try to force a discard to unstick the game
-            try {
-                 if (game.turnPhase === 'playing') {
-                     game.discardFromHand(this.seat, 0); // Discard first card blindly
-                     if (broadcastFunc) broadcastFunc(this.seat);
-                 }
-            } catch (e) { /* Ignore */ }
+    // --- 3. SELECTION LOGIC ---
+    if (injectedDna) {
+        // Use training DNA if provided directly (for the training scripts)
+        this.dna = injectedDna;
+    } else {
+        const dnaKey = `${this.type}-${this.ruleset}`; // e.g., "2p-easy"
+        
+        if (masterDna && masterDna[dnaKey]) {
+            // Use the professional DNA learned from 5,000 generations
+            this.dna = masterDna[dnaKey];
+        } else {
+            // FALLBACK: Use your original hardcoded defaults if file is missing
+            this.dna = this.getDefaultFallbackDna(this.type, this.ruleset);
         }
     }
+}
 
-    // --- PHASE LOGIC ---
+// Helper to keep the constructor clean
+getDefaultFallbackDna(type, ruleset) {
+    if (type === '2p') {
+        return ruleset === 'easy' ? 
+            { DISCARD_WILD_PENALTY: 500, FEED_ENEMY_MELD: 1000, DISCARD_SINGLE_BONUS: 50, MELD_AGGRESSION: 1.2, PICKUP_THRESHOLD: 1, BREAK_PAIR_PENALTY: 50, DISCARD_JUNK_BONUS: 20, GO_OUT_THRESHOLD: 0 } :
+            { DISCARD_WILD_PENALTY: 1732, FEED_ENEMY_MELD: 2071, DISCARD_SINGLE_BONUS: -93, MELD_AGGRESSION: 0.91, PICKUP_THRESHOLD: 2, BREAK_PAIR_PENALTY: 200, DISCARD_JUNK_BONUS: 10, GO_OUT_THRESHOLD: 0 };
+    } else {
+        return ruleset === 'easy' ?
+            { DISCARD_WILD_PENALTY: 500, FEED_ENEMY_MELD: 1000, DISCARD_SINGLE_BONUS: 50, MELD_AGGRESSION: 1.2, PICKUP_THRESHOLD: 1, BREAK_PAIR_PENALTY: 50, DISCARD_JUNK_BONUS: 20, GO_OUT_THRESHOLD: 1000 } :
+            { DISCARD_WILD_PENALTY: 1732, FEED_ENEMY_MELD: 3012, DISCARD_SINGLE_BONUS: -93, MELD_AGGRESSION: 0.84, PICKUP_THRESHOLD: 2, BREAK_PAIR_PENALTY: 200, DISCARD_JUNK_BONUS: 10, GO_OUT_THRESHOLD: 500 };
+    }
+}
 
-    async performDrawPhase(game) {
-        let pile = game.discardPile;
-        let topCard = pile.length > 0 ? pile[pile.length - 1] : null;
-        let wantPile = false;
+    // --- MAIN GAME LOOP ---
+    async executeTurn(game, callback) {
+        try {
+            this.updateMemory(game); 
+            const wait = (ms) => this.turboMode ? Promise.resolve() : new Promise(r => setTimeout(r, ms));
+            // Phase 1: Draw
+            await wait(1200); 
+            this.decideDraw(game);
+            if (callback) callback(this.seat);
 
-        // Simple Pickup Logic
-        if (topCard) {
-            let hand = game.players[this.seat];
-            let myMelds = this.getMyMelds(game);
-            
-            // Check if we can legally take it
-            if (this.canTakePile(game, hand, topCard, myMelds)) {
-                let pileValue = this.evaluatePile(pile);
-                if (pileValue > 50 || (this.difficulty === 'hard' && pile.length > 1)) {
-                    wantPile = true;
+            // Phase 2: Partner Check (Fixed to prevent -100 penalty)
+            await wait(800);
+            this.handlePartnerCommunication(game);
+
+            // Phase 3: Meld (Fixed to prevent illegal 15pt melds)
+            await wait(1500);
+            this.tryMelding(game);
+            if (callback) callback(this.seat);
+
+            // Phase 4: Discard
+            const hand = game.players[this.seat];
+            if (hand.length > 0 && game.turnPhase === 'playing') {
+                await wait(1200);
+                let discardIndex = this.pickDiscard(game);
+                let res = game.discardFromHand(this.seat, discardIndex);
+                
+                // CRITICAL: If discard fails, the bot MUST draw next turn or the simulation hangs
+                if (!res.success && this.turboMode) {
+                    console.warn(`[SIM] Seat ${this.seat} failed discard: ${res.message}. Forcing turn end.`);
+                    game.turnPhase = 'draw';
+                    game.currentPlayer = (game.currentPlayer + 1) % game.config.PLAYER_COUNT;
                 }
             }
-        }
 
-        if (wantPile) {
-            let res = game.pickupDiscardPile(this.seat);
-            if (!res.success) game.drawFromDeck(this.seat);
-        } else {
-            game.drawFromDeck(this.seat);
+            this.saveStateSnapshot(game);
+            if (callback) callback(this.seat);
+
+        } catch (error) {
+            console.error(`[BOT ERROR] Seat ${this.seat}:`, error);
         }
     }
 
-    performMeldingPhase(game) {
-        if (game.turnPhase !== 'playing') return;
+    // This is the helper that handles 2P vs 4P logic
+    handlePartnerCommunication(game) {
+    if (game.config.PLAYER_COUNT === 4) {
+        const hand = game.players[this.seat];
+        const teamMelds = (this.seat % 2 === 0) ? game.team1Melds : game.team2Melds;
+        const canastaCount = Object.values(teamMelds).filter(p => p.length >= 7).length;
 
-        let realDeckSize = this.getRealDeckSize(game);
-        let isLastTurn = realDeckSize < 7;
-        let hasOpened = Object.keys(this.getMyMelds(game)).length > 0;
+        // ONLY ask if the bot is actually capable of going out (1 card left)
+        // AND already has the required Canastas.
+        if (hand.length <= 1 && canastaCount >= game.config.MIN_CANASTAS_OUT) {
+            const partnerSeat = (this.seat + 2) % 4;
+            const partnerHand = game.players[partnerSeat];
+            const partnerHandPoints = partnerHand.reduce((sum, c) => sum + this.getCardValue(c), 0);
+            
+            game.goOutPermission = (partnerHandPoints > this.dna.GO_OUT_THRESHOLD) ? 'denied' : 'granted';
+        } else {
+            // If not trying to go out, reset permission to null to avoid penalties
+            game.goOutPermission = null;
+        }
+    } else {
+        game.goOutPermission = null; 
+    }
+}
 
-        // 1. Panic / Last Turn Mode
-        if (isLastTurn || this.checkPanicMode(game)) {
-            this.meldMax(game);
+    // --- MEMORY SYSTEM LOGIC ---
+
+    updateMemory(game) {
+        if (!this.memory.initialized || (game.discardPile.length === 0 && this.memory.lastDiscardPile.length === 0)) {
+            this.resetMemory(game);
             return;
         }
 
-        // 2. Normal Play
-        if (!hasOpened) {
-            this.attemptToOpen(game);
-        } else {
-            this.meldMax(game);
-        }
-    }
+        // A. Detect Pickups
+        const currentPile = game.discardPile;
+        const lastPile = this.memory.lastDiscardPile;
 
-    performDiscardPhase(game, broadcastFunc) {
-        if (game.turnPhase !== 'playing') return;
+        if (currentPile.length < lastPile.length) {
+            // Someone picked up the pile!
+            const pickedUpCards = [...lastPile];
+            let pickerSeat = -1;
 
-        let hand = game.players[this.seat];
-        if (!hand || hand.length === 0) return;
-
-        try {
-            let discardIndex = this.pickDiscard(game);
-            
-            let cardToThrow = hand[discardIndex];
-            if (cardToThrow) {
-                this.observeDiscard(cardToThrow, this.seat, game);
-                game.discardFromHand(this.seat, discardIndex);
-                if (broadcastFunc) broadcastFunc(this.seat);
-            }
-        } catch (e) {
-            console.error(`[BOT ${this.seat}] Discard Logic Error:`, e);
-            // Fallback: Discard index 0
-            game.discardFromHand(this.seat, 0);
-            if (broadcastFunc) broadcastFunc(this.seat);
-        }
-    }
-
-    // --- STRATEGY HELPERS ---
-
-    pickDiscard(game) {
-        let hand = game.players[this.seat];
-        // Calculate Enemy Melds safely
-        let enemyMelds = (this.seat % 2 === 0) ? game.team2Melds : game.team1Melds;
-        if (!enemyMelds) enemyMelds = {}; // Safety fallack
-
-        let candidates = [];
-
-        hand.forEach((card, index) => {
-            let score = 0;
-
-            // 1. Base Value (High value = good to save, so negative score for discard?)
-            // Actually, usually we want to discard "safe" cards (score -> high) or "junk" (score -> high)
-            // Let's use: Higher Score = Better Candidate to Discard
-            
-            // Penalty: Do not discard Wilds/Red3s
-            if (card.isWild) score -= 5000;
-            if (card.isRed3) score -= 9000;
-
-            // Penalty: Do not feed enemy
-            if (enemyMelds[card.rank] && !card.isWild) {
-                score -= 2000;
-            }
-
-            // Bonus: Discard cards we have seen in trash (Rule of 8 / Safe)
-            if (this.isCardSafe(card, game)) {
-                score += 500;
-            }
-
-            // Bonus: Discard High points if safe
-            score += this.getCardPointValue(card);
-
-            candidates.push({ index, score });
-        });
-
-        // Sort Descending: Highest score is best discard
-        candidates.sort((a, b) => b.score - a.score);
-
-        return candidates[0] ? candidates[0].index : 0;
-    }
-
-    meldMax(game) {
-        let changed = true;
-        let attempts = 0;
-        // Prevent infinite loops with a hard cap
-        while(changed && attempts < 20) {
-            changed = false;
-            attempts++;
-            let hand = game.players[this.seat];
-            let myMelds = this.getMyMelds(game);
-            
-            // Try to add to existing melds
-            for (let i = hand.length - 1; i >= 0; i--) {
-                let c = hand[i];
-                if (myMelds[c.rank]) {
-                    let res = game.meldCards(this.seat, [i], c.rank);
-                    if (res.success) changed = true;
-                }
-                else if (c.isWild) {
-                    // Try to add Wild to any meld < 7
-                    for(let rank in myMelds) {
-                        if (myMelds[rank].length < 7) {
-                             let res = game.meldCards(this.seat, [i], rank);
-                             if (res.success) { changed = true; break; }
-                        }
+            if (game.config.PLAYER_COUNT === 2) {
+                pickerSeat = (this.seat + 1) % 2;
+            } else {
+                // Guess who picked up based on hand size growth
+                let maxGrowth = -999;
+                for (let i = 0; i < game.config.PLAYER_COUNT; i++) {
+                    if (i === this.seat) continue;
+                    const growth = game.players[i].length - (this.memory.playersLastHandSize[i] || 0);
+                    if (growth > maxGrowth) {
+                        maxGrowth = growth;
+                        pickerSeat = i;
                     }
                 }
             }
+
+            if (pickerSeat !== -1) {
+                if (!this.memory.knownHands[pickerSeat]) this.memory.knownHands[pickerSeat] = [];
+                this.memory.knownHands[pickerSeat].push(...pickedUpCards);
+            }
         }
-        this.meldNaturals(game);
+
+        // B. Cleanup Memory (Remove cards played/discarded by enemies)
+        for (let pIndex = 0; pIndex < game.config.PLAYER_COUNT; pIndex++) {
+            if (pIndex === this.seat) continue;
+            if (!this.memory.knownHands[pIndex]) continue;
+
+            const enemyMelds = (pIndex % 2 === 0) ? game.team1Melds : game.team2Melds;
+
+            // 1. Remove Melded Cards
+            this.memory.knownHands[pIndex] = this.memory.knownHands[pIndex].filter(knownCard => {
+                const meld = enemyMelds[knownCard.rank];
+                if (!meld) return true; // Not melded yet
+                // Simple heuristic: If meld exists, assume known card was used
+                return false; 
+            });
+
+            // 2. Remove Discarded Card
+            if (game.discardPile.length > 0) {
+                 const topCard = game.discardPile[game.discardPile.length - 1];
+                 // If previous player was this opponent
+                 let prevPlayer = (this.seat - 1 + game.config.PLAYER_COUNT) % game.config.PLAYER_COUNT;
+                 if (pIndex === prevPlayer) {
+                     const matchIdx = this.memory.knownHands[pIndex].findIndex(c => c.rank === topCard.rank);
+                     if (matchIdx !== -1) this.memory.knownHands[pIndex].splice(matchIdx, 1);
+                 }
+            }
+        }
     }
 
-    meldNaturals(game) {
+    saveStateSnapshot(game) {
+        this.memory.initialized = true;
+        this.memory.lastDiscardPile = [...game.discardPile]; 
+        for (let i = 0; i < game.config.PLAYER_COUNT; i++) {
+            this.memory.playersLastHandSize[i] = game.players[i].length;
+        }
+    }
+
+    resetMemory(game) {
+        this.memory = {
+            initialized: true,
+            lastDiscardPile: [],
+            knownHands: {},
+            playersLastHandSize: {}
+        };
+        for (let i = 0; i < game.config.PLAYER_COUNT; i++) {
+            this.memory.knownHands[i] = [];
+            this.memory.playersLastHandSize[i] = game.players[i].length;
+        }
+    }
+
+    // --- DECISION LOGIC ---
+
+    pickDiscard(game) {
         let hand = game.players[this.seat];
-        let groups = {};
-        hand.forEach((c, i) => {
-            if (!c.isWild) {
-                if (!groups[c.rank]) groups[c.rank] = [];
-                groups[c.rank].push(i);
+        let pile = game.discardPile;
+        let pileValue = pile.reduce((sum, c) => sum + this.getCardValue(c), 0);
+        
+        let nextPlayerSeat = (this.seat + 1) % game.config.PLAYER_COUNT;
+        
+        let enemyMelds;
+        if (game.config.PLAYER_COUNT === 2) {
+             enemyMelds = (this.seat === 0) ? game.team2Melds : game.team1Melds;
+        } else {
+             enemyMelds = (nextPlayerSeat % 2 === 0) ? game.team1Melds : game.team2Melds;
+        }
+
+        let enemyCanastaCount = 0;
+        for (let rank in enemyMelds) if (enemyMelds[rank].length >= 7) enemyCanastaCount++;
+        let isEndGame = (enemyCanastaCount >= 2);
+
+        let candidates = hand.map((card, index) => {
+            let score = 0;
+            score += this.getCardValue(card) * 2;
+            if (card.isWild) score += this.dna.DISCARD_WILD_PENALTY;
+
+            // --- STANDARD LOGIC ---
+            if (enemyMelds[card.rank]) {
+                if (isEndGame || pileValue > 300) score += (this.dna.FEED_ENEMY_MELD * 5); 
+                else score += this.dna.FEED_ENEMY_MELD;
             }
+
+            // --- MEMORY LOGIC ---
+            // "Do I know for a fact the next player has this card?"
+            const knownHand = this.memory.knownHands[nextPlayerSeat] || [];
+            const enemyHasPair = knownHand.filter(c => c.rank === card.rank).length >= 2;
+            const enemyHasSingle = knownHand.filter(c => c.rank === card.rank).length >= 1;
+
+            if (enemyHasPair) {
+                // They have a pair, this gives them a clean canasta/meld!
+                score += (this.dna.FEED_ENEMY_MELD * 2.5);
+            } else if (enemyHasSingle) {
+                // They have one, this gives them a pair (allowing them to pick up).
+                score += (this.dna.FEED_ENEMY_MELD * 0.8);
+            }
+
+            // --- SELF LOGIC ---
+            let matches = hand.filter(c => c.rank === card.rank).length;
+            if (matches >= 2) {
+                if (pileValue > 200) score += (this.dna.BREAK_PAIR_PENALTY * 3);
+                else score += this.dna.BREAK_PAIR_PENALTY;
+            }
+
+            if (["4","5","6","7"].includes(card.rank)) score += this.dna.DISCARD_JUNK_BONUS;
+            return { index, score, card };
         });
 
-        for (let rank in groups) {
-            if (groups[rank].length >= 3) {
-                game.meldCards(this.seat, groups[rank], rank);
-            }
-        }
-    }
-
-    attemptToOpen(game) {
-        let hand = game.players[this.seat];
-        let groups = {};
-        hand.forEach((c, i) => {
-            if (!c.isWild) {
-                if (!groups[c.rank]) groups[c.rank] = [];
-                groups[c.rank].push(i);
-            }
+        candidates.sort((a, b) => {
+            if (Math.abs(a.score - b.score) > 1) return a.score - b.score;
+            return this.getCardValue(a.card) - this.getCardValue(b.card);
         });
-        
-        let potentialMelds = [];
-        let totalPts = 0;
 
-        for (let r in groups) {
-            if (groups[r].length >= 3) {
-                let indices = groups[r];
-                potentialMelds.push({ indices: indices, rank: r });
-                indices.forEach(idx => totalPts += this.getCardPointValue(hand[idx]));
+        return candidates[0].index;
+    }
+
+    decideDraw(game) {
+        let pile = game.discardPile;
+        let topCard = pile.length > 0 ? pile[pile.length - 1] : null;
+        
+        if (!topCard) {
+            game.drawFromDeck(this.seat);
+            return;
+        }
+
+        let hand = game.players[this.seat];
+        let myMelds = (this.seat % 2 === 0) ? game.team1Melds : game.team2Melds;
+        let isFrozen = pile.some(c => c.isWild || c.isRed3);
+        let naturalMatches = hand.filter(c => c.rank === topCard.rank && !c.isWild).length;
+        let wildCount = hand.filter(c => c.isWild).length;
+
+        let canPickup = false;
+        if (naturalMatches >= 2) canPickup = true;
+        else if (myMelds[topCard.rank] && !isFrozen && naturalMatches >= 1) canPickup = true;
+        else if (!isFrozen && naturalMatches >= 1 && wildCount >= 1) canPickup = true;
+
+        if (canPickup) {
+            let pileValue = pile.reduce((sum, c) => sum + this.getCardValue(c), 0);
+            let wantPile = false;
+
+            if (pileValue > 200) wantPile = true;
+            else if (naturalMatches >= this.dna.PICKUP_THRESHOLD) wantPile = true;
+            else if (myMelds[topCard.rank] && myMelds[topCard.rank].length >= 4) wantPile = true;
+
+            if (wantPile) {
+                let res = game.pickupDiscardPile(this.seat);
+                if (res.success) return; 
             }
         }
-        
-        let myScore = (this.seat % 2 === 0) ? game.cumulativeScores.team1 : game.cumulativeScores.team2;
-        let req = game.getOpeningReq(myScore);
-        
-        if (totalPts >= req && potentialMelds.length > 0) {
-            game.processOpening(this.seat, potentialMelds, false);
+        game.drawFromDeck(this.seat);
+    }
+
+
+
+    tryMelding(game) {
+        const myTeamKey = (this.seat % 2 === 0) ? 'team1' : 'team2';
+        const myScore = game.cumulativeScores[myTeamKey];
+        const myMelds = (this.seat % 2 === 0) ? game.team1Melds : game.team2Melds;
+        const isOpening = (Object.keys(myMelds).length === 0);
+
+        // --- 1. OPENING REQUIREMENT CHECK (With Wilds) ---
+        if (isOpening) {
+            const requiredPoints = game.getOpeningReq(myScore);
+            let totalOpeningPoints = 0;
+            let hand = [...game.players[this.seat]];
+            
+            let naturalGroups = {};
+            let wilds = [];
+            hand.forEach(c => { 
+                if(!c.isWild) {
+                    naturalGroups[c.rank] = (naturalGroups[c.rank] || 0) + 1; 
+                } else {
+                    wilds.push(c);
+                }
+            });
+            
+            // Calculate points from valid potential melds
+            for (let r in naturalGroups) {
+                let count = naturalGroups[r];
+                // Case A: Natural set of 3+
+                if (count >= 3) {
+                    totalOpeningPoints += count * this.getCardValue({rank: r});
+                } 
+                // Case B: Natural pair + 1 Wild (minimum 3 cards)
+                else if (count === 2 && wilds.length >= 1) {
+                    totalOpeningPoints += (2 * this.getCardValue({rank: r})) + this.getCardValue(wilds[0]);
+                    wilds.shift(); // Use this wild card
+                }
+            }
+
+            // If we don't have 50+ points total, STOP.
+            if (totalOpeningPoints < requiredPoints) return;
+        }
+
+        // --- 2. MAIN MELDING LOOP ---
+        let madeMeld = true;
+        while (madeMeld) {
+            madeMeld = false;
+            let hand = game.players[this.seat]; 
+            let groups = {};
+            let wildIndices = [];
+
+            hand.forEach((c, i) => {
+                if (c.isWild) wildIndices.push(i);
+                else {
+                    if (!groups[c.rank]) groups[c.rank] = [];
+                    groups[c.rank].push(i);
+                }
+            });
+
+            // Priority 1: Add to existing melds
+            for (let rank in myMelds) {
+                if (groups[rank] && groups[rank].length > 0) {
+                    let cardsToPlay = groups[rank];
+                    let currentHand = game.players[this.seat];
+                    const canastaCount = Object.values(myMelds).filter(p => p.length >= 7).length;
+
+                    // SAFETY: Do not meld down to 1 card if we can't legally discard it
+                    if (canastaCount < game.config.MIN_CANASTAS_OUT && (currentHand.length - cardsToPlay.length === 1)) {
+                        continue; 
+                    }
+
+                    let res = game.meldCards(this.seat, groups[rank], rank);
+                    if (res.success) { madeMeld = true; break; }
+                }
+            }
+            if (madeMeld) continue;
+
+            // Priority 2: Create new melds (3+ cards, allows mixing)
+            for (let rank in groups) {
+                let cardsToPlay = [...groups[rank]];
+                let currentHand = game.players[this.seat];
+                const teamMelds = (this.seat % 2 === 0) ? game.team1Melds : game.team2Melds;
+                const canastaCount = Object.values(teamMelds).filter(p => p.length >= 7).length;
+
+                if (canastaCount < game.config.MIN_CANASTAS_OUT && (currentHand.length - cardsToPlay.length === 1)) {
+                continue; // Skip this meld to stay at 2+ cards
+                }
+                // If it's just a pair, try to use a wild card to make it a meld
+                if (cardsToPlay.length === 2 && wildIndices.length >= 1) {
+                    cardsToPlay.push(wildIndices[0]);
+                }
+
+                if (cardsToPlay.length >= 3) {
+                    let res = game.meldCards(this.seat, cardsToPlay, rank);
+                    if (res.success) { madeMeld = true; break; }
+                }
+            }
         }
     }
 
-    // --- HELPERS ---
-
-    getMyMelds(game) {
-        return (this.seat % 2 === 0) ? game.team1Melds : game.team2Melds;
-    }
-
-    getRealDeckSize(game) {
-        let visibleDeckCount = game.deck.length;
-        let team1R3 = game.team1Red3s || [];
-        let team2R3 = game.team2Red3s || [];
-        let missingR3 = 4 - (team1R3.length + team2R3.length);
-        return Math.max(0, visibleDeckCount - missingR3); 
-    }
-
-    checkPanicMode(game) {
-        // Safety check for players array
-        let pCount = game.players ? game.players.length : 4;
-        let oppSeat = (this.seat + 1) % pCount; 
-        
-        if (!game.players[oppSeat]) return false;
-
-        let oppMelds = (this.seat % 2 !== 0) ? game.team1Melds : game.team2Melds;
-        if (!oppMelds) return false;
-
-        let canastaCount = 0;
-        for (let rank in oppMelds) {
-            if (oppMelds[rank].length >= 7) canastaCount++;
-        }
-        return (canastaCount >= 2);
-    }
-
-    isCardSafe(card, game) {
-        if (card.isWild) return true;
-        let rank = card.rank;
-        
-        // Count cards visible everywhere
-        let inHand = 0; // Bot assumes it has them
-        let tableCount = 0;
-        
-        if (game.team1Melds[rank]) tableCount += game.team1Melds[rank].length;
-        if (game.team2Melds[rank]) tableCount += game.team2Melds[rank].length;
-        
-        let inTrash = this.seenDiscards[rank] || 0;
-        
-        // If 7+ are accounted for, it's impossible for enemy to have a clean pair
-        return (tableCount + inTrash >= 7);
-    }
-
-    getCardPointValue(card) {
-        if (card.rank === 'Joker') return 50;
-        if (card.rank === '2' || card.rank === 'A') return 20;
-        if (['8','9','10','J','Q','K'].includes(card.rank)) return 10;
+    getCardValue(card) {
+        if (card.rank === "Joker") return 50;
+        if (card.rank === "2" || card.rank === "A") return 20;
+        if (["8","9","10","J","Q","K"].includes(card.rank)) return 10;
         return 5; 
-    }
-
-    evaluatePile(pile) {
-        return pile.reduce((sum, c) => sum + this.getCardPointValue(c), 0);
-    }
-
-    canTakePile(game, hand, topCard, myMelds) {
-        if (topCard.isWild || topCard.rank === '3') return false;
-        if (myMelds[topCard.rank]) return true;
-        let naturals = hand.filter(c => c.rank === topCard.rank && !c.isWild).length;
-        return (naturals >= 2);
-    }
-    
-    decideGoOutPermission(game) {
-        // Default to YES to prevent game stalling if logic is complex
-        return true;
-    }
-
-    observeDiscard(card, playerSeat, game) {
-        if (!card) return;
-        if (!this.seenDiscards[card.rank]) this.seenDiscards[card.rank] = 0;
-        this.seenDiscards[card.rank]++;
     }
 }
 

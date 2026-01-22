@@ -18,10 +18,9 @@ window.hardReset = () => {
 let afkSeconds = 0; // Tracks seconds since last action
 let timeoutSent = false;
 function resetActivity() {
-  afkSeconds = 0;
-  timeoutSent = false;
-  const warningEl = document.getElementById('inactivity-warning');
-  if (warningEl) warningEl.style.display = 'none';
+    afkSeconds = 0;
+    timeoutSent = false;
+    UI.hideInactivityWarning(); // Call the exported function from ui.js
 }
 
 // NEW: Listeners to detect any activity
@@ -39,6 +38,36 @@ if (state.playerToken && state.playerUsername) {
 
 // --- 2. EXPOSE FUNCTIONS TO HTML (Crucial Step!) ---
 window.navTo = UI.navTo;
+// --- BOT SPEED CONTROL (FIXED) ---
+document.addEventListener('DOMContentLoaded', () => {
+    const botSpeedRange = document.getElementById('botSpeedRange');
+    const speedValueLabel = document.getElementById('speedValue');
+
+    if (!botSpeedRange || !speedValueLabel) return;
+
+    // 1. Load locally saved speed so the slider stays put on refresh
+    const savedSpeed = localStorage.getItem('pref_bot_speed') || 350;
+    botSpeedRange.value = savedSpeed;
+    speedValueLabel.innerText = savedSpeed + 'ms';
+
+    botSpeedRange.addEventListener('input', (e) => {
+        const speed = parseInt(e.target.value);
+        speedValueLabel.innerText = speed + 'ms';
+        localStorage.setItem('pref_bot_speed', speed);
+
+        // 2. Identify the Game ID safely
+        // Check state.activeData first, but also check if we are in a lobby
+        const gId = state.activeData?.gameId || document.getElementById('lobby-room-id')?.innerText;
+        
+        if (state.socket) {
+            // Even if gId is "---" or null, we emit so the server saves it to the SESSION
+            state.socket.emit('updateBotSpeed', { 
+                gameId: (gId === '---' ? null : gId), 
+                speed: speed 
+            });
+        }
+    });
+});
 window.toggleGameMenu = UI.toggleGameMenu;
 window.logout = logout;
 
@@ -571,13 +600,26 @@ state.socket.on('penalty_notification', (data) => {
         }
     });
 
+    state.socket.on('timer_sync', (data) => {
+    if (data.bankTimers) {
+        // Update the local state with the server's truth
+        state.seatTimers = data.bankTimers;
+        // Call your existing function to update the 12:00 labels
+        updateTimerDOM();
+    }
+});
+
     state.socket.on('update_game', (data) => {
+        if (data.bankTimers) {
+        state.seatTimers = data.bankTimers;
+        updateTimerDOM();
+    }
     // 1. Define the full update callback
     const performFullUpdate = () => UI.updateUI(data);
     // RESET AFK TIMER because an action happened
         afkSeconds = 0; 
         timeoutSent = false;
-        hideInactivityWarning(); // Remove warning if it was showing
+        UI.hideInactivityWarning(); // Remove warning if it was showing
     if (state.activeData) {
         // 2. Pass the FULL update function to animations
         Anim.handleServerAnimations(state.activeData, data, performFullUpdate);
@@ -599,6 +641,9 @@ state.socket.on('penalty_notification', (data) => {
 };
 
     state.socket.on('match_over', (data) => {
+    // Hide the warning immediately when match ends
+    const warningEl = document.getElementById('inactivity-warning') || document.getElementById('afk-warning');
+    if (warningEl) warningEl.style.display = 'none';
         setTimeout(() => {
             // 1. Cleanup Animations
             state.discardAnimationActive = false; 
@@ -805,53 +850,24 @@ if (nameEl) nameEl.innerText = pName;
 
 // --- TIMER LOGIC ---
 
-function startTimerSystem(shouldReset = false) {
+function startTimerSystem() {
     if (state.timerInterval) clearInterval(state.timerInterval);
-        timeoutSent = false;   // <--- add this
-        afkSeconds = 0;    
-    // RESTORE: 12 Minute Bank (720s)
-    if (shouldReset) {
-        state.seatTimers = { 0: 720, 1: 720, 2: 720, 3: 720 };
-        afkSeconds = 0; // Reset AFK tracker
-    }
-    updateTimerDOM(); 
+    afkSeconds = 0;
 
     state.timerInterval = setInterval(() => {
         if (!state.gameStarted || state.currentTurnSeat === -1) return;
 
-        // 1. MAIN GAME TIMER (The Bank)
-        if (state.seatTimers[state.currentTurnSeat] > 0) {
-            state.seatTimers[state.currentTurnSeat]--;
-            updateTimerDOM(); // Updates the visual clock (12:00)
-        }
-
-        // 2. INACTIVITY MONITOR (The Hidden Clock)
-        // Only track AFK for the player whose turn it is
+        // ONLY track AFK for the local player
         if (state.currentTurnSeat === state.mySeat) {
             afkSeconds++;
-
-            // WARNING at 45 Seconds (15s left)
-            if (afkSeconds === 45) {
-                showInactivityWarning();
+            if (afkSeconds >= 45 && afkSeconds < 60) {
+                UI.showInactivityWarning(60 - afkSeconds);
             }
-
-            // FORFEIT at 60 Seconds
             if (afkSeconds >= 60 && !timeoutSent) {
-            console.log("Inactivity limit reached. Requesting auto-forfeit.");
-            timeoutSent = true;
-            state.socket.emit('act_timeout');
-            // Do NOT clear the main interval, it drives the 12-minute bank timer
-}
-        } else {
-             // If it's not my turn, I check if the opponent is AFK?
-             // Actually, let the server or the opponent's client handle their own emit.
-             // OR: As an opponent, I can count their AFK time too and claim the win.
-             
-             // Opponent tracking logic (Optional but good for fallback):
-             // afkSeconds++;
-             // if (afkSeconds >= 62) state.socket.emit('act_timeout'); 
+                timeoutSent = true;
+                state.socket.emit('act_timeout');
+            }
         }
-
     }, 1000);
 }
 
@@ -1125,33 +1141,3 @@ window.drawCard = () => {
 
     state.socket.emit('act_draw', { seat: state.mySeat });
 };
-
-// --- INACTIVITY WARNING UI HELPERS ---
-
-// client.js - Replace your existing showInactivityWarning function
-
-function showInactivityWarning() {
-    let el = document.getElementById('inactivity-warning');
-    
-    // Create element if it doesn't exist (only happens once)
-    if (!el) {
-        el = document.createElement('div');
-        el.id = 'inactivity-warning'; // CSS file will style this now
-        document.body.appendChild(el);
-    }
-
-    // Set content and show
-    el.innerHTML = `
-        <div style="font-size: 30px; margin-bottom: 10px;">⏳</div>
-        <div>ARE YOU STILL THERE?</div>
-        <div style="font-size: 12px; margin-top: 5px;">Move or touch to continue</div>
-    `;
-    el.style.display = 'block';
-}
-
-function hideInactivityWarning() {
-    const el = document.getElementById('inactivity-warning');
-    if (el) {
-        el.style.display = 'none';
-    }
-}

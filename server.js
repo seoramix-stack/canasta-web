@@ -424,6 +424,19 @@ io.on('connection', async (socket) => {
     });
 
     // --- NEW: SOCIAL EVENTS ---
+    socket.on('updateBotSpeed', ({ gameId, speed }) => {
+        const token = socket.handshake.auth.token;
+        
+        // 1. Update the CURRENT game if it exists
+        if (gameId && games[gameId]) {
+            games[gameId].botDelayBase = speed; 
+        }
+
+        // 2. Save to the player's SESSION so the NEXT game remembers it
+        if (token && playerSessions[token]) {
+            playerSessions[token].botSpeed = speed;
+        }
+    });
 
     socket.on('social_search', async (query) => {
         if (DEV_MODE) return;
@@ -696,37 +709,21 @@ io.on('connection', async (socket) => {
             let hand = game.players[data.seat];
             let willGoOut = (hand.length === 1); // If 1 card and discarding it -> 0 left
 
-                // --- PENALTY CHECK 1: IGNORING "NO" ---
-            // You are trying to Go Out, but Partner said NO.
+            // ONLY apply partner penalties in 4-player games
+        if (game.config.PLAYER_COUNT === 4) {
+            // Penalty Check 1: Ignoring "NO"
             if (willGoOut && game.goOutPermission === 'denied') {
-                const teamKey = (data.seat % 2 === 0) ? 'team1' : 'team2';
-                game.cumulativeScores[teamKey] -= 100;
-
-                const name = (game.names && game.names[data.seat]) ? game.names[data.seat] : `Player ${data.seat+1}`;
-                io.to(gameId).emit('penalty_notification', { 
-                    message: `${name} ignored partner's NO! -100 pts.`
-                });
-                
-                // REJECT THE MOVE: You must keep the card.
-                socket.emit('error_message', "Partner said NO! You cannot go out.");
-                broadcastAll(gameId); 
+                // ... (keep existing penalty logic here)
                 return; 
             }
 
-            // --- PENALTY CHECK 2: IGNORING "YES" (THE MISSING LOGIC) ---
-            // You are NOT going out (will have cards left), but Partner said YES.
+            // Penalty Check 2: Ignoring "YES"
             if (!willGoOut && game.goOutPermission === 'granted') {
                 const teamKey = (data.seat % 2 === 0) ? 'team1' : 'team2';
                 game.cumulativeScores[teamKey] -= 100;
-
-                const name = (game.names && game.names[data.seat]) ? game.names[data.seat] : `Player ${data.seat+1}`;
-                io.to(gameId).emit('penalty_notification', { 
-                    message: `${name} failed to go out! -100 pts.`
-                });
-                
-                // We ALLOW the discard, but apply the penalty.
-                // (Because you physically cannot go out, so the game must continue).
+                // ... (keep existing notification logic here)
             }
+        }
 
             // Normal Execution
             let res = game.discardFromHand(data.seat, data.index); 
@@ -811,26 +808,24 @@ io.on('connection', async (socket) => {
 
     // --- TIMEOUT HANDLER ---
     socket.on('act_timeout', async () => {
-        const gameId = socket.data.gameId;
-        const game = games[gameId];
-        if (!game) return;
+    const gameId = socket.data.gameId;
+    const game = games[gameId];
+    if (!game || game.matchIsOver) return;
 
-        const now = Date.now();
-        const INACTIVITY_LIMIT = 60 * 1000; // 1 Minute
-        const timeSinceAction = now - game.lastActionTime;
+    // We trust the client's 60s trigger but add a small 2s buffer 
+    // to account for network lag vs the server's lastActionTime.
+    const now = Date.now();
+    const INACTIVITY_LIMIT = 58000; // 58s buffer (be slightly more lenient than 60s)
+    const timeSinceAction = now - game.lastActionTime;
 
-        // 1. Validate the timeout (Security)
-        if (timeSinceAction < INACTIVITY_LIMIT) {
-            console.log(`[TIMEOUT DENIED] Player Active. Last action: ${timeSinceAction}ms ago.`);
-            return;
-        }
+    if (timeSinceAction < INACTIVITY_LIMIT) {
+        console.log(`[TIMEOUT DENIED] Security check failed: ${timeSinceAction}ms`);
+        return;
+    }
 
-        console.log(`[TIMEOUT] Game ${gameId} ended. Player ${game.currentPlayer} AFK.`);
-
-        // 2. Trigger the Forfeit Logic
-        // This function handles the Math, the Ratings, AND the 'match_over' broadcast.
-        handleForfeit(gameId, game.currentPlayer); 
-    });
+    console.log(`[TIMEOUT] Ending Game ${gameId}. Player ${game.currentPlayer} is AFK.`);
+    handleForfeit(gameId, game.currentPlayer); 
+});
 
     socket.on('leave_game', async () => { 
         const gameId = socket.data.gameId;
@@ -882,9 +877,6 @@ async function startBotGame(humanSocket, difficulty, playerCount = 4, ruleset = 
     const gameId = generateGameId();
     const pCountInt = parseInt(playerCount);
     
-    // --- PHASE 3: DYNAMIC CONFIG ---
-    // 2-Player Standard: 15 Cards, 2 to Draw (Draw count handled by default config)
-    // 4-Player Standard: 11 Cards
     const gameConfig = (playerCount === 2) 
         ? { PLAYER_COUNT: 2, HAND_SIZE: 15 } 
         : { PLAYER_COUNT: 4, HAND_SIZE: 11 };
@@ -898,24 +890,28 @@ async function startBotGame(humanSocket, difficulty, playerCount = 4, ruleset = 
     }
 
     games[gameId] = new CanastaGame(gameConfig);
+    
+    // --- PERSISTENCE FIX ---
+    // 1. Get the token once at the start
+    const token = humanSocket.handshake.auth.token; 
+    
+    // 2. Apply the saved speed from the session immediately if it exists
+    if (token && playerSessions[token] && playerSessions[token].botSpeed) {
+        games[gameId].botDelayBase = playerSessions[token].botSpeed;
+    } else {
+        games[gameId].botDelayBase = 350; // Default fallback
+    }
+
     games[gameId].resetMatch();
     
     const userName = humanSocket.handshake.auth.username || "Player";
     gameBots[gameId] = {};
 
-    // --- SETUP BOTS & NAMES BASED ON COUNT ---
     if (playerCount === 2) {
-        // 2P: Human (Seat 0) vs Bot (Seat 1)
         games[gameId].names = [userName, "Bot 1"];
-        
-        // Spawn 1 Bot at Seat 1
         gameBots[gameId][1] = new CanastaBot(1, difficulty, '2p');
-        
     } else {
-        // 4P: Human (Seat 0) vs Bots (Seats 1, 2, 3)
         games[gameId].names = [userName, "Bot 1", "Bot 2", "Bot 3"];
-        
-        // Spawn 3 Bots
         for (let i = 1; i <= 3; i++) {
             gameBots[gameId][i] = new CanastaBot(i, difficulty, '4p');
         }
@@ -925,15 +921,20 @@ async function startBotGame(humanSocket, difficulty, playerCount = 4, ruleset = 
     humanSocket.data.seat = 0;
     humanSocket.data.gameId = gameId;
 
-    const token = humanSocket.handshake.auth.token;
+    // 3. Update the session using the 'token' variable we already declared above
     if (token) {
         const existingName = playerSessions[token] ? playerSessions[token].username : "Player";
-        playerSessions[token] = { gameId: gameId, seat: 0, username: existingName };
+        
+        playerSessions[token] = { 
+            ...playerSessions[token], // Keep botSpeed
+            gameId: gameId, 
+            seat: 0, 
+            username: existingName 
+        };
     }
 
     games[gameId].currentPlayer = 0;
     games[gameId].roundStarter = 0;
-    // Force immediate update
     sendUpdate(gameId, humanSocket.id, 0);
 }
 
@@ -1003,6 +1004,7 @@ function broadcastAll(gameId, activeSeat) {
     io.sockets.sockets.forEach((s) => {
         if (s.data.gameId === gameId) {
             let update = {
+                bankTimers: game.bankTimers,
                 currentPlayer: game.currentPlayer, 
                 handBacks: handBacks,
                 nextDeckColor: nextDeckColor,
@@ -1048,34 +1050,36 @@ function checkBotTurn(gameId) {
     if (game.processingTurnFor === curr) return; 
 
     if (bot) {
-        game.processingTurnFor = curr;
-        
-        const delay = (game.turnPhase === 'draw') ? 1000 : 0;
+    game.processingTurnFor = curr;
+    
+    // --- ADJUSTABLE SPEEDS ---
+    // 350ms feels snappy but allows the eye to follow the card movement.
+    const base = game.botDelayBase || 350;
+    const DRAW_DELAY = base; 
+    const ACTION_DELAY = Math.floor(base / 2); 
+    const delay = (game.turnPhase === 'draw') ? DRAW_DELAY : ACTION_DELAY;
 
-        setTimeout(() => {
-    // 1. Run the bot logic
-    bot.executeTurn(game, (updatedSeat) => {
-        // NOTE: We do NOT release 'processingTurnFor' here anymore.
-        // We only broadcast the update. The lock stays active.
-        if (game.turnPhase === 'game_over') {
-            console.log(`[BOT] Player ${updatedSeat} ended the round.`);
-            handleRoundEnd(gameId, io);    
-        } else {
-            broadcastAll(gameId, updatedSeat); 
-        }
-    })
-    // 2. Release the lock ONLY when the bot is fully done (Promise resolves)
-    .then(() => {
-        game.processingTurnFor = null; 
-    })
-    // 3. Release lock if it crashes
-    .catch(err => {
-        console.error(`[BOT ERROR] Seat ${curr} crashed:`, err);
-        game.processingTurnFor = null; 
-    });
-}, delay);
+    setTimeout(() => {
+        bot.executeTurn(game, (updatedSeat) => {
+            if (game.turnPhase === 'game_over') {
+                console.log(`[BOT] Player ${updatedSeat} ended the round.`);
+                handleRoundEnd(gameId, io);    
+            } else {
+                broadcastAll(gameId, updatedSeat); 
+            }
+        })
+        .then(() => {
+            game.processingTurnFor = null; 
+            // Trigger the next check immediately to keep the game flowing
+            checkBotTurn(gameId); 
+        })
+        .catch(err => {
+            console.error(`[BOT ERROR] Seat ${curr} crashed:`, err);
+            game.processingTurnFor = null; 
+        });
+    }, delay);
 
-    } else {
+}else {
         game.processingTurnFor = null;
     }
 }
@@ -1367,7 +1371,7 @@ async function handleForfeit(gameId, loserSeat) {
                         players[seat].stats.losses++;
                         updates[seat] = { delta: baseLoss, newRating: players[seat].stats.rating };
                     }
-                } else {
+                    } else {
                     // Rule 3: Winners gain the standard win amount
                     const winPoints = Math.abs(baseLoss);
                     players[seat].stats.rating += winPoints;
@@ -1384,10 +1388,30 @@ async function handleForfeit(gameId, loserSeat) {
             console.error("Forfeit Elo Error:", e);
         }
     }
-
+    
     // 3) Cleanup game from memory
     setTimeout(() => {
         delete games[gameId];
         delete gameBots[gameId];
     }, 10000);
+    
 }
+setInterval(() => {
+    Object.keys(games).forEach(gameId => {
+        const game = games[gameId];
+        if (game && !game.matchIsOver && !game.isLobby && game.currentPlayer !== -1) {
+            const activeSeat = game.currentPlayer;
+            if (game.bankTimers[activeSeat] > 0) {
+                game.bankTimers[activeSeat]--;
+
+                if (game.bankTimers[activeSeat] <= 0) {
+                    console.log(`[BANK TIMEOUT] Seat ${activeSeat} ran out of time in Game ${gameId}`);
+                    handleForfeit(gameId, activeSeat);
+                }
+            }
+            
+            // NEW: Every second, send the current bank timers to everyone in this game room
+            io.to(gameId).emit('timer_sync', { bankTimers: game.bankTimers });
+        }
+    });
+}, 1000);

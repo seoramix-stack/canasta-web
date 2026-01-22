@@ -818,40 +818,26 @@ export function renderLobbySeats(data, mySeat) {
         container.appendChild(slot);
     }
 }
-function showInactivityWarning() {
-    // Check if it already exists
-    let warningEl = document.getElementById('afk-warning');
+export function showInactivityWarning(secondsLeft) {
+    let warningEl = document.getElementById('inactivity-warning');
+    
     if (!warningEl) {
         warningEl = document.createElement('div');
-        warningEl.id = 'afk-warning';
-        warningEl.style.cssText = `
-            position: absolute; 
-            top: 20%; 
-            left: 50%; 
-            transform: translateX(-50%);
-            background: rgba(231, 76, 60, 0.9); 
-            color: white; 
-            padding: 15px 30px; 
-            border-radius: 50px; 
-            font-size: 18px; 
-            font-weight: bold; 
-            z-index: 9999;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
-            animation: pulse 1s infinite;
-            border: 2px solid white;
-        `;
-        // Add simple pulse animation
-        const styleSheet = document.createElement("style");
-        styleSheet.innerText = `@keyframes pulse { 0% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-50%) scale(1.05); } 100% { transform: translateX(-50%) scale(1); } }`;
-        document.head.appendChild(styleSheet);
-        
-        warningEl.innerText = "⚠️ 15 SECONDS TO MOVE!";
+        warningEl.id = 'inactivity-warning';
         document.body.appendChild(warningEl);
     }
+
+    // Now uses clean class names managed by style.css
+    warningEl.innerHTML = `
+        <div class="warning-icon">⏳</div>
+        <div>ARE YOU STILL THERE?</div>
+        <div class="warning-countdown">FORFEIT IN: ${secondsLeft}s</div>
+        <div class="warning-hint">Move or touch to continue</div>
+    `;
     warningEl.style.display = 'block';
 }
 
-function hideInactivityWarning() {
-    const el = document.getElementById('afk-warning');
+export function hideInactivityWarning() {
+    const el = document.getElementById('inactivity-warning');
     if (el) el.style.display = 'none';
 }

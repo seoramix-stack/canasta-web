@@ -8,13 +8,18 @@ class ChaosBot extends CanastaBot {
     }
 
     playTurnSync(game) {
-        if (Math.random() < this.chaosRate) {
-            this.executeChaosMove(game);
-        } else {
-            // Play normally most of the time so the game actually progresses
-            super.playTurnSync(game);
-        }
-    }
+  const beforePlayer = game.currentPlayer;
+  const beforePhase = game.turnPhase;
+
+  if (Math.random() < this.chaosRate) {
+    this.executeChaosMove(game);
+  }
+
+  // If chaos did not progress the game, play normally
+  if (game.currentPlayer === beforePlayer && game.turnPhase === beforePhase) {
+    super.playTurnSync(game);
+  }
+}
 
     executeChaosMove(game) {
         const action = Math.floor(Math.random() * 5);
