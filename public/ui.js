@@ -493,6 +493,7 @@ function renderTable(elementId, meldsObj, red3sArray) {
     const vertMargin = visibleStrip - cardHeight;
 
     openMelds.forEach((groupData, gIdx) => {
+        
         const groupDiv = document.createElement("div");
         groupDiv.className = "meld-group";
         const teamSuffix = (elementId === "my-melds") ? "my" : "enemy";
@@ -512,20 +513,42 @@ function renderTable(elementId, meldsObj, red3sArray) {
         }
 
         let html = `<div class='meld-container' style='display:flex; flex-direction:column; align-items:center;'>`;
-        
-        let activeMargin = vertMargin;
-        if (groupData.cards.length > 5) activeMargin -= 5; 
 
-        groupData.cards.forEach((c, cIdx) => { 
-            const marginTop = (cIdx > 0) ? `margin-top:${activeMargin}px;` : "";
-            let transformStyle = "transform: none;";
-            if (groupData.cards.length === 6 && cIdx === 5) {
-                transformStyle = "transform: rotate(-45deg) translateX(10px) translateY(-5px);";
-            }
-            html += `<img src="${getCardImage(c)}" class="card-img meld-card" style="${marginTop} margin-left: 0; ${transformStyle} box-shadow: 1px 1px 2px rgba(0,0,0,0.3);">`; 
-        });
+// 1. DYNAMIC VERTICAL SQUEEZE CALCULATION
+const totalCards = groupData.cards.length;
+const cardH = isDesktop ? 105 : 70;
+// We define a target height for the meld area (e.g., 40% of the game area)
+const maxMeldHeight = window.innerHeight * 0.35; 
 
-        html += "</div>"; 
+let activeMargin = isDesktop ? -80 : -55; // Default overlap
+
+if (totalCards > 3) {
+    // If the pile would exceed the max height, calculate a tighter margin
+    const neededMargin = (maxMeldHeight - cardH) / (totalCards - 1) - cardH;
+    activeMargin = Math.min(activeMargin, neededMargin);
+    
+    // Safety cap: don't overlap so much that cards are invisible (min 15px visible)
+    const minVisible = 15;
+    activeMargin = Math.max(activeMargin, -(cardH - minVisible));
+}
+
+groupData.cards.forEach((c, cIdx) => { 
+    const marginTop = (cIdx > 0) ? `margin-top:${activeMargin}px;` : "";
+    
+    // Preserve your existing Canasta rotation logic for the 7th card
+    let transformStyle = "transform: none;";
+    if (totalCards >= 7 && cIdx === 6) {
+        transformStyle = "transform: rotate(-45deg) translateX(10px) translateY(-5px);";
+    }
+
+    html += `
+        <img src="${getCardImage(c)}" 
+             class="card-img meld-card" 
+             style="${marginTop} ${transformStyle} z-index: ${cIdx}; box-shadow: 1px 1px 2px rgba(0,0,0,0.3);">
+    `; 
+});
+
+html += "</div>";
         groupDiv.innerHTML = html; 
         container.appendChild(groupDiv);
     });
@@ -596,7 +619,12 @@ function renderHand(hand) {
     if(!div) return;
     div.innerHTML = "";
     if (!hand || hand.length === 0) return;
-
+    const stagedIndices = new Set();
+    if (state.isStaging) {
+        state.stagedMelds.forEach(meld => {
+            meld.indices.forEach(idx => stagedIndices.add(idx));
+        });
+    }
     const isDesktop = window.innerWidth > 800;
     const cardHeight = isDesktop ? 105 : 70;
     const groupWidth = isDesktop ? 75 : 50;
@@ -607,6 +635,7 @@ function renderHand(hand) {
     const groups = [];
     let currentGroup = [];
     hand.forEach((card, index) => {
+        if (stagedIndices.has(index)) return;
         if (currentGroup.length === 0) {
             currentGroup.push({card, index});
         } else {

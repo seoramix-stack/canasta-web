@@ -541,29 +541,44 @@ class CanastaGame {
              }
         }
 
-        // --- EXECUTION ---
+            // --- EXECUTION ---
+
+        // 1. Identify and extract the melded cards FIRST using the original hand snapshot
+        let cardsToRemove = [];
+        meldsData.forEach((m) => {
+            let meldCards = m.indices.map(i => hand[i]);
+            cardsToRemove.push({ rank: m.rank, cards: meldCards });
+        });
+
+        // 2. Remove melded cards from the player's ACTUAL hand BEFORE adding the pile.
+        // We do this first so the indices are still accurate.
+        let allUsedIndices = [];
+        meldsData.forEach(m => allUsedIndices.push(...m.indices));
+        allUsedIndices.sort((a, b) => b - a); // Sort descending to prevent index shifting
+        allUsedIndices.forEach(idx => this.players[seat].splice(idx, 1));
+
+        // 3. Handle the Pickup Pile now that the melded cards are gone
         if (wantPickup) {
             let pile = this.discardPile.splice(0, this.discardPile.length);
-            pile.pop(); 
+            pile.pop(); // Remove top card (it's added to the table meld below)
         
             this.players[seat].push(...pile);
+            // It is now safe to check Red 3s because we aren't relying on indices anymore
             this.checkRed3s(seat);
         }
 
-        meldsData.forEach((m, index) => {
-            let meldRank = m.rank;
+        // 4. Move the extracted cards to the Team Melds table
+        cardsToRemove.forEach((item, index) => {
+            let meldRank = item.rank;
             if (!teamMelds[meldRank]) teamMelds[meldRank] = [];
-            let meldCards = m.indices.map(i => hand[i]);
-            teamMelds[meldRank].push(...meldCards);
-            if (wantPickup && index === 0) teamMelds[meldRank].push(topCard);
+            
+            teamMelds[meldRank].push(...item.cards);
+            
+            // Add the top card from the discard pile to the very first meld
+            if (wantPickup && index === 0) {
+                teamMelds[meldRank].push(topCard);
+            }
         });
-
-        let allUsedIndices = [];
-        meldsData.forEach(m => allUsedIndices.push(...m.indices));
-        allUsedIndices.sort((a,b) => b-a);
-        allUsedIndices.forEach(idx => this.players[seat].splice(idx, 1));
-
-        this.sortHand(seat);
 
         if (this.players[seat].length === 0) {
             this.turnPhase = "game_over";

@@ -467,6 +467,8 @@ h2 {
         flex-wrap: nowrap !important;
         /* Allow overlap */
         overflow: visible !important;
+        max-height: 40vh;
+        display: flex;
     }
     #my-melds { padding-top: 15px; }
     .meld-group { 
@@ -672,8 +674,6 @@ h2 {
     pointer-events: none; /* Click through it */
     z-index: 0;    /* Behind cards */
 }
-
-/* style.css */
 
 /* 1. Ensure the meld container can anchor the logo */
 #my-melds {
