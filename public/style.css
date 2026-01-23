@@ -4,11 +4,27 @@
 :root {
     --card-w: 50px; 
     --card-h: 70px;
-    --bg-color: #34495e;
-    --accent-color: #f1c40f;
-    --surface-dark: rgba(0,0,0,0.3);
+    
+    /* COLORS SAMPLED FROM LOGO & CARDS */
+    --bg-color: #1a252f;      /* Deep Navy (Spade Background) */
+    --accent-color: #f1c40f;   /* Master Club Gold */
+    --accent-dark: #d4ac0d;
+    --rose-red: #c0392b;      /* Rose Red */
+    --stone-grey: #7f8c8d;    /* Spade Stone Grey */
+    --surface-dark: rgba(0,0,0,0.6);
+    
+    /* TYPOGRAPHY */
+    --font-title: 'Cinzel', serif;   /* Formal Branding */
+    --font-body: 'Roboto', sans-serif; /* High Readability */
+    --text-primary: #f4f7f6;  /* Soft, non-flashy white */
+    --text-secondary: #bdc3c7; /* Muted silver for labels */
+    --card-brightness: 0.92;   /* Global brightness control for cards */
 }
-
+.card-img {
+    /* ... existing properties ... */
+    filter: brightness(var(--card-brightness)); /* Mutes the white face of the cards */
+    background: var(--text-primary); /* Soft white background for card containers */
+}
 * { box-sizing: border-box; }
 body {
     margin: 0; padding: 0;
@@ -38,7 +54,23 @@ body {
     justify-content: center;
     text-align: center;
     width: 100%;
-    margin-bottom: 20px; /* Moves the inputs down slightly for better spacing */
+    margin-bottom: 20px;
+    
+    /* 1. Control the spacing between ALL items (logo, h1, h2) */
+    gap: 5px; 
+}
+
+/* 2. Remove default browser margins that push headings apart */
+.logo-area h1, 
+.logo-area h2 {
+    margin: 0;
+    padding: 0;
+    line-height: 1.1; /* Optional: tightens the vertical space of the letters themselves */
+}
+
+/* 3. If you want the logo image to have more space than the text: */
+.logo-area img {
+    margin-bottom: 10px; 
 }
 .active-screen { display: flex !important; z-index: 20; }
 .game-bg { background: var(--bg-color); }
@@ -62,44 +94,78 @@ h2 {
 }
 .logo-sub { font-size: 14px; color: #bdc3c7; margin-bottom: 40px; }
 
+/* style.css - BUTTONS SECTION */
+/* style.css */
+
+.menu-list {
+    display: flex;
+    flex-direction: column; /* Stacks buttons vertically */
+    align-items: center;    /* Centers the stack horizontally */
+    gap: 12px;              /* Space between buttons */
+    width: 100%;
+}
+
 .menu-btn {
-    width: 250px; padding: 15px; margin: 10px 0; 
-    border-radius: 4px; /* Less rounded, more like a plaque */
-    border: 1px solid var(--accent-dark); /* Gold Border */
+    /* FIXED SIZE: This ensures all buttons are identical */
+    width: 280px;           /* Adjust this value to your preferred width */
+    height: 50px;           /* Optional: Fixed height for perfect symmetry */
     
-    font-family: var(--font-title); /* Classy Font */
-    font-size: 18px; 
+    padding: 0 20px;        /* Side padding only since height is fixed */
+    margin: 0; 
+    border-radius: 4px; 
+    
+    font-family: var(--font-title);
+    font-size: 16px; 
     font-weight: 700; 
-    cursor: pointer;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 1.5px;
+    cursor: pointer;
     
-    box-shadow: 0 4px 6px rgba(0,0,0,0.5); 
-    display: flex; align-items: center; justify-content: center; gap: 10px;
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    gap: 10px;
     transition: all 0.2s ease;
 }
+
 .menu-btn.primary { 
-    background: linear-gradient(180deg, #f1c40f 0%, #f39c12 100%); /* Gold Gradient */
+    background: #f1c40f; /* Solid Gold */
     color: #1a252f; 
-    text-shadow: none;
     border: 1px solid #f1c40f;
 }
+
 .menu-btn.primary:hover {
+    background: #fff;
     transform: translateY(-2px);
-    box-shadow: 0 0 15px rgba(241, 196, 15, 0.4);
 }
+
 .menu-btn.secondary { 
-    background: rgba(44, 62, 80, 0.8); 
-    color: var(--accent-color); 
-    border: 1px solid var(--accent-color);
+    background: transparent;
+    color: var(--accent-color);
+    border: 1px solid var(--accent-color); /* Outlined Gold */
 }
+
 .menu-btn.secondary:hover {
-    background: rgba(44, 62, 80, 1);
-    border-color: #fff;
+    background: rgba(241, 196, 15, 0.15);
 }
-.menu-btn.text-only { background: transparent; color: #bdc3c7; box-shadow: none; }
-.menu-btn.danger { background: #e74c3c; color: white; margin-top: 10px; }
-.menu-btn:active { transform: scale(0.95); }
+
+/* Pause Menu - Leave Game Button */
+.menu-btn.danger { 
+    background: var(--rose-red); 
+    color: var(--text-primary); 
+    border: 1px solid #962d22;
+}
+.menu-btn.text-only { 
+    background: transparent; 
+    color: var(--stone-grey); /* Updated from #bdc3c7 to match your logo grey */
+    box-shadow: none; 
+    border: none; /* Ensures no ghost borders appear */
+}
+
+/* Keep this exactly as is for the "click" effect */
+.menu-btn:active { 
+    transform: scale(0.95); 
+}
 
 /* ========================================= */
 /* === 3. GAME GRID (MOBILE DEFAULT)     === */
@@ -170,18 +236,36 @@ h2 {
 #hud-me      { grid-area: timer-bot; justify-self: center; z-index: 10; }
 
 .player-hud {
-    background: rgba(0, 0, 0, 0.85); padding: 4px; border-radius: 12px;
-    border: 1px solid rgba(255,255,255,0.2); pointer-events: none;
+    background: rgba(26, 37, 47, 0.9); /* Matching Navy background */
+    border: 1px solid var(--stone-grey); /* Stone Grey border */
+    border-radius: 4px;
+    padding: 5px 10px;
 }
+
+.hud-name {
+    color: var(--accent-color) !important; /* Gold Names */
+    font-family: var(--font-title);
+    font-weight: 900;
+}
+
+.timer-text {
+    font-family: var(--font-body);
+    font-weight: bold;
+    color: var(--text-primary); /* Clean white timers */
+}
+
 .status-light {
-    width: 10px; height: 10px; border-radius: 50%;
-    background-color: #e74c3c; border: 1px solid rgba(255,255,255,0.5); transition: all 0.3s;
+    background-color: var(--stone-grey); /* Inactive */
 }
-.status-light.active { background-color: #2ecc71; box-shadow: 0 0 8px #2ecc71; transform: scale(1.2); }
+
+.status-light.active { 
+    background-color: #2ecc71; /* Bright Green for active turn */
+    box-shadow: 0 0 10px #2ecc71; 
+}
 .hud-name, .timer-text {
     font-family: 'Segoe UI', sans-serif !important; font-size: 14px !important; 
     font-weight: bold !important; text-shadow: 1px 1px 3px rgba(0,0,0,0.9) !important; 
-    color: white; line-height: 1.2 !important;
+    color: var(--text-primary); line-height: 1.2 !important;
 }
 .hud-name { color: #f1c40f !important; text-transform: uppercase; max-width: none !important; }
 
@@ -277,7 +361,7 @@ h2 {
 
 #deck-count {
     position: absolute; top: auto; bottom: 4px; left: 4px; transform: none;
-    background: rgba(0, 0, 0, 0.7); color: white;
+    background: rgba(0, 0, 0, 0.7); color: var(--text-primary);
     font-size: 12px; font-weight: bold; min-width: 24px; padding: 2px 5px;
     border-radius: 10px; border: 1px solid rgba(255,255,255,0.3);
     z-index: 10; pointer-events: none; display: flex; justify-content: center;
@@ -322,18 +406,11 @@ h2 {
 /* === 8. DESKTOP OVERRIDES (> 800px)    === */
 /* ========================================= */
 @media (min-width: 800px) {
-    :root { --card-w: 75px; --card-h: 105px; 
-    --bg-color: #2c3e50;     /* Darker Navy (Matches Logo Background) */
-    --accent-color: #f1c40f;  /* Gold (Keep this, matches Logo Text) */
-    --accent-dark: #d4ac0d;   /* Darker Gold for hover/borders */
-    --deep-red: #c0392b;      /* Deep Red (Matches Logo Ribbon) */
-    --surface-dark: rgba(0,0,0,0.4);
-    
-    /* NEW FONTS */
-    --font-title: 'Cinzel', serif;   /* For Headings, Logo, Buttons */
-    --font-body: 'Roboto', sans-serif; /* For Names, Scores, Chat */
-}
-    
+    :root { 
+        --card-w: 75px; 
+        --card-h: 105px; 
+        --bg-color: #162029; /* Slightly deeper navy for desktop */
+    }  
 
     /* --- LAYOUT --- */
     #game-grid {
@@ -424,7 +501,7 @@ h2 {
     transition: border 0.3s;
 }
 .form-input::placeholder {
-    color: #7f8c8d;
+    color: var(--text-secondary);;
     font-family: var(--font-title); /* Placeholder uses fancy font */
     text-transform: uppercase;
     font-size: 12px;
@@ -440,16 +517,61 @@ h2 {
 .link-text { color: #bdc3c7; margin-top: 15px; cursor: pointer; font-size: 14px; text-decoration: underline; }
 
 /* Modals */
+.menu-box {
+    background: #1a252f; /* Deep Navy */
+    border: 2px solid var(--accent-color); /* Gold Border */
+    padding: 30px;
+    border-radius: 8px;
+    text-align: center;
+    box-shadow: 0 0 40px rgba(0,0,0,0.8);
+}
+
+.menu-box h3 {
+    color: var(--text-primary);
+    font-family: var(--font-title);
+    letter-spacing: 2px;
+    margin-bottom: 25px;
+    text-transform: uppercase;
+}
 #ready-modal, #score-modal, #game-menu-overlay { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 2000; flex-direction: column; align-items: center; justify-content: center; }
-.ready-box, .menu-box { background: #2c3e50; border: 2px solid var(--accent-color); padding: 30px; border-radius: 15px; text-align: center; box-shadow: 0 0 30px rgba(0,0,0,0.8); }
+.ready-box{ background: #2c3e50; border: 2px solid var(--accent-color); padding: 30px; border-radius: 15px; text-align: center; box-shadow: 0 0 30px rgba(0,0,0,0.8); }
 .score-box { background: white; color: #333; width: 85%; padding: 20px; border-radius: 10px; text-align: center; }
-.score-table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 14px; color: #333; }
-.score-table th, .score-table td { padding: 8px; border-bottom: 1px solid #ddd; text-align: center; }
-.score-table th { background: #f1c40f; color: #2c3e50; }
+.score-table { 
+    width: 100%; 
+    border-collapse: collapse; 
+    margin: 15px 0; 
+    font-size: 14px; 
+    /* CHANGE: White text for readability on dark backgrounds */
+    color: var(--text-primary);
+    background: transparent;
+}
+
+.score-table th, .score-table td { 
+    padding: 10px 8px; 
+    /* CHANGE: Use a darker or gold-tinted border instead of light grey */
+    border-bottom: 1px solid rgba(189, 195, 199, 0.2);
+    text-align: center; 
+}
+
+.score-table th {
+    background: var(--accent-color) !important;
+    color: #1a252f !important;
+    font-family: var(--font-title);
+    text-transform: uppercase;
+    font-weight: 900;
+    letter-spacing: 1px;
+}
+
+/* Optional: Highlight the "Total" rows at the bottom */
+.score-table .total-row {
+    font-weight: bold;
+    color: var(--accent-color);
+    background: rgba(0, 0, 0, 0.3);
+}
 .total-row { font-weight: bold; background: #eee; }
 
 /* In-Game Menu */
-#btn-game-menu { position: absolute; bottom: 115px; right: 10px; width: 35px; height: 35px; background: rgba(0,0,0,0.6); color: white; font-size: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 2px solid rgba(255,255,255,0.3); z-index: 2000; }
+#btn-game-menu { position: absolute; bottom: 115px; right: 10px; width: 35px; height: 35px; background: rgba(0,0,0,0.6); color: var(--text-primary); font-size: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 2px solid rgba(255,255,255,0.3); z-index: 2000; }
 .pass-toggle { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); cursor: pointer; opacity: 0.7; z-index: 5; }
 
 /* Victory & Animation */
@@ -461,11 +583,11 @@ h2 {
 
 /* Bot UI */
 .diff-grid { display: flex; gap: 10px; margin: 20px 0; justify-content: center; }
-.diff-btn { padding: 10px 20px; border: 2px solid #34495e; border-radius: 8px; color: #bdc3c7; cursor: pointer; font-weight: bold; background: rgba(0,0,0,0.2); }
+.diff-btn { padding: 10px 20px; border: 2px solid #46719b; border-radius: 8px; color: #bdc3c7; cursor: pointer; font-weight: bold; background: rgba(0,0,0,0.2); }
 .diff-btn.selected { background: var(--accent-color); color: #2c3e50; border-color: var(--accent-color); }
 .p-indicator { width: 40px; height: 40px; border-radius: 50%; background: #444; color: #aaa; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid #555; }
-.p-indicator.ready { background: #2ecc71; color: white; border-color: white; box-shadow: 0 0 10px #2ecc71; }
-#staging-panel { display: none; position: absolute; bottom: 35%; left: 10%; width: 80%; background: #2d3436; color: white; padding: 10px; border-radius: 8px; border: 2px solid #f1c40f; z-index: 999; }
+.p-indicator.ready { background: #2ecc71; color: var(--text-primary); border-color: var(--text-primary); box-shadow: 0 0 10px #2ecc71; }
+#staging-panel { display: none; position: absolute; bottom: 35%; left: 10%; width: 80%; background: #2d3436; color: var(--text-primary); padding: 10px; border-radius: 8px; border: 2px solid #f1c40f; z-index: 999; }
 
 /* --- LEADERBOARD STYLES --- */
 .leaderboard-container {
@@ -507,7 +629,7 @@ h2 {
     z-index: 10;
 }
 
-.lb-name { flex: 1; text-align: left; padding-left: 10px; font-weight: bold; color: white; }
+.lb-name { flex: 1; text-align: left; padding-left: 10px; font-weight: bold; color: var(--text-primary); }
 .lb-rating { width: 60px; text-align: right; color: #f1c40f; font-weight: bold; }
 .lb-stats { width: 60px; text-align: right; color: #95a5a6; font-size: 12px; }
 
@@ -560,35 +682,59 @@ h2 {
 }
 
 /* 2. Create the Logo using a pseudo-element */
-#my-melds::before {
+/* 1. Target the Opponent's meld area */
+#enemy-melds {
+    position: relative;
+    z-index: 1; /* Ensures cards stay on top */
+}
+
+#enemy-melds::before {
     content: "";
     position: absolute;
-    
-    /* Center it perfectly */
-    top: 50%;
-    left: 50%;
+    top: 50%; left: 50%;
     transform: translate(-50%, -50%);
-    
-    /* Size and Image */
-    width: 200px;  /* Adjust this if you want it bigger/smaller */
-    height: 100%;  /* Constrain height to fit the row */
-    background-image: url('Canasta logo.png'); /* Make sure your file is named logo.png */
-    background-position: center;
+    width: 220px; 
+    height: 100%;
+    background-image: url('Canasta logo.png');
     background-repeat: no-repeat;
-    background-size: contain; /* Keeps aspect ratio */
-    
-    /* Watermark styling */
-    opacity: 0.15; /* Transparent ghost effect */
-    pointer-events: none; /* Allows clicking through it */
-    z-index: -1; /* Places it BEHIND the cards */
+    background-size: contain;
+    background-position: center;
+    opacity: 0.12; /* Fainter for gameplay clarity */
+    pointer-events: none;
+    z-index: -1;
 }
+
+/* 2. Target Your meld area */
+#my-melds {
+    position: relative;
+    z-index: 1;
+}
+
+#my-melds::before {
+    content: "CANASTA\a MASTER CLUB"; 
+    white-space: pre;
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: var(--font-title);
+    font-weight: 900;
+    font-size: 32px; /* Scaled down for table usage */
+    text-align: center;
+    color: var(--accent-color);
+    letter-spacing: 3px;
+    opacity: 0.12;
+    text-shadow: 2px 2px 0px #000;
+    pointer-events: none;
+    z-index: -1;
+}
+
 #inactivity-warning {
     position: fixed;
     top: 20%;
     left: 50%;
     transform: translateX(-50%);
     background: rgba(231, 76, 60, 0.95);
-    color: white;
+    color: var(--text-primary);
     padding: 20px 40px;
     border-radius: 8px;
     z-index: 10000;
@@ -633,33 +779,4 @@ h2 {
     font-weight: bold;
     color: #2c3e50;
     min-width: 60px;
-}
-
-.canasta-master-club-text {
-    font-family: 'Cinzel Decorative', serif; /* Defined in index.html */
-    font-size: clamp(30px, 8vw, 60px); /* Mobile responsive scaling */
-    font-weight: 900;
-    text-transform: uppercase;
-    text-align: center;
-    margin: 0;
-    padding: 0;
-    
-    /* NEW METALLIC GOLD PALETTE */
-    background: linear-gradient(
-        to bottom,
-        #FFF5C3 0%,   /* Very light champagne gold (Highlight) */
-        #F1C40F 45%,  /* Your standard accent gold */
-        #D4AF37 55%,  /* Metallic Gold (The mid-tone) */
-        #B8860B 100%  /* Dark Goldenrod (Deep but not bronze) */
-    );
-
-    /* Standardized properties to fix your previous diagnostic error */
-    -webkit-background-clip: text;
-    background-clip: text; 
-    -webkit-text-fill-color: transparent;
-    
-    /* Slightly lightened shadow to reduce the "dirty" bronze look */
-    text-shadow: 
-        1px 1px 2px rgba(0, 0, 0, 0.4), 
-        0px 0px 5px rgba(241, 196, 15, 0.2); 
 }
