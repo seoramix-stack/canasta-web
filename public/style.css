@@ -780,3 +780,55 @@ h2 {
     color: #2c3e50;
     min-width: 60px;
 }
+.rules-container {
+    width: 90%;
+    max-width: 600px;
+    height: 70vh;
+    overflow-y: auto;
+    background: rgba(0, 0, 0, 0.4);
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid rgba(241, 196, 15, 0.2);
+    margin-bottom: 20px;
+    text-align: left;
+}
+
+.rules-section {
+    margin-bottom: 25px;
+}
+
+.rules-section h3 {
+    color: var(--accent-color);
+    font-family: var(--font-title);
+    font-size: 18px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.rules-section ul {
+    padding-left: 20px;
+    color: var(--text-secondary);
+}
+
+.rules-section li {
+    margin-bottom: 8px;
+    line-height: 1.4;
+}
+
+.rules-table {
+    width: 100%;
+    border-collapse: collapse;
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.rules-table th {
+    text-align: left;
+    color: var(--accent-color);
+    padding: 8px 0;
+}
+
+.rules-table td {
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}

@@ -23,7 +23,7 @@ class ChaosBot extends CanastaBot {
     super(seat, difficulty, type);
     this.chaosRate = Number.isFinite(opts.chaosRate)
       ? opts.chaosRate
-      : Number(process.env.CHAOS_RATE ?? 0.1);
+      : Number(process.env.CHAOS_RATE ?? 0.3);
     this.stats = { chaosMoves: 0, unexpectedSuccess: 0 };
   }
 

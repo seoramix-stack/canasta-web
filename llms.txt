@@ -1,0 +1,19 @@
+# Canasta Master Club
+
+> A high-performance, competitive online Canasta platform featuring authentic rules, ELO-based matchmaking, and dual-timer anti-AFK systems.
+
+## Core Game Mechanics
+- [Rules](https://www.canastamaster.club/how-to-play): Explains Standard (Draw 2) vs. Easy (Draw 1) rulesets.
+- [ELO System](https://www.canastamaster.club/rankings): Details on how margin-of-victory affects player ratings.
+- [Timers](https://www.canastamaster.club/how-to-play#timers): Details on the 12-minute match bank and 60-second turn limit.
+
+## Rules & Variations
+- **2-Player Mode**: Players receive 15 cards each; individual play.
+- **4-Player Mode**: Players receive 11 cards each; team-based play.
+- **Going Out (Standard)**: Requires 2 Canastas and drawing 2 cards per turn.
+- **Going Out (Easy)**: Requires 1 Canasta and drawing 1 card per turn.
+
+## Competitive Fair Play
+- **Anti-AFK**: 1-minute turn timer with automatic forfeit to prevent stalling.
+- **Match Bank**: 12-minute total time pool per player/team.
+- **ELO Penalties**: Forfeiting or disconnecting results in a 1.5x rating loss multiplier.

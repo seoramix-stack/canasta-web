@@ -2,16 +2,104 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Canasta Master</title>
+    <title>Canasta Master Club | Online Multiplayer & Rated ELO Play</title>
+    
+    <meta name="description" content="Play classic Canasta online with 2 or 4 players. Features rated ELO matchmaking, 12-minute match banks, and 1-minute turn timers. Choose between Standard (Draw 2) or Easy rules.">
+    <meta name="keywords" content="Canasta online, multiplayer Canasta, Canasta ELO ranking, play Canasta with bots, Canasta rules 2 players">
+    
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    
+    <meta property="og:title" content="Canasta Master Club">
+    <meta property="og:description" content="Compete in rated Canasta matches. Standard Draw 2 or Easy Draw 1 rules available.">
+    <meta property="og:image" content="Canasta logo.png">
+    <meta property="og:type" content="website">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Canasta Master Club">
+    <meta name="twitter:description" content="Authentic multiplayer Canasta with professional ELO rankings and bot training.">
+    <meta name="twitter:image" content="Canasta logo.png">
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@900&family=Cinzel:wght@400;700;900&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    
     <link rel="stylesheet" href="style.css">
     <style> 
-        /* Spinner Animation */
+        /* Spinner Animation (Preserved from original) */
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } } 
     </style>
+    <script type="application/ld+json">
+[{
+  "@context": "https://schema.org",
+  "@type": "HowTo",
+  "name": "How to Play Canasta Master Club",
+  "description": "Learn the official rules for Standard and Easy Canasta modes, including ELO ranking and match timers.",
+  "step": [
+    {
+      "@type": "HowToStep",
+      "name": "Choose your Ruleset",
+      "text": "Select Standard for a 2-card draw and 2-Canasta requirement, or Easy for a 1-card draw and 1-Canasta requirement."
+    },
+    {
+      "@type": "HowToStep",
+      "name": "Understand the Timers",
+      "text": "Manage your 12-minute match bank and 60-second turn limit to avoid automatic forfeit."
+    },
+    {
+      "@type": "HowToStep",
+      "name": "Master the ELO System",
+      "text": "Win matches to increase your rating. Points gained are scaled based on your opponent's skill and your margin of victory."
+    }
+  ]
+},
+{
+  "@context": "https://schema.org",
+  "@type": "HowTo",
+  "name": "How to Create a Private Canasta Room",
+  "description": "Invite friends to a private rated or unrated Canasta match.",
+  "step": [
+    {
+      "@type": "HowToStep",
+      "name": "Generate Room ID",
+      "text": "Click 'Play with Friends' to generate a unique 6-digit room code."
+    },
+    {
+      "@type": "HowToStep",
+      "name": "Share Code",
+      "text": "Send the code to your friends. They can join by entering the ID in the 'Join Room' field."
+    }
+  ]
+}]
+</script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "VideoGame",
+      "name": "Canasta Master Club",
+      "description": "Rated multiplayer Canasta with customizable rules (Draw 1 or 2) and competitive ELO systems.",
+      "genre": ["Card Game", "Strategy Game"],
+      "gamePlatform": ["Web Browser"],
+      "featureList": [
+        "12-minute match bank timers",
+        "1-minute turn timers to prevent AFK",
+        "2-Player and 4-Player modes",
+        "ELO Rating system with margin-of-victory scaling"
+      ]
+    }
+    </script>
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Table",
+  "about": "Canasta Card Point Values",
+  "mainEntity": [
+    {"name": "Joker", "value": "50 points"},
+    {"name": "Ace", "value": "20 points"},
+    {"name": "Natural Canasta", "value": "500 points"},
+    {"name": "Mixed Canasta", "value": "300 points"}
+  ]
+}
+</script>
 </head>
 <body>
 
@@ -34,6 +122,7 @@
             </div>
             
             <button class="menu-btn primary" onclick="doLogin()">LOGIN</button>
+            <button class="menu-btn secondary" style="margin-top: 10px;" onclick="navTo('screen-how-to')">📖 HOW TO PLAY</button>
             <div class="link-text" onclick="toggleForms('register')">Create an Account</div>
         </div>
 
@@ -58,6 +147,7 @@
         <button class="menu-btn" onclick="navTo('screen-bot')"><span></span> TRAIN VS BOTS</button>
         <button class="menu-btn secondary" onclick="openFriendsScreen()"><span></span> FRIENDS</button> 
         <button class="menu-btn secondary" onclick="openProfile()"><span></span> MY PROFILE</button>
+        <button class="menu-btn secondary" onclick="navTo('screen-how-to')">📖 HOW TO PLAY</button>
     </div>
 </div>
 
@@ -526,6 +616,53 @@
         <div style="font-size:24px; font-weight:bold;">-100 POINTS</div>
         <button class="menu-btn text-only" onclick="document.getElementById('modal-penalty').style.display='none'" style="color:white; border:1px solid white; margin-top:10px;">OK</button>
     </div>
+</div>
+<div id="screen-how-to" class="app-screen">
+    <h1 class="logo">CANASTA RULES & SCORING</h1>
+    
+    <div class="rules-container">
+        
+        <section class="rules-section">
+            <h3>👥 PLAYER MODES</h3>
+            <p><strong>Canasta Master Club supports 2 and 4-player competitive matches.</strong></p>
+            <ul>
+                <li><strong>2 Players:</strong> Each player is dealt 15 cards and plays individually.</li>
+                <li><strong>4 Players:</strong> Players form two teams of two, dealt 11 cards each.</li>
+            </ul>
+        </section>
+
+        <section class="rules-section">
+            <h3>📜 STANDARD VS. EASY RULES</h3>
+            <p><strong>The primary difference between Standard and Easy Canasta is the drawing pace and victory requirements.</strong></p>
+            <table class="rules-table">
+                <tr><th>Feature</th><th>Standard</th><th>Easy</th></tr>
+                <tr><td>Cards Drawn</td><td>2 Cards</td><td>1 Card</td></tr>
+                <tr><td>Canastas to Out</td><td>2 Required</td><td>1 Required</td></tr>
+            </table>
+        </section>
+
+        <section class="rules-section">
+            <h3>⏱️ DUAL-TIMER SYSTEM</h3>
+            <p><strong>Fair play is maintained through a 12-minute match bank and a 60-second turn limit.</strong> If your personal bank reaches 0:00 or you exceed the 1-minute turn limit, you automatically forfeit the match.</p>
+        </section>
+
+        <section class="rules-section">
+            <h3>CARD POINT GLOSSARY</h3>
+            <p><strong>Canasta cards have specific point values used to calculate the final score of a round.</strong></p>
+            <table class="rules-table">
+                <tr><td>Jokers (Wild)</td><td>50 pts</td></tr>
+                <tr><td>Aces & 2s (Wild)</td><td>20 pts</td></tr>
+                <tr><td>8 through King</td><td>10 pts</td></tr>
+                <tr><td>4 through 7</td><td>5 pts</td></tr>
+                <tr><td>Natural Canasta</td><td>500 pts</td></tr>
+                <tr><td>Mixed Canasta</td><td>300 pts</td></tr>
+            </table>
+        </section>
+
+    </div>
+    
+    <button class="menu-btn primary" onclick="navTo('screen-login')">READY TO PLAY?</button>
+    <button class="menu-btn text-only" id="back-to-menu-btn" onclick="navTo('screen-home')" style="display:none;">BACK TO MENU</button>
 </div>
 <script src="/socket.io/socket.io.js"></script>
 <script type="module" src="client.js"></script>

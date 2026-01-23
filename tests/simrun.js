@@ -20,7 +20,7 @@ const { ChaosBot } = tryRequire([
   '../tests/chaos_bot.improved.js'
 ]);
 
-const TOTAL_GAMES = Number(process.env.TOTAL_GAMES ?? 1000);
+const TOTAL_GAMES = Number(process.env.TOTAL_GAMES ?? 5000);
 const MAX_TURNS = Number(process.env.MAX_TURNS ?? 300);
 const LOG_INTERVAL = Number(process.env.LOG_INTERVAL ?? 100);
 const SAVE_CRASHES = String(process.env.SAVE_CRASHES ?? '1') !== '0';
@@ -72,7 +72,7 @@ let stats = {
 console.log(`\n🤖 STARTING BOT SIMULATION: ${TOTAL_GAMES} GAMES 🤖`);
 console.log(`--------------------------------------------------`);
 console.log(`Config: PLAYER_COUNT=${PLAYER_COUNT} HAND_SIZE=${HAND_SIZE} MIN_CANASTAS_OUT=${MIN_CANASTAS_OUT} DRAW_COUNT=${DRAW_COUNT}`);
-console.log(`Test:   MAX_TURNS=${MAX_TURNS} CHAOS_RATE=${process.env.CHAOS_RATE ?? 0.1} SEED=${BASE_SEED} SAVE_CRASHES=${SAVE_CRASHES}`);
+console.log(`Test:   MAX_TURNS=${MAX_TURNS} CHAOS_RATE=${process.env.CHAOS_RATE ?? 0.3} SEED=${BASE_SEED} SAVE_CRASHES=${SAVE_CRASHES}`);
 
 const startTime = Date.now();
 
@@ -144,10 +144,23 @@ async function runSingleGame(gameId) {
 
   try {
     while (game.turnPhase !== 'game_over') {
-      if (turns >= MAX_TURNS) {
+    if (turns >= MAX_TURNS) {
+        // 1. Log the specific failure for detection
+        const myTeamMelds = (game.currentPlayer % 2 === 0) ? game.team1Melds : game.team2Melds;
+        const canastas = Object.values(myTeamMelds).filter(p => p.length >= 7).length;
+        
+        const errorMsg = `STUCK_LOOP: Seat ${game.currentPlayer} has ${game.players[game.currentPlayer].length} cards and ${canastas} Canastas.`;
+        
+        // 2. Report it to stats so you see it in the summary
+        stats.errorsByType[errorMsg] = (stats.errorsByType[errorMsg] || 0) + 1;
         stats.stuckGames++;
-        throw new Error('GAME_STUCK_INFINITE_LOOP');
-      }
+        
+        // 3. Save the crash log for this specific loop
+        handleCrash(new Error(errorMsg), game, gameId, seed);
+        
+        // 4. BREAK this game to start the next one
+        break; 
+    }
 
       const currentPlayer = game.currentPlayer;
       const bot = bots[currentPlayer];

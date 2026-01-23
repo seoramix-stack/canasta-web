@@ -30,14 +30,25 @@ document.addEventListener('touchstart', resetActivity);
 document.addEventListener('keydown', resetActivity);
 document.addEventListener('click', resetActivity);
 // --- 1. INITIALIZATION ---
+const currentScreen = document.querySelector('.active-screen')?.id;
+
 if (state.playerToken && state.playerUsername) {
+    // Logged in: normal flow
     initSocket(state.playerToken);
 } else {
-    UI.navTo('screen-login');
+    // Not logged in: Allow "How to Play" screen, otherwise force Login
+    if (currentScreen !== 'screen-how-to') {
+        UI.navTo('screen-login');
+    }
 }
 
 // --- 2. EXPOSE FUNCTIONS TO HTML (Crucial Step!) ---
-window.navTo = UI.navTo;
+window.navTo = (screenId) => {
+    UI.navTo(screenId);
+    if (screenId === 'screen-how-to') {
+        document.getElementById('back-to-menu-btn').style.display = state.playerToken ? 'block' : 'none';
+    }
+};
 // --- BOT SPEED CONTROL (FIXED) ---
 document.addEventListener('DOMContentLoaded', () => {
     const botSpeedRange = document.getElementById('botSpeedRange');

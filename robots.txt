@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /                     # Allows access to landing page
+Allow: /how-to-play          # Crucial for Rules SEO/GEO
+Allow: /api/leaderboard      # Lets AI see your competitive rankings
+Disallow: /api/              # Blocks generic API access
+Disallow: /profile           # Keeps user data private
+Disallow: /game              # Prevents bots from trying to join active matches
+
+Sitemap: https://www.canastamaster.club/sitemap.xml

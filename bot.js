@@ -54,18 +54,45 @@ class CanastaBot {
     }
 }
 
-// Helper to keep the constructor clean
 getDefaultFallbackDna(type, ruleset) {
-    if (type === '2p') {
-        return ruleset === 'easy' ? 
-            { DISCARD_WILD_PENALTY: 500, FEED_ENEMY_MELD: 1000, DISCARD_SINGLE_BONUS: 50, MELD_AGGRESSION: 1.2, PICKUP_THRESHOLD: 1, BREAK_PAIR_PENALTY: 50, DISCARD_JUNK_BONUS: 20, GO_OUT_THRESHOLD: 0 } :
-            { DISCARD_WILD_PENALTY: 1732, FEED_ENEMY_MELD: 2071, DISCARD_SINGLE_BONUS: -93, MELD_AGGRESSION: 0.91, PICKUP_THRESHOLD: 2, BREAK_PAIR_PENALTY: 200, DISCARD_JUNK_BONUS: 10, GO_OUT_THRESHOLD: 0 };
-    } else {
-        return ruleset === 'easy' ?
-            { DISCARD_WILD_PENALTY: 500, FEED_ENEMY_MELD: 1000, DISCARD_SINGLE_BONUS: 50, MELD_AGGRESSION: 1.2, PICKUP_THRESHOLD: 1, BREAK_PAIR_PENALTY: 50, DISCARD_JUNK_BONUS: 20, GO_OUT_THRESHOLD: 1000 } :
-            { DISCARD_WILD_PENALTY: 1732, FEED_ENEMY_MELD: 3012, DISCARD_SINGLE_BONUS: -93, MELD_AGGRESSION: 0.84, PICKUP_THRESHOLD: 2, BREAK_PAIR_PENALTY: 200, DISCARD_JUNK_BONUS: 10, GO_OUT_THRESHOLD: 500 };
+        // Added PICKUP_PATIENCE to defaults
+        if (type === '2p') {
+            return ruleset === 'easy' ? 
+                { DISCARD_WILD_PENALTY: 500, FEED_ENEMY_MELD: 1000, DISCARD_SINGLE_BONUS: 50, MELD_AGGRESSION: 1.0, PICKUP_THRESHOLD: 1, BREAK_PAIR_PENALTY: 50, DISCARD_JUNK_BONUS: 20, GO_OUT_THRESHOLD: 0, BAIT_AGGRESSION: 50, PICKUP_PATIENCE: 4 } :
+                { DISCARD_WILD_PENALTY: 1732, FEED_ENEMY_MELD: 2071, DISCARD_SINGLE_BONUS: -93, MELD_AGGRESSION: 0.8, PICKUP_THRESHOLD: 2, BREAK_PAIR_PENALTY: 200, DISCARD_JUNK_BONUS: 10, GO_OUT_THRESHOLD: 0, BAIT_AGGRESSION: 150, PICKUP_PATIENCE: 6 };
+        } else {
+            return ruleset === 'easy' ?
+                { DISCARD_WILD_PENALTY: 500, FEED_ENEMY_MELD: 1000, DISCARD_SINGLE_BONUS: 50, MELD_AGGRESSION: 1.0, PICKUP_THRESHOLD: 1, BREAK_PAIR_PENALTY: 50, DISCARD_JUNK_BONUS: 20, GO_OUT_THRESHOLD: 1000, BAIT_AGGRESSION: 50, PICKUP_PATIENCE: 4 } :
+                { DISCARD_WILD_PENALTY: 1732, FEED_ENEMY_MELD: 3012, DISCARD_SINGLE_BONUS: -93, MELD_AGGRESSION: 0.7, PICKUP_THRESHOLD: 2, BREAK_PAIR_PENALTY: 200, DISCARD_JUNK_BONUS: 10, GO_OUT_THRESHOLD: 500, BAIT_AGGRESSION: 150, PICKUP_PATIENCE: 7 };
+        }
     }
-}
+evaluateSeatPileWorth(game, targetSeat) {
+        if (game.discardPile.length === 0) return 0;
+
+        let worth = 0;
+        const isTeam1 = (targetSeat % 2 === 0);
+        const teamMelds = isTeam1 ? game.team1Melds : game.team2Melds;
+        
+        // 1. Base Face Value
+        worth += game.discardPile.reduce((sum, card) => sum + this.getCardValue(card), 0);
+
+        // 2. Canasta Potential Simulation
+        const pileRanks = {};
+        game.discardPile.forEach(c => { pileRanks[c.rank] = (pileRanks[c.rank] || 0) + 1; });
+
+        for (let rank in pileRanks) {
+            const existingMeld = teamMelds[rank] || [];
+            const newCount = existingMeld.length + pileRanks[rank];
+
+            // If this pile completes a Canasta for the target seat
+            if (newCount >= 7 && existingMeld.length < 7) {
+                // Heuristic: Assume 300 for dirty unless pile is purely natural
+                const hasWilds = game.discardPile.some(c => c.isWild) || existingMeld.some(c => c.isWild);
+                worth += (hasWilds ? 300 : 500);
+            }
+        }
+        return worth;
+    }
 
     // --- MAIN GAME LOOP ---
     async executeTurn(game, callback) {
@@ -220,103 +247,104 @@ getDefaultFallbackDna(type, ruleset) {
 
     pickDiscard(game) {
         let hand = game.players[this.seat];
-        let pile = game.discardPile;
-        let pileValue = pile.reduce((sum, c) => sum + this.getCardValue(c), 0);
-        
-        let nextPlayerSeat = (this.seat + 1) % game.config.PLAYER_COUNT;
-        
-        let enemyMelds;
-        if (game.config.PLAYER_COUNT === 2) {
-             enemyMelds = (this.seat === 0) ? game.team2Melds : game.team1Melds;
-        } else {
-             enemyMelds = (nextPlayerSeat % 2 === 0) ? game.team1Melds : game.team2Melds;
-        }
+        let nextPlayer = (this.seat + 1) % game.config.PLAYER_COUNT;
+        const enemyMelds = (nextPlayer % 2 === 0) ? game.team1Melds : game.team2Melds;
+        const myTeamMelds = (this.seat % 2 === 0) ? game.team1Melds : game.team2Melds;
 
-        let enemyCanastaCount = 0;
-        for (let rank in enemyMelds) if (enemyMelds[rank].length >= 7) enemyCanastaCount++;
-        let isEndGame = (enemyCanastaCount >= 2);
+        // --- NEW SAFETY GATE: Floating Prevention ---
+        const canastaCount = Object.values(myTeamMelds).filter(p => p.length >= 7).length;
+        const goingOutIsIllegal = canastaCount < game.config.MIN_CANASTAS_OUT;
+
+        // --- NEW DUAL-VALUE CALCULATION ---
+        const myWorth = this.evaluateSeatPileWorth(game, this.seat);
+        const enemyWorth = this.evaluateSeatPileWorth(game, nextPlayer);
 
         let candidates = hand.map((card, index) => {
             let score = 0;
+
+            // 1. FLOATING PENALTY: Never discard the last card if we can't go out
+            if (hand.length === 1 && goingOutIsIllegal) {
+                return { index, score: 999999, card }; // Block this card entirely
+            }
+
             score += this.getCardValue(card) * 2;
-            if (card.isWild) score += this.dna.DISCARD_WILD_PENALTY;
 
-            // --- STANDARD LOGIC ---
+            // 2. DYNAMIC WILD LOGIC (Defensive Freeze)
+            if (card.isWild) {
+                let threatLevel = enemyWorth / 400;
+                score += (this.dna.DISCARD_WILD_PENALTY / Math.max(1, threatLevel));
+            }
+
+            // 3. DYNAMIC FEEDING LOGIC
             if (enemyMelds[card.rank]) {
-                if (isEndGame || pileValue > 300) score += (this.dna.FEED_ENEMY_MELD * 5); 
-                else score += this.dna.FEED_ENEMY_MELD;
+                let juicyMultiplier = 1 + (enemyWorth / 200);
+                score += (this.dna.FEED_ENEMY_MELD * juicyMultiplier);
             }
 
-            // --- MEMORY LOGIC ---
-            // "Do I know for a fact the next player has this card?"
-            const knownHand = this.memory.knownHands[nextPlayerSeat] || [];
+            // 4. MEMORY-BASED THREAT
+            const knownHand = this.memory.knownHands[nextPlayer] || [];
             const enemyHasPair = knownHand.filter(c => c.rank === card.rank).length >= 2;
-            const enemyHasSingle = knownHand.filter(c => c.rank === card.rank).length >= 1;
-
             if (enemyHasPair) {
-                // They have a pair, this gives them a clean canasta/meld!
-                score += (this.dna.FEED_ENEMY_MELD * 2.5);
-            } else if (enemyHasSingle) {
-                // They have one, this gives them a pair (allowing them to pick up).
-                score += (this.dna.FEED_ENEMY_MELD * 0.8);
+                score += (this.dna.FEED_ENEMY_MELD * 3) + enemyWorth;
             }
 
-            // --- SELF LOGIC ---
+            // 5. PHASE C: TRAP / BAIT LOGIC
+            let rankCount = hand.filter(c => c.rank === card.rank && !c.isWild).length;
+            if (rankCount >= 3 && !enemyMelds[card.rank] && !card.isWild) {
+                if (!enemyHasPair) {
+                    let baitBonus = this.dna.BAIT_AGGRESSION;
+                    if (rankCount === 4) baitBonus *= 1.2;
+                    score -= baitBonus;
+                }
+            }
+
+            // 6. PAIR PRESERVATION
             let matches = hand.filter(c => c.rank === card.rank).length;
-            if (matches >= 2) {
-                if (pileValue > 200) score += (this.dna.BREAK_PAIR_PENALTY * 3);
-                else score += this.dna.BREAK_PAIR_PENALTY;
-            }
+            if (matches >= 2) score += this.dna.BREAK_PAIR_PENALTY;
+            if (["4", "5", "6", "7"].includes(card.rank)) score += this.dna.DISCARD_JUNK_BONUS;
 
-            if (["4","5","6","7"].includes(card.rank)) score += this.dna.DISCARD_JUNK_BONUS;
             return { index, score, card };
         });
 
-        candidates.sort((a, b) => {
-            if (Math.abs(a.score - b.score) > 1) return a.score - b.score;
-            return this.getCardValue(a.card) - this.getCardValue(b.card);
-        });
-
+        candidates.sort((a, b) => a.score - b.score);
         return candidates[0].index;
     }
 
     decideDraw(game) {
         let pile = game.discardPile;
         let topCard = pile.length > 0 ? pile[pile.length - 1] : null;
-        
-        if (!topCard) {
-            game.drawFromDeck(this.seat);
-            return;
-        }
+        if (!topCard) { game.drawFromDeck(this.seat); return; }
 
         let hand = game.players[this.seat];
-        let myMelds = (this.seat % 2 === 0) ? game.team1Melds : game.team2Melds;
-        let isFrozen = pile.some(c => c.isWild || c.isRed3);
-        let naturalMatches = hand.filter(c => c.rank === topCard.rank && !c.isWild).length;
-        let wildCount = hand.filter(c => c.isWild).length;
+        let myTeamMelds = (this.seat % 2 === 0) ? game.team1Melds : game.team2Melds;
+        let canastas = Object.values(myTeamMelds).filter(p => p.length >= 7).length;
 
-        let canPickup = false;
-        if (naturalMatches >= 2) canPickup = true;
-        else if (myMelds[topCard.rank] && !isFrozen && naturalMatches >= 1) canPickup = true;
-        else if (!isFrozen && naturalMatches >= 1 && wildCount >= 1) canPickup = true;
+        // Legal check: Can we pick it up?
+        let naturalMatches = hand.filter(c => c.rank === topCard.rank && !c.isWild).length;
+        let canPickup = (naturalMatches >= 2); 
 
         if (canPickup) {
-            let pileValue = pile.reduce((sum, c) => sum + this.getCardValue(c), 0);
-            let wantPile = false;
+            // STABILITY FIX: Predict hand size after Red 3s are moved to table
+            if (canastas < game.config.MIN_CANASTAS_OUT) {
+                let red3sInPile = pile.filter(c => c.isRed3).length;
+                // Predicted = Current + Pile - 2 (used for meld) - Red3s (auto-played)
+                let predictedSize = hand.length + pile.length - 2 - red3sInPile;
 
-            if (pileValue > 200) wantPile = true;
-            else if (naturalMatches >= this.dna.PICKUP_THRESHOLD) wantPile = true;
-            else if (myMelds[topCard.rank] && myMelds[topCard.rank].length >= 4) wantPile = true;
+                if (predictedSize <= 3) {
+                    // Force a deck draw to avoid the 1-card trap
+                    game.drawFromDeck(this.seat);
+                    return;
+                }
+            }
 
-            if (wantPile) {
+            let myWorth = this.evaluateSeatPileWorth(game, this.seat);
+            if (myWorth > 350 || naturalMatches >= this.dna.PICKUP_THRESHOLD) {
                 let res = game.pickupDiscardPile(this.seat);
                 if (res.success) return; 
             }
         }
         game.drawFromDeck(this.seat);
     }
-
-
 
     tryMelding(game) {
         const myTeamKey = (this.seat % 2 === 0) ? 'team1' : 'team2';
@@ -381,10 +409,11 @@ getDefaultFallbackDna(type, ruleset) {
                     let currentHand = game.players[this.seat];
                     const canastaCount = Object.values(myMelds).filter(p => p.length >= 7).length;
 
-                    // SAFETY: Do not meld down to 1 card if we can't legally discard it
-                    if (canastaCount < game.config.MIN_CANASTAS_OUT && (currentHand.length - cardsToPlay.length === 1)) {
-                        continue; 
-                    }
+                    if (canastaCount < game.config.MIN_CANASTAS_OUT) {
+                if (currentHand.length - cardsToPlay.length < 3) {
+                    continue; 
+                }
+            }
 
                     let res = game.meldCards(this.seat, groups[rank], rank);
                     if (res.success) { madeMeld = true; break; }
@@ -399,11 +428,16 @@ getDefaultFallbackDna(type, ruleset) {
                 const teamMelds = (this.seat % 2 === 0) ? game.team1Melds : game.team2Melds;
                 const canastaCount = Object.values(teamMelds).filter(p => p.length >= 7).length;
 
-                if (canastaCount < game.config.MIN_CANASTAS_OUT && (currentHand.length - cardsToPlay.length === 1)) {
-                continue; // Skip this meld to stay at 2+ cards
+                if (canastaCount < game.config.MIN_CANASTAS_OUT) {
+                if (currentHand.length - cardsToPlay.length < 3) {
+                    continue; 
                 }
-                // If it's just a pair, try to use a wild card to make it a meld
+                }
                 if (cardsToPlay.length === 2 && wildIndices.length >= 1) {
+                    // Only meld the pair + wild if our hand is getting too big 
+                    // or if we have very low patience DNA.
+                    if (hand.length > (this.dna.PICKUP_PATIENCE || 6)) continue; 
+                    
                     cardsToPlay.push(wildIndices[0]);
                 }
 
