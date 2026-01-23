@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@900&family=Cinzel:wght@400;700;900&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <style> 
         /* Spinner Animation */
@@ -17,9 +17,9 @@
 
     <div id="screen-login" class="app-screen">
         <div class="logo-area">
-            <img src="Canasta logo.png" style="width: 150px; height: auto; margin-bottom: 20px;">
-            <div class="logo">CANASTA</div>
-        </div>
+    <img src="Canasta logo.png" style="width: 150px; height: auto; margin-bottom: 20px;">
+    <h1 class="canasta-master-club-text">CANASTA MASTER CLUB</h1>
+</div>
 
         <div id="form-login" style="display:flex; flex-direction:column; align-items:center; width:100%;">
             <div class="error-msg" id="login-error">Invalid credentials</div>
@@ -80,13 +80,6 @@
             DRAW 1<br>1 OUT
         </button>
     </div>
-    <div id="settings-panel">
-    <div class="setting-item">
-        <label for="botSpeedRange">Bot Speed</label>
-        <input type="range" id="botSpeedRange" min="50" max="1000" step="50" value="350">
-        <span id="speedValue">350ms</span>
-    </div>
-</div>
     <button class="menu-btn primary" onclick="connectToGame('bot')" style="margin-top: 20px;">START MATCH</button>
     <button class="menu-btn text-only" onclick="navTo('screen-home')">BACK</button>
 </div>

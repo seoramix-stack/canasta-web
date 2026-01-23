@@ -42,29 +42,21 @@ window.navTo = UI.navTo;
 document.addEventListener('DOMContentLoaded', () => {
     const botSpeedRange = document.getElementById('botSpeedRange');
     const speedValueLabel = document.getElementById('speedValue');
-
     if (!botSpeedRange || !speedValueLabel) return;
 
-    // 1. Load locally saved speed so the slider stays put on refresh
-    const savedSpeed = localStorage.getItem('pref_bot_speed') || 350;
-    botSpeedRange.value = savedSpeed;
-    speedValueLabel.innerText = savedSpeed + 'ms';
+    // Map 1, 2, 3 to actual millisecond values
+    const speedMap = { "1": 1000, "2": 500, "3": 100 };
+    const labelMap = { "1": "SLOW", "2": "MEDIUM", "3": "FAST" };
 
     botSpeedRange.addEventListener('input', (e) => {
-        const speed = parseInt(e.target.value);
-        speedValueLabel.innerText = speed + 'ms';
-        localStorage.setItem('pref_bot_speed', speed);
-
-        // 2. Identify the Game ID safely
-        // Check state.activeData first, but also check if we are in a lobby
-        const gId = state.activeData?.gameId || document.getElementById('lobby-room-id')?.innerText;
+        const step = e.target.value;
+        const actualMs = speedMap[step];
         
+        speedValueLabel.innerText = labelMap[step];
+        localStorage.setItem('pref_bot_step', step);
+
         if (state.socket) {
-            // Even if gId is "---" or null, we emit so the server saves it to the SESSION
-            state.socket.emit('updateBotSpeed', { 
-                gameId: (gId === '---' ? null : gId), 
-                speed: speed 
-            });
+            state.socket.emit('updateBotSpeed', { speed: actualMs });
         }
     });
 });

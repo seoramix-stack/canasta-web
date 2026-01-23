@@ -634,3 +634,32 @@ h2 {
     color: #2c3e50;
     min-width: 60px;
 }
+
+.canasta-master-club-text {
+    font-family: 'Cinzel Decorative', serif; /* Defined in index.html */
+    font-size: clamp(30px, 8vw, 60px); /* Mobile responsive scaling */
+    font-weight: 900;
+    text-transform: uppercase;
+    text-align: center;
+    margin: 0;
+    padding: 0;
+    
+    /* NEW METALLIC GOLD PALETTE */
+    background: linear-gradient(
+        to bottom,
+        #FFF5C3 0%,   /* Very light champagne gold (Highlight) */
+        #F1C40F 45%,  /* Your standard accent gold */
+        #D4AF37 55%,  /* Metallic Gold (The mid-tone) */
+        #B8860B 100%  /* Dark Goldenrod (Deep but not bronze) */
+    );
+
+    /* Standardized properties to fix your previous diagnostic error */
+    -webkit-background-clip: text;
+    background-clip: text; 
+    -webkit-text-fill-color: transparent;
+    
+    /* Slightly lightened shadow to reduce the "dirty" bronze look */
+    text-shadow: 
+        1px 1px 2px rgba(0, 0, 0, 0.4), 
+        0px 0px 5px rgba(241, 196, 15, 0.2); 
+}

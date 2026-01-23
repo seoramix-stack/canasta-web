@@ -69,45 +69,41 @@ getDefaultFallbackDna(type, ruleset) {
 
     // --- MAIN GAME LOOP ---
     async executeTurn(game, callback) {
-        try {
-            this.updateMemory(game); 
-            const wait = (ms) => this.turboMode ? Promise.resolve() : new Promise(r => setTimeout(r, ms));
-            // Phase 1: Draw
-            await wait(1200); 
-            this.decideDraw(game);
-            if (callback) callback(this.seat);
+    try {
+        this.updateMemory(game); 
+        
+        // 1. Pull the dynamic speed (Default to 500ms if not set)
+        const baseSpeed = game.botDelayBase || 500; 
+        const wait = (ms) => this.turboMode ? Promise.resolve() : new Promise(r => setTimeout(r, ms));
 
-            // Phase 2: Partner Check (Fixed to prevent -100 penalty)
-            await wait(800);
-            this.handlePartnerCommunication(game);
+        // Phase 1: Draw
+        await wait(baseSpeed); 
+        this.decideDraw(game);
+        if (callback) callback(this.seat);
 
-            // Phase 3: Meld (Fixed to prevent illegal 15pt melds)
-            await wait(1500);
-            this.tryMelding(game);
-            if (callback) callback(this.seat);
+        // Phase 2: Partner Check (Slightly faster pause)
+        await wait(baseSpeed * 0.5);
+        this.handlePartnerCommunication(game);
 
-            // Phase 4: Discard
-            const hand = game.players[this.seat];
-            if (hand.length > 0 && game.turnPhase === 'playing') {
-                await wait(1200);
-                let discardIndex = this.pickDiscard(game);
-                let res = game.discardFromHand(this.seat, discardIndex);
-                
-                // CRITICAL: If discard fails, the bot MUST draw next turn or the simulation hangs
-                if (!res.success && this.turboMode) {
-                    console.warn(`[SIM] Seat ${this.seat} failed discard: ${res.message}. Forcing turn end.`);
-                    game.turnPhase = 'draw';
-                    game.currentPlayer = (game.currentPlayer + 1) % game.config.PLAYER_COUNT;
-                }
-            }
+        // Phase 3: Meld (Wait a full baseSpeed unit)
+        await wait(baseSpeed);
+        this.tryMelding(game);
+        if (callback) callback(this.seat);
 
-            this.saveStateSnapshot(game);
-            if (callback) callback(this.seat);
-
-        } catch (error) {
-            console.error(`[BOT ERROR] Seat ${this.seat}:`, error);
+        // Phase 4: Discard (Wait a full baseSpeed unit)
+        const hand = game.players[this.seat];
+        if (hand.length > 0 && game.turnPhase === 'playing') {
+            await wait(baseSpeed); 
+            let discardIndex = this.pickDiscard(game);
+            game.discardFromHand(this.seat, discardIndex);
         }
+
+        this.saveStateSnapshot(game);
+        if (callback) callback(this.seat);
+    } catch (error) {
+        console.error(`[BOT ERROR]`, error);
     }
+}
 
     // This is the helper that handles 2P vs 4P logic
     handlePartnerCommunication(game) {

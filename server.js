@@ -424,19 +424,27 @@ io.on('connection', async (socket) => {
     });
 
     // --- NEW: SOCIAL EVENTS ---
-    socket.on('updateBotSpeed', ({ gameId, speed }) => {
-        const token = socket.handshake.auth.token;
-        
-        // 1. Update the CURRENT game if it exists
-        if (gameId && games[gameId]) {
-            games[gameId].botDelayBase = speed; 
-        }
+    socket.on('updateBotSpeed', ({ speed }) => {
+    const token = socket.handshake.auth.token;
+    
+    // 1. Prioritize the active game the socket is currently in
+    let targetGameId = socket.data.gameId;
 
-        // 2. Save to the player's SESSION so the NEXT game remembers it
-        if (token && playerSessions[token]) {
-            playerSessions[token].botSpeed = speed;
-        }
-    });
+    // 2. Fallback: Check if the player session has a gameId assigned
+    if (!targetGameId && token && playerSessions[token]) {
+        targetGameId = playerSessions[token].gameId;
+    }
+
+    if (targetGameId && games[targetGameId]) {
+        games[targetGameId].botDelayBase = speed;
+        console.log(`[BOT SPEED] Game ${targetGameId} updated to ${speed}ms`);
+    }
+
+    // 3. Persist for future games
+    if (token && playerSessions[token]) {
+        playerSessions[token].botSpeed = speed;
+    }
+});
 
     socket.on('social_search', async (query) => {
         if (DEV_MODE) return;
@@ -891,15 +899,13 @@ async function startBotGame(humanSocket, difficulty, playerCount = 4, ruleset = 
 
     games[gameId] = new CanastaGame(gameConfig);
     
-    // --- PERSISTENCE FIX ---
-    // 1. Get the token once at the start
-    const token = humanSocket.handshake.auth.token; 
+    const token = humanSocket.handshake.auth.token;
     
-    // 2. Apply the saved speed from the session immediately if it exists
+    // FETCH SAVED SPEED
     if (token && playerSessions[token] && playerSessions[token].botSpeed) {
         games[gameId].botDelayBase = playerSessions[token].botSpeed;
     } else {
-        games[gameId].botDelayBase = 350; // Default fallback
+        games[gameId].botDelayBase = 500; // Better default than 350
     }
 
     games[gameId].resetMatch();
@@ -1038,49 +1044,35 @@ function broadcastAll(gameId, activeSeat) {
 
 function checkBotTurn(gameId) {
     const game = games[gameId];
-    if (!game || !gameBots[gameId]) return;
-
-    // 1. Safety: Don't let bots play if the game is already over
-    if (game.turnPhase === 'game_over') return;
+    if (!game || !gameBots[gameId] || game.turnPhase === 'game_over') return;
 
     let curr = game.currentPlayer;
     let bot = gameBots[gameId][curr];
 
-    // Prevent double-submission if bot is already thinking
-    if (game.processingTurnFor === curr) return; 
+    if (bot && game.processingTurnFor !== curr) {
+        game.processingTurnFor = curr;
+        
+        // Always grab the freshest speed from the game object
+        const baseSpeed = game.botDelayBase || 350;
+        const delay = (game.turnPhase === 'draw') ? baseSpeed : Math.floor(baseSpeed / 2);
 
-    if (bot) {
-    game.processingTurnFor = curr;
-    
-    // --- ADJUSTABLE SPEEDS ---
-    // 350ms feels snappy but allows the eye to follow the card movement.
-    const base = game.botDelayBase || 350;
-    const DRAW_DELAY = base; 
-    const ACTION_DELAY = Math.floor(base / 2); 
-    const delay = (game.turnPhase === 'draw') ? DRAW_DELAY : ACTION_DELAY;
-
-    setTimeout(() => {
-        bot.executeTurn(game, (updatedSeat) => {
-            if (game.turnPhase === 'game_over') {
-                console.log(`[BOT] Player ${updatedSeat} ended the round.`);
-                handleRoundEnd(gameId, io);    
-            } else {
-                broadcastAll(gameId, updatedSeat); 
-            }
-        })
-        .then(() => {
-            game.processingTurnFor = null; 
-            // Trigger the next check immediately to keep the game flowing
-            checkBotTurn(gameId); 
-        })
-        .catch(err => {
-            console.error(`[BOT ERROR] Seat ${curr} crashed:`, err);
-            game.processingTurnFor = null; 
-        });
-    }, delay);
-
-}else {
-        game.processingTurnFor = null;
+        setTimeout(() => {
+            bot.executeTurn(game, (updatedSeat) => {
+                if (game.turnPhase === 'game_over') {
+                    handleRoundEnd(gameId, io);    
+                } else {
+                    broadcastAll(gameId, updatedSeat); 
+                }
+            })
+            .then(() => {
+                game.processingTurnFor = null; 
+                checkBotTurn(gameId); // Recursively check for next action
+            })
+            .catch(err => {
+                console.error(`[BOT ERROR]`, err);
+                game.processingTurnFor = null; 
+            });
+        }, delay);
     }
 }
 
