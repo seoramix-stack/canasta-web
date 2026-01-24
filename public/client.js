@@ -1256,3 +1256,22 @@ window.drawCard = () => {
 
     state.socket.emit('act_draw', { seat: state.mySeat });
 };
+let deferredPrompt;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  // Prevent the mini-infobar from appearing on mobile
+  e.preventDefault();
+  // Stash the event so it can be triggered later.
+  deferredPrompt = e;
+  
+  // OPTIONAL: Show your own UI button here
+  // showInstallButton();
+});
+
+window.installApp = async () => {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    deferredPrompt = null;
+  }
+};
