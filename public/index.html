@@ -102,8 +102,41 @@
 </script>
 </head>
 <body>
+<div id="screen-landing" class="app-screen">
+    <div class="landing-content">
+        <div class="logo-area">
+            <img src="Canasta logo.png" class="landing-hero-logo">
+            <h1 class="logo">CANASTA</h1>
+            <h2 class="logo">MASTER CLUB</h2>
+            
+            <div class="feature-pills">
+                <span>🏆 RATED ELO</span>
+                <span>⏱️ DUAL TIMERS</span>
+                <span>🃏 2/4 PLAYER</span>
+            </div>
+        </div>
 
+        <div class="landing-action-grid">
+            <div class="landing-cta">
+                <button class="menu-btn primary" onclick="navTo('screen-login')">GET STARTED</button>
+                <button class="menu-btn secondary" onclick="navTo('screen-how-to')">LEARN TO PLAY</button>
+            </div>
+
+            <div class="landing-stats-preview">
+                <h3>🌍 TOP MASTERS</h3>
+                <div id="landing-leaderboard-list" class="leaderboard-mini">
+                    </div>
+            </div>
+        </div>
+    </div>
+</div>
     <div id="screen-login" class="app-screen">
+        <div class="screen-header">
+    <div class="back-nav" onclick="goHome()">
+        <span class="home-icon">🏠</span>
+        <span class="back-text">HOME</span>
+    </div>
+</div>
         <div class="logo-area">
     <img src="Canasta logo.png" style="width: 150px; height: auto; margin-bottom: 20px;">
     <h1 class="logo">CANASTA</h1><h2 class="logo">MASTER CLUB</h2>
@@ -175,7 +208,13 @@
 </div>
 
 <div id="screen-profile" class="app-screen">
+    <div class="screen-header">
+    <div class="back-nav" onclick="goHome()">
+        <span class="home-icon">🏠</span>
+        <span class="back-text">LOBBY</span>
+    </div>
     <h2>MY PROFILE</h2>
+</div>
     
     <div style="font-size: 60px; margin-bottom: 10px;">👤</div>
     <div id="my-username" class="p-name" style="font-size: 24px; font-weight: bold; color: #f1c40f; margin-bottom: 20px;">Player</div>
@@ -287,7 +326,13 @@
 </div>
 
 <div id="screen-friends" class="app-screen">
+    <div class="screen-header">
+    <div class="back-nav" onclick="goHome()">
+        <span class="home-icon">🏠</span>
+        <span class="back-text">LOBBY</span>
+    </div>
     <h2>FRIENDS & PLAYERS</h2>
+</div>
     
     <div style="display:flex; gap:10px; margin-bottom:15px;">
         <button class="action-btn" onclick="showFriendTab('list')">MY FRIENDS</button>
@@ -587,7 +632,13 @@
         </div>
     </div> 
     <div id="screen-leaderboard" class="app-screen">
-    <h2>TOP 100 PLAYERS</h2>
+    <div class="screen-header">
+    <div class="back-nav" onclick="goHome()">
+        <span class="home-icon">🏠</span>
+        <span class="back-text">LOBBY</span>
+    </div>
+    <h2>TOP 100 MASTERS</h2>
+</div>
     <div class="info-text" style="margin-bottom: 10px;">Ranked by ELO Rating</div>
 
     <div id="leaderboard-list" class="leaderboard-container">

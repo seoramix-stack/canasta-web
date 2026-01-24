@@ -33,16 +33,46 @@ document.addEventListener('click', resetActivity);
 const currentScreen = document.querySelector('.active-screen')?.id;
 
 if (state.playerToken && state.playerUsername) {
-    // Logged in: normal flow
     initSocket(state.playerToken);
 } else {
-    // Not logged in: Allow "How to Play" screen, otherwise force Login
-    if (currentScreen !== 'screen-how-to') {
-        UI.navTo('screen-login');
+    // We use the imported UI.navTo here because window.navTo isn't defined yet
+    if (currentScreen !== 'screen-how-to' && currentScreen !== 'screen-login') {
+        UI.navTo('screen-landing'); 
     }
 }
 
+// Automatically fetch rankings for the landing page
+document.addEventListener('DOMContentLoaded', () => {
+    fetchLeaderboardPreview();
+});
+
+async function fetchLeaderboardPreview() {
+    const container = document.getElementById('landing-leaderboard-list');
+    if (!container) return;
+    try {
+        const res = await fetch('/api/leaderboard');
+        const data = await res.json();
+        if (data.success) {
+            container.innerHTML = data.leaderboard.slice(0, 5).map((p, i) => `
+                <div class="lb-mini-row">
+                    <span>#${i+1} ${p.username}</span>
+                    <span class="gold">${Math.round(p.stats.rating)} ELO</span>
+                </div>
+            `).join('');
+        }
+    } catch (e) { container.innerHTML = ""; }
+}
+
 // --- 2. EXPOSE FUNCTIONS TO HTML (Crucial Step!) ---
+window.goHome = () => {
+    // 1. Clean up any active game states
+    UI.hideInactivityWarning();
+    state.selectedIndices = [];
+    state.isStaging = false;
+
+    // 2. Navigate to the public landing page instead of the lobby
+    window.navTo('screen-landing');
+};
 window.navTo = (screenId) => {
     UI.navTo(screenId);
     if (screenId === 'screen-how-to') {
@@ -147,7 +177,7 @@ window.connectToGame = (mode) => {
 window.leaveGame = () => {
     if(state.socket) state.socket.emit('leave_game');
     if(state.timerInterval) clearInterval(state.timerInterval);
-    UI.navTo('screen-home');
+    window.navTo('screen-landing');
 };
 
 window.confirmLeave = () => {

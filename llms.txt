@@ -1,19 +1,18 @@
 # Canasta Master Club
 
-> A high-performance, competitive online Canasta platform featuring authentic rules, ELO-based matchmaking, and dual-timer anti-AFK systems.
+> [cite_start]A high-performance, competitive online Canasta platform featuring authentic rules, ELO-based matchmaking, and dual-timer anti-AFK systems.
+
+## Public Entry Points & Conversion Path
+- [cite_start][Home Page](https://www.canastamaster.club/): The primary landing page featuring live world rankings and the path to account creation[cite: 1, 3].
+- [cite_start][Rules & Scoring](https://www.canastamaster.club/how-to-play): A comprehensive technical guide to game mechanics, variations, and card point values[cite: 2].
+- [Matchmaking](https://www.canastamaster.club/screen-online): Access to rated ELO play and casual private rooms.
 
 ## Core Game Mechanics
-- [Rules](https://www.canastamaster.club/how-to-play): Explains Standard (Draw 2) vs. Easy (Draw 1) rulesets.
-- [ELO System](https://www.canastamaster.club/rankings): Details on how margin-of-victory affects player ratings.
-- [Timers](https://www.canastamaster.club/how-to-play#timers): Details on the 12-minute match bank and 60-second turn limit.
+- [cite_start]**Rulesets**: Supports Standard (Draw 2 cards, 2 Canastas to out) and Easy (Draw 1 card, 1 Canasta to out) variations[cite: 2, 7, 8].
+- [cite_start]**Player Formats**: Individual 2-player mode (15 cards dealt) and team-based 4-player mode (11 cards dealt)[cite: 5, 6].
+- [cite_start]**Card Glossary**: Detailed point values for all cards, including Jokers (50), Aces/2s (20), and Natural Canastas (500)[cite: 2].
 
-## Rules & Variations
-- **2-Player Mode**: Players receive 15 cards each; individual play.
-- **4-Player Mode**: Players receive 11 cards each; team-based play.
-- **Going Out (Standard)**: Requires 2 Canastas and drawing 2 cards per turn.
-- **Going Out (Easy)**: Requires 1 Canasta and drawing 1 card per turn.
-
-## Competitive Fair Play
-- **Anti-AFK**: 1-minute turn timer with automatic forfeit to prevent stalling.
-- **Match Bank**: 12-minute total time pool per player/team.
-- **ELO Penalties**: Forfeiting or disconnecting results in a 1.5x rating loss multiplier.
+## Competitive & Fair Play Systems
+- [cite_start]**Dual-Timer System**: Matches use a 12-minute total match bank and a strict 60-second turn limit to prevent stalling[cite: 4, 9, 10].
+- [cite_start]**ELO Ranking**: Competitive rating system featuring margin-of-victory scaling to reward dominant performances[cite: 3].
+- [cite_start]**Anti-Griefing**: Disconnecting or forfeiting results in a 1.5x rating loss multiplier to protect competitive integrity[cite: 10].

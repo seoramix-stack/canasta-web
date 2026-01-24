@@ -39,6 +39,12 @@ body {
 /* ========================================= */
 /* === 2. SCREENS & MENUS                === */
 /* ========================================= */
+.landing-action-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 100%;
+}
 .app-screen {
     display: none !important;
     height: 100%; width: 100%;
@@ -128,15 +134,15 @@ h2 {
     transition: all 0.2s ease;
 }
 
-.menu-btn.primary { 
-    background: #f1c40f; /* Solid Gold */
-    color: #1a252f; 
-    border: 1px solid #f1c40f;
+.menu-btn.primary {
+    background: linear-gradient(135deg, #f1c40f 0%, #d4ac0d 100%) !important;
+    box-shadow: 0 0 20px rgba(241, 196, 15, 0.4);
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 .menu-btn.primary:hover {
-    background: #fff;
-    transform: translateY(-2px);
+    box-shadow: 0 0 35px rgba(241, 196, 15, 0.6);
+    transform: scale(1.05) translateY(-3px);
 }
 
 .menu-btn.secondary { 
@@ -209,10 +215,11 @@ h2 {
 }
 
 #table-zone {
-    grid-area: table; position: relative; padding: 5px 0; overflow: visible !important;
-    display: flex; flex-direction: column; justify-content: center; gap: 10px; 
+    grid-area: table; position: relative; padding: 5px 0; overflow: hidden !important;
+    display: grid; flex-direction: column; justify-content: center; gap: 10px; 
     min-width: 0; /* Prevents grid blowout */
     width: 100%;  /* Ensures it stays within the 1fr track */
+    grid-template-rows: 1fr auto 1fr;
 }
 
 #my-zone {
@@ -310,11 +317,31 @@ h2 {
 
 /* Melds */
 .meld-row { 
-    display: flex; overflow: visible !important; padding: 0 5px; 
-    width: 100%; flex-wrap: nowrap; align-items: flex-start !important;
-    height: 160px !important; min-height: 160px !important; margin: 0 !important;
+    display: flex; 
+    flex-direction: row;
+    overflow: visible !important; 
+    padding: 0 5px; 
+    width: 100%; 
+    flex-wrap: nowrap !important; 
+    align-items: flex-start !important;
+    height: 160px !important; 
+    min-height: 160px !important; 
+    max-height: 160px !important;
+    margin: 0 !important;
+    overflow: visible !important;
 }
-.meld-group { display: flex; flex-direction: column; align-items: center; min-width: var(--card-w); margin-right: 8px; }
+.meld-group { 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    min-width: var(--card-w); 
+    margin-right: 8px;
+    flex-shrink: 0;
+    transition: margin 0.2s ease; /* Smooth squeeze animation */
+    max-height: 150px; 
+    overflow: visible;
+    }
+
 .meld-label { font-size: 9px; font-weight: bold; text-shadow: 1px 1px 1px black; margin-bottom: 2px; color: #bdc3c7; }
 
 /* Center Strip */
@@ -413,9 +440,76 @@ h2 {
     }  
 
     /* --- LAYOUT --- */
+    /* --- Global Screen Header Styles --- */
+.screen-header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center; /* Centers the title */
+    padding: 20px;
+    position: relative;
+    border-bottom: 1px solid rgba(241, 196, 15, 0.1); /* Subtle gold line */
+    background: linear-gradient(to bottom, rgba(0,0,0,0.2), transparent);
+    margin-bottom: 30px;
+}
+.home-icon {
+        filter: drop-shadow(0 0 5px var(--accent-color)); /* Makes the icon pop */
+    }
+.back-nav {
+    position: absolute;
+    left: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    opacity: 0.7;
+    transition: all 0.2s ease;
+    filter: drop-shadow(0 0 5px var(--accent-color));
+}
+
+.back-nav:hover {
+    opacity: 1;
+    color: var(--accent-color);
+    transform: translateX(-5px); /* Subtle "pull" effect */
+}
+
+.back-text {
+    font-family: var(--font-title);
+    font-size: 14px;
+    letter-spacing: 1px;
+}
+    .landing-content {
+        max-width: 1000px; /* Increased to accommodate side-by-side layout */
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .landing-action-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr; /* Split into CTA and Stats columns */
+        gap: 50px;
+        width: 100%;
+        align-items: center;
+        margin-top: 40px;
+    }
+
+    .landing-cta {
+        align-items: flex-end; /* Buttons sit toward the center-left */
+        margin-bottom: 0;      /* Remove mobile spacing */
+    }
+
+    .landing-stats-preview {
+        text-align: left;
+        align-self: stretch; /* Match height of CTA column for symmetry */
+        background: rgba(255, 255, 255, 0.03);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(241, 196, 15, 0.15);
+    }
+
     #game-grid {
         grid-template-columns: 140px 1fr 140px; 
-        grid-template-rows: 50px 0px 1fr 0px 130px; 
+        grid-template-rows: 40px 0px 1fr 0px 120px !important;
         grid-template-areas: 
             ".          partner    ."
             ".          timer-top  ."
@@ -428,8 +522,14 @@ h2 {
     #partner-zone { grid-area: partner; align-items: flex-end; overflow: visible; }
     #my-zone { grid-area: player; align-items: flex-start; padding-top: 10px; }
     #table-zone {
-        grid-area: center; display: grid; grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr) !important;
-        padding: 0 40px; height: 100%; gap: 0 !important; align-content: center; overflow: hidden;
+        grid-area: center; 
+        display: grid; 
+        grid-template-rows: 1fr auto 1fr !important;
+        padding: 0 40px; 
+        height: 100%; 
+        gap: 0 !important; 
+        align-content: center; 
+        overflow: hidden !important;
     }
     .side-zone { 
         justify-content: center; 
@@ -456,25 +556,34 @@ h2 {
     }
     .score-group { flex: 0 0 220px !important; width: 220px !important; height: 90px !important; margin: 0 !important; position: static !important; }
     .piles-group { flex: 0 0 auto !important; width: auto !important; min-width: 180px !important; height: 90px !important; margin: 0 !important; justify-content: center; gap: 15px; position: static !important; }
-
-    #enemy-melds, #my-melds { 
-        height: 100% !important; 
-        align-items: flex-start !important; 
-        padding-top: 35px !important; 
-        margin: 0 !important; 
-        min-height: 0;
-        /* Ensure we don't wrap to a new line */
-        flex-wrap: nowrap !important;
-        /* Allow overlap */
+    #enemy-melds {
+        margin-top: 18px !important;   /* Clears the "BOT 1" timer text */
+        padding-top: 0px !important;
+        height: 195px !important;      /* Fixed height for the "Green Box" */
+        max-height: 195px !important;
+        min-height: 195px !important;
+        
+        display: flex !important;
+        align-items: flex-start !important;
         overflow: visible !important;
-        max-height: 40vh;
+    }
+
+    #my-melds {
+        /* Symmetric height for user, keeping spacing we liked before */
+        padding-top: 10px !important;
+        height: 195px !important;
+        max-height: 195px !important;
+        min-height: 195px !important;
+        margin-bottom: 0px !important; 
+    }
+
+    .meld-container {
         display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 100%;
     }
-    #my-melds { padding-top: 15px; }
-    .meld-group { 
-        flex-shrink: 0;
-        transition: margin 0.2s ease; /* Smooth squeeze animation */
-    }
+
 
     /* --- CARDS --- */
     #hand-left, #hand-right { transform: none !important; padding: 20px 0; margin: 0 5px !important; }
@@ -537,40 +646,69 @@ h2 {
 }
 #ready-modal, #score-modal, #game-menu-overlay { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 2000; flex-direction: column; align-items: center; justify-content: center; }
 .ready-box{ background: #2c3e50; border: 2px solid var(--accent-color); padding: 30px; border-radius: 15px; text-align: center; box-shadow: 0 0 30px rgba(0,0,0,0.8); }
-.score-box { background: white; color: #333; width: 85%; padding: 20px; border-radius: 10px; text-align: center; }
+
+/* Dark Theme Score Box to match the app */
+.score-box { 
+    background: #2c3e50; /* Dark Navy instead of White */
+    color: var(--text-primary); /* White Text */
+    width: 85%; 
+    max-width: 600px;
+    padding: 25px; 
+    border-radius: 12px; 
+    text-align: center; 
+    border: 2px solid var(--accent-color); /* Gold Border */
+    box-shadow: 0 0 40px rgba(0,0,0,0.8);
+}
+
+.score-box h2 {
+    color: var(--text-primary);
+    font-family: var(--font-title);
+    letter-spacing: 2px;
+    margin-bottom: 20px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+
 .score-table { 
     width: 100%; 
     border-collapse: collapse; 
     margin: 15px 0; 
-    font-size: 14px; 
-    /* CHANGE: White text for readability on dark backgrounds */
-    color: var(--text-primary);
+    font-size: 15px; 
+    color: var(--text-primary); /* Text is now visible on dark bg */
     background: transparent;
 }
 
-.score-table th, .score-table td { 
-    padding: 10px 8px; 
-    /* CHANGE: Use a darker or gold-tinted border instead of light grey */
-    border-bottom: 1px solid rgba(189, 195, 199, 0.2);
-    text-align: center; 
-}
-
-.score-table th {
-    background: var(--accent-color) !important;
-    color: #1a252f !important;
+.score-table th { 
+    background: var(--accent-color) !important; /* Gold Header */
+    color: #1a252f !important; /* Dark Text on Gold */
+    padding: 12px 8px; 
     font-family: var(--font-title);
     text-transform: uppercase;
     font-weight: 900;
     letter-spacing: 1px;
+    border-bottom: 2px solid #fff;
 }
 
-/* Optional: Highlight the "Total" rows at the bottom */
-.score-table .total-row {
-    font-weight: bold;
-    color: var(--accent-color);
-    background: rgba(0, 0, 0, 0.3);
+.score-table td { 
+    padding: 10px 8px; 
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1); /* Subtle divider */
+    text-align: center; 
 }
-.total-row { font-weight: bold; background: #eee; }
+
+/* Highlights the category labels in the first column */
+.score-table td:first-child {
+    text-align: left;
+    color: #bdc3c7; /* Silver for labels */
+    font-weight: bold;
+}
+
+/* Total Row Styling */
+.score-table .total-row {
+    font-weight: 900;
+    color: #2c3e50 !important;
+    background: rgba(0, 0, 0, 0.4); /* Darker stripe */
+    border-top: 2px solid var(--accent-color);
+    font-size: 18px;
+}
 
 /* In-Game Menu */
 #btn-game-menu { position: absolute; bottom: 115px; right: 10px; width: 35px; height: 35px; background: rgba(0,0,0,0.6); color: var(--text-primary); font-size: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 2px solid rgba(255,255,255,0.3); z-index: 2000; }
@@ -831,4 +969,80 @@ h2 {
 .rules-table td {
     padding: 8px 0;
     border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.landing-content {
+    max-width: 800px;
+    padding: 40px 20px;
+    text-align: center;
+    animation: fadeIn 0.8s ease-out;
+}
+
+.hero-text {
+    font-size: 18px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin: 20px auto 40px;
+    max-width: 500px;
+}
+
+.landing-hero-logo {
+    width: 220px; /* Slightly larger */
+    filter: drop-shadow(0 0 30px rgba(241, 196, 15, 0.25));
+    animation: float 6s ease-in-out infinite; /* Adds "life" */
+}
+
+.landing-cta {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 50px;
+}
+
+.landing-stats-preview {
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(10px); /* Frosted glass effect */
+    border: 1px solid rgba(241, 196, 15, 0.2);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
+    border-radius: 15px;
+    padding: 25px;
+    width: 100%;
+    max-width: 450px; /* Better density */
+}
+#screen-landing, #screen-home {
+    /* Rich radial gradient centered on the branding */
+    background: radial-gradient(circle at center, #2c3e50 0%, #1a252f 100%) !important;
+    position: relative;
+    overflow: hidden;
+}
+#screen-landing::before {
+    content: "♠ ♥ ♣ ♦";
+    position: absolute;
+    font-size: 20rem;
+    color: rgba(255, 255, 255, 0.02);
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-15deg);
+    pointer-events: none;
+    z-index: 0;
+}
+/* Dynamic Floating Cards Background */
+.bg-cards {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.floating-card-bg {
+    position: absolute;
+    opacity: 0.05; /* Very faint */
+    animation: float-around 20s linear infinite;
+}
+
+@keyframes float-around {
+    0% { transform: translateY(110vh) rotate(0deg); }
+    100% { transform: translateY(-10vh) rotate(360deg); }
 }

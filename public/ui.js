@@ -253,50 +253,49 @@ function renderTable(elementId, meldsObj, red3sArray) {
     if (state.meldAnimationActive) return;
     container.innerHTML = "";
 
-    // 1. Sort & Separate Data
+    // --- SETUP & SORTING ---
     const rankPriority = ["A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3"];
     const openMelds = [];
     const closedMelds = [];
 
     if (meldsObj) {
-        const sortedRanks = Object.keys(meldsObj).sort((a, b) => { 
-            return rankPriority.indexOf(a) - rankPriority.indexOf(b); 
-        });
-        
+        const sortedRanks = Object.keys(meldsObj).sort((a, b) => 
+            rankPriority.indexOf(a) - rankPriority.indexOf(b)
+        );
         sortedRanks.forEach(rank => { 
             const pile = meldsObj[rank];
             if (pile.length >= 7) {
                 closedMelds.push({ rank: rank, cards: pile });
             } else {
-                openMelds.push({ rank: rank, cards: pile, label: pile.length });
+                openMelds.push({ rank: rank, cards: pile });
             }
         });
     }
 
     const isDesktop = window.innerWidth > 800;
     const groupWidth = isDesktop ? 75 : 50;
-    
-    // --- 2. RENDER THE "BONUS STACKS" (Red 3s & Canastas) ---
+
+    // --- 1. RENDER BONUS STACKS (Red 3s / Canastas) ---
+    // This logic was missing or truncated in the previous step
+    let stackWidth = 0;
     const hasRed3s = (red3sArray && red3sArray.length > 0);
     const hasCanastas = (closedMelds.length > 0);
-    let stackWidth = 0;
 
-    // Helper: Calculates vertical squeeze for a stack
+    // Helper to calculate vertical spacing for stacks
     const getVerticalOffset = (itemCount) => {
         const cardH = isDesktop ? 105 : 70;
-        const defaultStep = isDesktop ? 30 : 25;
-        // Estimate available height (approx 40% of screen height)
-        const availableH = container.clientHeight || (window.innerHeight * 0.4);
+        const defaultStep = isDesktop ? 45 : 25;
+        const availableH = isDesktop ? 195 : (container.clientHeight || 150);
+        
         const neededH = (itemCount * defaultStep) + cardH;
-
         if (neededH > availableH && itemCount > 1) {
             const squeezed = (availableH - cardH) / itemCount;
-            return Math.max(10, squeezed); // Don't squeeze tighter than 10px
+            return Math.max(20, squeezed); 
         }
         return defaultStep;
     };
 
-    // Helper: Creates a generic stack container
+    // Helper to create the stack container div
     const createStackContainer = () => {
         const div = document.createElement("div");
         div.className = "meld-group";
@@ -307,9 +306,9 @@ function renderTable(elementId, meldsObj, red3sArray) {
     };
 
     if (isDesktop) {
-        // === DESKTOP: SEPARATE STACKS ===
+        // === DESKTOP: SEPARATE COLUMNS ===
         
-        // A. Render Red 3s Column
+        // A. Red 3s
         if (hasRed3s) {
             const r3Div = createStackContainer();
             const offset = getVerticalOffset(red3sArray.length);
@@ -322,14 +321,12 @@ function renderTable(elementId, meldsObj, red3sArray) {
                 img.className = "card-img meld-card";
                 img.style.position = "absolute";
                 img.style.top = `${top}px`;
-                img.style.left = "0";
                 img.style.zIndex = z++;
                 img.style.boxShadow = "2px 2px 0 #555";
                 r3Div.appendChild(img);
                 top += offset;
             });
-
-            // Spacer for flexbox layout
+            // Spacer to give the div real height
             const spacer = document.createElement("div");
             spacer.style.width = "var(--card-w)";
             spacer.style.height = `calc(var(--card-h) + ${top - offset}px)`;
@@ -339,7 +336,7 @@ function renderTable(elementId, meldsObj, red3sArray) {
             stackWidth += (groupWidth + 20);
         }
 
-        // B. Render Canastas Column
+        // B. Canastas (The Invisible Pile Fix)
         if (hasCanastas) {
             const cDiv = createStackContainer();
             const offset = getVerticalOffset(closedMelds.length);
@@ -349,7 +346,8 @@ function renderTable(elementId, meldsObj, red3sArray) {
             closedMelds.forEach(m => {
                 const pile = m.cards;
                 const isNatural = !pile.some(c => c.isWild);
-                // Find top card logic
+                
+                // Determine Top Card (Red for Natural, Black for Mixed)
                 let topCard = pile[0]; 
                 if (isNatural) {
                     topCard = pile.find(c => c.suit === 'Hearts' || c.suit === 'Diamonds') || pile[0];
@@ -385,7 +383,7 @@ function renderTable(elementId, meldsObj, red3sArray) {
         }
 
     } else {
-        // === MOBILE: COMBINED STACK (To save horizontal space) ===
+        // === MOBILE: COMBINED STACK ===
         if (hasRed3s || hasCanastas) {
             const stackDiv = createStackContainer();
             stackWidth = groupWidth + 15;
@@ -396,7 +394,6 @@ function renderTable(elementId, meldsObj, red3sArray) {
             let zIndex = 1;
             let topOffset = 0;
 
-            // 1. Red 3s
             if (hasRed3s) {
                 red3sArray.forEach(card => {
                     const img = document.createElement("img");
@@ -409,11 +406,9 @@ function renderTable(elementId, meldsObj, red3sArray) {
                     stackDiv.appendChild(img);
                     topOffset += offsetStep;
                 });
-                // Small gap between types
                 if (hasCanastas) topOffset += (offsetStep * 0.5); 
             }
 
-            // 2. Canastas
             closedMelds.forEach(m => {
                 const pile = m.cards;
                 const isNatural = !pile.some(c => c.isWild);
@@ -450,50 +445,27 @@ function renderTable(elementId, meldsObj, red3sArray) {
         }
     }
 
-    // --- 3. RENDER OPEN MELDS (With Squeeze Logic) ---
-    if (openMelds.length === 0) return;
-
-    // A. Calculate Available Space
-    let safeWidth = container.clientWidth;
-    if (window.innerWidth <= 800) {
-        // Mobile Max = Screen Width - Side Columns (25px + 25px) - Padding (~10px)
-        const mobileMax = window.innerWidth - 60; 
-        // If container reports it's wider than the screen (overflowing), force it down
-        if (!safeWidth || safeWidth > mobileMax) safeWidth = mobileMax;
-    } else {
-        // Desktop Fallback
-        safeWidth = safeWidth || (window.innerWidth * 0.4); 
-    }
-
-    const availableWidth = safeWidth - stackWidth; // Remove space taken by Canastas
+    // --- 2. RENDER OPEN MELDS (With New Height Logic) ---
     
-    // B. Calculate Margin needed to fit all cards
-    // Formula: TotalWidth = (NumCards * CardWidth) + ((NumCards - 1) * Margin)
-    // We solve for Margin: Margin = (AvailableWidth - (NumCards * CardWidth)) / (NumCards - 1)
+    // Config
+    const cardHeight = isDesktop ? 105 : 70;
+    const boxHeight = isDesktop ? 195 : 160; 
     
-    let horizMargin = isDesktop ? 20 : 5; // Default comfortable margin
+    // Horizontal space calc
+    let safeWidth = container.clientWidth || (isDesktop ? window.innerWidth * 0.4 : window.innerWidth - 60);
+    const availableWidth = safeWidth - stackWidth;
+    let horizMargin = isDesktop ? 20 : 5;
 
     if (openMelds.length > 1) {
         const totalCardWidth = openMelds.length * groupWidth;
         const spacingSlots = openMelds.length - 1;
-        
-        // Check if we overflow
         if (totalCardWidth + (spacingSlots * horizMargin) > availableWidth) {
-            // Squeeze calculation
-            const neededSqueeze = (availableWidth - totalCardWidth) / spacingSlots;
-            
-            // Cap the squeeze (don't overlap more than 60% of card)
-            const minOverlap = isDesktop ? -50 : -30; 
-            horizMargin = Math.max(minOverlap, neededSqueeze);
+            horizMargin = (availableWidth - totalCardWidth) / spacingSlots;
+            horizMargin = Math.max(isDesktop ? -50 : -30, horizMargin);
         }
     }
 
-    const cardHeight = isDesktop ? 105 : 70;
-    const visibleStrip = isDesktop ? 22 : 18;
-    const vertMargin = visibleStrip - cardHeight;
-
     openMelds.forEach((groupData, gIdx) => {
-        
         const groupDiv = document.createElement("div");
         groupDiv.className = "meld-group";
         const teamSuffix = (elementId === "my-melds") ? "my" : "enemy";
@@ -502,7 +474,6 @@ function renderTable(elementId, meldsObj, red3sArray) {
         groupDiv.style.position = "relative";
         groupDiv.style.zIndex = gIdx + 10;
         
-        // APPLY THE CALCULATED MARGIN
         if (gIdx < openMelds.length - 1) {
             groupDiv.style.marginRight = `${horizMargin}px`;
         }
@@ -512,43 +483,42 @@ function renderTable(elementId, meldsObj, red3sArray) {
             groupDiv.style.cursor = "pointer";
         }
 
-        let html = `<div class='meld-container' style='display:flex; flex-direction:column; align-items:center;'>`;
+        // Vertical Squeeze
+        const totalCards = groupData.cards.length;
+        let activeMargin = isDesktop ? -70 : -55;
 
-// 1. DYNAMIC VERTICAL SQUEEZE CALCULATION
-const totalCards = groupData.cards.length;
-const cardH = isDesktop ? 105 : 70;
-// We define a target height for the meld area (e.g., 40% of the game area)
-const maxMeldHeight = window.innerHeight * 0.35; 
+        if (totalCards > 1) {
+            const stackH = cardHeight + ((totalCards - 1) * (cardHeight + activeMargin));
+            if (stackH > boxHeight) {
+                const squeezedMargin = ((boxHeight - cardHeight) / (totalCards - 1)) - cardHeight;
+                activeMargin = squeezedMargin;
+            }
+        }
+        
+        const minVisible = 15;
+        if ((cardHeight + activeMargin) < minVisible) {
+            activeMargin = -(cardHeight - minVisible);
+        }
 
-let activeMargin = isDesktop ? -80 : -55; // Default overlap
+        let html = `<div class='meld-container'>`;
 
-if (totalCards > 3) {
-    // If the pile would exceed the max height, calculate a tighter margin
-    const neededMargin = (maxMeldHeight - cardH) / (totalCards - 1) - cardH;
-    activeMargin = Math.min(activeMargin, neededMargin);
-    
-    // Safety cap: don't overlap so much that cards are invisible (min 15px visible)
-    const minVisible = 15;
-    activeMargin = Math.max(activeMargin, -(cardH - minVisible));
-}
+        groupData.cards.forEach((c, cIdx) => { 
+            const marginTop = (cIdx > 0) ? `margin-top:${activeMargin}px;` : "";
+            
+            // 6th Card Rotation
+            let transformStyle = "transform: none;";
+            if (totalCards === 6 && cIdx === 5) {
+                transformStyle = "transform: rotate(45deg) translateX(10px) translateY(-5px);";
+            }
+            
+            html += `
+                <img src="${getCardImage(c)}" 
+                     class="card-img meld-card" 
+                     style="${marginTop} ${transformStyle} z-index: ${cIdx}; box-shadow: 1px 1px 2px rgba(0,0,0,0.3);">
+            `; 
+        });
 
-groupData.cards.forEach((c, cIdx) => { 
-    const marginTop = (cIdx > 0) ? `margin-top:${activeMargin}px;` : "";
-    
-    // Preserve your existing Canasta rotation logic for the 7th card
-    let transformStyle = "transform: none;";
-    if (totalCards >= 7 && cIdx === 6) {
-        transformStyle = "transform: rotate(-45deg) translateX(10px) translateY(-5px);";
-    }
-
-    html += `
-        <img src="${getCardImage(c)}" 
-             class="card-img meld-card" 
-             style="${marginTop} ${transformStyle} z-index: ${cIdx}; box-shadow: 1px 1px 2px rgba(0,0,0,0.3);">
-    `; 
-});
-
-html += "</div>";
+        html += "</div>";
         groupDiv.innerHTML = html; 
         container.appendChild(groupDiv);
     });
