@@ -132,9 +132,8 @@
 </div>
     <div id="screen-login" class="app-screen">
         <div class="screen-header">
-    <div class="back-nav" onclick="goHome()">
-        <span class="home-icon">🏠</span>
-        <span class="back-text">HOME</span>
+    <div class="back-nav" onclick="navTo('screen-landing')">
+        <span class="back-text" style="font-size: 16px; text-decoration: none;">&lt; BACK</span>
     </div>
 </div>
         <div class="logo-area">
@@ -175,13 +174,25 @@
             <div class="link-text" onclick="toggleForms('login')">Back to Login</div>
     </div> </div> 
     <div id="screen-home" class="app-screen">
-    <div class="menu-list">
-        <button class="menu-btn primary" onclick="navTo('screen-online')"><span></span> PLAY ONLINE</button>
-        <button class="menu-btn" onclick="navTo('screen-bot')"><span></span> TRAIN VS BOTS</button>
-        <button class="menu-btn secondary" onclick="openFriendsScreen()"><span></span> FRIENDS</button> 
-        <button class="menu-btn secondary" onclick="openProfile()"><span></span> MY PROFILE</button>
-        <button class="menu-btn secondary" onclick="navTo('screen-how-to')">📖 HOW TO PLAY</button>
+    
+    <div class="logo-area">
+        <img src="Canasta logo.png" class="landing-hero-logo" style="width: 180px; margin-bottom: 10px;">
+        <h1 class="logo">CANASTA</h1>
+        <h2 class="logo">MASTER CLUB</h2>
     </div>
+
+    <div class="menu-list">
+    <button class="menu-btn primary" onclick="navTo('screen-online')"><span></span> PLAY ONLINE</button>
+    <button class="menu-btn" onclick="navTo('screen-bot')"><span></span> TRAIN VS BOTS</button>
+    
+    <button class="menu-btn secondary" onclick="openFriendsScreen()"><span></span> FRIENDS</button> 
+    <button class="menu-btn secondary" onclick="openProfile()"><span></span> MY PROFILE</button>
+    
+    <button class="menu-btn secondary" onclick="navTo('screen-how-to')">📖 HOW TO PLAY</button>
+    <button class="menu-btn primary" onclick="navTo('screen-subscribe')" style="background: linear-gradient(135deg, #9b59b6, #8e44ad) !important; box-shadow: 0 0 15px rgba(155, 89, 182, 0.4); border: none;">
+        💎 REMOVE ADS
+    </button>
+</div>
 </div>
 
 <div id="screen-bot" class="app-screen">
@@ -712,8 +723,31 @@
 
     </div>
     
-    <button class="menu-btn primary" onclick="navTo('screen-login')">READY TO PLAY?</button>
+    <button id="btn-ready-play" class="menu-btn primary" onclick="navTo('screen-login')">READY TO PLAY?</button>
     <button class="menu-btn text-only" id="back-to-menu-btn" onclick="navTo('screen-home')" style="display:none;">BACK TO MENU</button>
+</div>
+<div id="screen-subscribe" class="app-screen">
+    <div class="logo-area">
+        <div style="font-size: 60px; margin-bottom: 10px;">💎</div>
+        <h1 class="logo" style="color: #9b59b6; text-shadow: 0 0 15px rgba(155, 89, 182, 0.3);">PREMIUM</h1>
+        <h2 class="logo">CLUB ACCESS</h2>
+    </div>
+
+    <div class="menu-box" style="max-width: 400px;">
+        <h3 style="color: #bdc3c7; border-bottom: 1px solid #555; padding-bottom: 15px;">MEMBER BENEFITS</h3>
+        <ul style="text-align: left; color: white; line-height: 2; margin-bottom: 30px; padding-left: 20px;">
+            <li>🚫 <b>No Ads</b> between matches</li>
+            <li>⚡ <b>Priority</b> Server Queue</li>
+            <li>🏆 <b>Gold</b> Profile Badge</li>
+            <li>♾️ <b>Unlimited</b> Replays</li>
+        </ul>
+
+        <div style="font-size: 32px; font-weight: bold; color: white; margin-bottom: 5px;">$2.90</div>
+        <div style="color: #bdc3c7; font-size: 14px; margin-bottom: 25px;">per month</div>
+
+        <button class="menu-btn primary" onclick="startStripeCheckout()" style="background: linear-gradient(135deg, #9b59b6, #8e44ad) !important;">SUBSCRIBE NOW</button>
+        <button class="menu-btn text-only" onclick="navTo('screen-home')">NO THANKS</button>
+    </div>
 </div>
 <script src="/socket.io/socket.io.js"></script>
 <script type="module" src="client.js"></script>

@@ -104,34 +104,40 @@ h2 {
 /* style.css */
 
 .menu-list {
-    display: flex;
-    flex-direction: column; /* Stacks buttons vertically */
-    align-items: center;    /* Centers the stack horizontally */
-    gap: 12px;              /* Space between buttons */
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Create 2 columns */
+    gap: 12px;
     width: 100%;
+    max-width: 340px; /* Constrain width on tablets */
+    margin: 30px auto 0 auto;
+    padding: 0 15px; /* Ensure buttons don't touch screen edges */
+}
+
+.menu-list > button:nth-child(1),
+.menu-list > button:nth-child(2) {
+    grid-column: span 2;
 }
 
 .menu-btn {
-    /* FIXED SIZE: This ensures all buttons are identical */
-    width: 280px;           /* Adjust this value to your preferred width */
-    height: 50px;           /* Optional: Fixed height for perfect symmetry */
-    
-    padding: 0 20px;        /* Side padding only since height is fixed */
-    margin: 0; 
-    border-radius: 4px; 
+    width: 100%; /* Fluid width to fit the grid cell */
+    height: 50px;
+    padding: 0 5px; /* Tighter padding for side-by-side buttons */
+    margin: 0;
     
     font-family: var(--font-title);
-    font-size: 16px; 
-    font-weight: 700; 
+    font-size: 14px; /* Slightly smaller text for mobile grid */
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 1.5px;
-    cursor: pointer;
+    letter-spacing: 1px;
     
-    display: flex; 
-    align-items: center; 
-    justify-content: center; 
-    gap: 10px;
-    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    
+    white-space: nowrap; /* Prevent text wrapping */
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .menu-btn.primary {
@@ -441,6 +447,25 @@ h2 {
 
     /* --- LAYOUT --- */
     /* --- Global Screen Header Styles --- */
+
+.menu-list {
+        display: grid !important;
+        /* Desktop: 2 columns, fixed width buttons */
+        grid-template-columns: repeat(2, 280px); 
+        gap: 20px 30px;
+        justify-content: center;
+        max-width: none; /* Remove mobile constraint */
+        padding: 0;
+    }
+    /* DESKTOP RESET: Make Play & Train buttons take 1 column each (side-by-side) */
+    .menu-list > button:nth-child(1),
+    .menu-list > button:nth-child(2) {
+        grid-column: span 1 !important; 
+    }
+    .menu-btn {
+        font-size: 16px; /* Restore larger text for desktop */
+        letter-spacing: 1.5px;
+    }
 .screen-header {
     width: 100%;
     display: flex;
@@ -1015,7 +1040,7 @@ h2 {
     position: relative;
     overflow: hidden;
 }
-#screen-landing::before {
+#screen-landing::before, #screen-home::before {
     content: "♠ ♥ ♣ ♦";
     position: absolute;
     font-size: 20rem;

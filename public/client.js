@@ -34,6 +34,7 @@ const currentScreen = document.querySelector('.active-screen')?.id;
 
 if (state.playerToken && state.playerUsername) {
     initSocket(state.playerToken);
+    UI.navTo('screen-home');
 } else {
     // We use the imported UI.navTo here because window.navTo isn't defined yet
     if (currentScreen !== 'screen-how-to' && currentScreen !== 'screen-login') {
@@ -64,6 +65,75 @@ async function fetchLeaderboardPreview() {
 }
 
 // --- 2. EXPOSE FUNCTIONS TO HTML (Crucial Step!) ---
+// client.js
+
+// 1. Mock Stripe Checkout Redirect
+window.startStripeCheckout = async () => {
+    if (!state.playerToken) return alert("Please login first.");
+    
+    const btn = document.querySelector('#screen-subscribe .primary');
+    btn.innerText = "REDIRECTING...";
+    btn.disabled = true;
+
+    try {
+        // In a real app, you fetch a session ID from your backend here
+        // const res = await fetch('/api/create-checkout-session', { ... });
+        // const data = await res.json();
+        // window.location.href = data.url; 
+        
+        // FOR NOW: Simulate Success for testing
+        setTimeout(() => {
+            alert("Redirecting to Stripe Checkout...");
+            btn.innerText = "SUBSCRIBE NOW";
+            btn.disabled = false;
+        }, 1000);
+    } catch (e) {
+        alert("Connection Error");
+    }
+};
+
+// 2. Mock Ad Logic (Interstitial)
+window.showInterstitialAd = () => {
+    return new Promise((resolve) => {
+        // CHECK: Is user Premium?
+        if (state.isPremium) {
+            console.log("User is Premium - Skipping Ad");
+            resolve(); // Skip ad immediately
+            return;
+        }
+
+        // IF FREE USER: Show Ad Overlay
+        console.log("Showing Ad...");
+        const adOverlay = document.createElement('div');
+        adOverlay.id = 'ad-overlay';
+        adOverlay.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:black; z-index:99999; display:flex; flex-direction:column; align-items:center; justify-content:center; color:white;";
+        adOverlay.innerHTML = `
+            <h1 style="color:#f1c40f;">ADVERTISEMENT</h1>
+            <p>Support us by watching this short ad.</p>
+            <div style="font-size:40px; margin:20px;">📺</div>
+            <button id="close-ad-btn" style="padding:10px 30px; font-size:18px; cursor:pointer; margin-top:20px;" disabled>Close in 5s</button>
+        `;
+        document.body.appendChild(adOverlay);
+
+        // Simulate 5 second ad timer
+        let seconds = 5;
+        const btn = document.getElementById('close-ad-btn');
+        const timer = setInterval(() => {
+            seconds--;
+            btn.innerText = `Close in ${seconds}s`;
+            if (seconds <= 0) {
+                clearInterval(timer);
+                btn.innerText = "CLOSE AD ❎";
+                btn.disabled = false;
+                btn.onclick = () => {
+                    adOverlay.remove();
+                    resolve(); // Resume game flow
+                };
+            }
+        }, 1000);
+    });
+};
+
 window.goHome = () => {
     // 1. Clean up any active game states
     UI.hideInactivityWarning();
@@ -75,8 +145,20 @@ window.goHome = () => {
 };
 window.navTo = (screenId) => {
     UI.navTo(screenId);
+
     if (screenId === 'screen-how-to') {
-        document.getElementById('back-to-menu-btn').style.display = state.playerToken ? 'block' : 'none';
+        const isLoggedIn = !!state.playerToken;
+
+        // 1. Existing Logic: Show "Back to Menu" only if logged in
+        const backBtn = document.getElementById('back-to-menu-btn');
+        if (backBtn) backBtn.style.display = isLoggedIn ? 'block' : 'none';
+
+        // 2. New Logic: Hide "Ready to Play" if logged in
+        const readyBtn = document.getElementById('btn-ready-play');
+        if (readyBtn) {
+            // If logged in, hide it. If public, show it (flex matches your CSS).
+            readyBtn.style.display = isLoggedIn ? 'none' : 'flex';
+        }
     }
 };
 // --- BOT SPEED CONTROL (FIXED) ---
