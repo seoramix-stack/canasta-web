@@ -39,6 +39,27 @@ body {
 /* ========================================= */
 /* === 2. SCREENS & MENUS                === */
 /* ========================================= */
+.feature-pills {
+    display: flex;
+    flex-wrap: wrap;       /* Allow wrapping if screen is very narrow */
+    justify-content: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.feature-pills span {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(241, 196, 15, 0.3); /* Subtle Gold Border */
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    padding: 6px 12px;
+    border-radius: 20px;       /* Pill shape */
+    white-space: nowrap;       /* PREVENTS "2/4 \n PLAYER" WRAPPING */
+    text-transform: uppercase;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
 .landing-action-grid {
     display: flex;
     flex-direction: column;
@@ -404,6 +425,57 @@ h2 {
 /* === 7. MOBILE OVERRIDES (< 800px)     === */
 /* ========================================= */
 @media (max-width: 800px) {
+    .landing-content {
+        padding: 20px 15px !important; 
+        min-height: 100vh;      /* Use full screen height */
+        display: flex;
+        flex-direction: column;
+        justify-content: center; /* Center content vertically */
+    }
+
+    /* 2. SHRINK LOGO & TITLE */
+    .landing-hero-logo {
+        width: 130px !important; /* Reduced from default (~220px) */
+        margin-bottom: 10px;
+    }
+
+    .logo {
+        font-size: 34px !important; /* Reduced from 48px */
+        margin-bottom: 5px !important;
+    }
+
+    /* 3. TIGHTEN PILLS */
+    .feature-pills {
+        gap: 6px !important;
+        margin-bottom: 20px; /* Space before buttons */
+    }
+    
+    .feature-pills span {
+        font-size: 10px !important;
+        padding: 4px 10px !important;
+    }
+
+    /* 4. ADJUST BUTTON GRID */
+    .landing-action-grid {
+        margin-top: 10px !important;
+        gap: 20px !important; /* Less gap between Buttons and Leaderboard */
+    }
+    
+    .landing-cta {
+        gap: 10px !important; /* Tighter buttons */
+        margin-bottom: 0 !important;
+    }
+
+    /* 5. LEADERBOARD PREVIEW */
+    .landing-stats-preview {
+        padding: 15px !important;
+        background: rgba(0,0,0,0.4) !important; /* Darker for better contrast */
+    }
+    
+    .landing-stats-preview h3 {
+        font-size: 14px !important;
+        margin-bottom: 10px;
+    }
     /* 1. GIVE SCOREBOARD MORE SPACE (50% width) */
     .score-group {
         flex: 0.9 !important;
