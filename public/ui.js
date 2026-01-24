@@ -465,63 +465,51 @@ function renderTable(elementId, meldsObj, red3sArray) {
         }
     }
 
-    openMelds.forEach((groupData, gIdx) => {
-        const groupDiv = document.createElement("div");
-        groupDiv.className = "meld-group";
-        const teamSuffix = (elementId === "my-melds") ? "my" : "enemy";
-        groupDiv.id = `meld-pile-${teamSuffix}-${groupData.rank}`;
+    // Inside export function renderTable(elementId, meldsObj, red3sArray)...
+
+openMelds.forEach((groupData, gIdx) => {
+    const groupDiv = document.createElement("div");
+    groupDiv.className = "meld-group";
+    const teamSuffix = (elementId === "my-melds") ? "my" : "enemy";
+    groupDiv.id = `meld-pile-${teamSuffix}-${groupData.rank}`;
+    
+    groupDiv.style.position = "relative";
+    groupDiv.style.display = "flex";
+    groupDiv.style.flexDirection = "column";
+    groupDiv.style.alignItems = "center";
+
+    // Dynamic Vertical Squeeze (Cascade Effect)
+    const totalCards = groupData.cards.length;
+    // Default overlap: shows about 20-25px of the card spine
+    let activeMargin = isDesktop ? -75 : -50; 
+
+    // Prevent cards from flowing out of the meld box (boxHeight is ~160px on mobile)
+    if (totalCards > 1) {
+        const stackH = cardHeight + ((totalCards - 1) * (cardHeight + activeMargin));
+        if (stackH > boxHeight) {
+            // Recalculate margin to fit exactly into the available boxHeight
+            activeMargin = ((boxHeight - cardHeight) / (totalCards - 1)) - cardHeight;
+        }
+    }
+
+    let html = `<div class='meld-container' style="display:flex; flex-direction:column; align-items:center;">`;
+
+    groupData.cards.forEach((c, cIdx) => { 
+        // Apply the negative margin to every card after the first one to create the stack
+        const marginTop = (cIdx > 0) ? `margin-top:${activeMargin}px;` : "margin-top:0px;";
         
-        groupDiv.style.position = "relative";
-        groupDiv.style.zIndex = gIdx + 10;
-        
-        if (gIdx < openMelds.length - 1) {
-            groupDiv.style.marginRight = `${horizMargin}px`;
-        }
-
-        if (elementId === "my-melds") {
-            groupDiv.setAttribute("onclick", `handleMeldClick(event, '${groupData.rank}')`);
-            groupDiv.style.cursor = "pointer";
-        }
-
-        // Vertical Squeeze
-        const totalCards = groupData.cards.length;
-        let activeMargin = isDesktop ? -70 : -55;
-
-        if (totalCards > 1) {
-            const stackH = cardHeight + ((totalCards - 1) * (cardHeight + activeMargin));
-            if (stackH > boxHeight) {
-                const squeezedMargin = ((boxHeight - cardHeight) / (totalCards - 1)) - cardHeight;
-                activeMargin = squeezedMargin;
-            }
-        }
-        
-        const minVisible = 15;
-        if ((cardHeight + activeMargin) < minVisible) {
-            activeMargin = -(cardHeight - minVisible);
-        }
-
-        let html = `<div class='meld-container'>`;
-
-        groupData.cards.forEach((c, cIdx) => { 
-            const marginTop = (cIdx > 0) ? `margin-top:${activeMargin}px;` : "";
-            
-            // 6th Card Rotation
-            let transformStyle = "transform: none;";
-            if (totalCards === 6 && cIdx === 5) {
-                transformStyle = "transform: rotate(45deg) translateX(10px) translateY(-5px);";
-            }
-            
-            html += `
-                <img src="${getCardImage(c)}" 
-                     class="card-img meld-card" 
-                     style="${marginTop} ${transformStyle} z-index: ${cIdx}; box-shadow: 1px 1px 2px rgba(0,0,0,0.3);">
-            `; 
-        });
-
-        html += "</div>";
-        groupDiv.innerHTML = html; 
-        container.appendChild(groupDiv);
+        // Z-index ensures the newer cards (bottom of cascade) are visually on top
+        html += `
+            <img src="${getCardImage(c)}" 
+                 class="card-img meld-card" 
+                 style="${marginTop} z-index: ${cIdx}; position: relative; box-shadow: 0px -2px 5px rgba(0,0,0,0.2);">
+        `; 
     });
+
+    html += "</div>";
+    groupDiv.innerHTML = html; 
+    container.appendChild(groupDiv);
+});
 }
 
 function renderOtherHand(elementId, backsArray, orientation) {
