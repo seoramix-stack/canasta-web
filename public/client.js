@@ -1268,10 +1268,26 @@ window.addEventListener('beforeinstallprompt', (e) => {
   // showInstallButton();
 });
 
+// client.js - Updated Install Logic
+
 window.installApp = async () => {
+  // 1. Android / Desktop Chrome Logic
   if (deferredPrompt) {
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
+    console.log("User response to install:", outcome);
     deferredPrompt = null;
+    return;
   }
+
+  // 2. iOS (iPhone/iPad) Logic
+  // iOS doesn't support a button, so we must show instructions.
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  if (isIOS) {
+    alert("To install on iOS:\n\n1. Tap the Share button (box with arrow)\n2. Scroll down and tap 'Add to Home Screen' ➕");
+    return;
+  }
+
+  // 3. Fallback (Already Installed or Not Supported)
+  alert("Installation not available.\n\nThe app might already be installed, or your browser (like Firefox/Brave) requires you to install manually from the menu.");
 };
