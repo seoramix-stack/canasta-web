@@ -345,7 +345,7 @@ h2 {
 /* Melds */
 .meld-row { 
     display: flex; 
-    flex-direction: row;
+    flex-direction: column;
     overflow: visible !important; 
     padding: 0 5px; 
     width: 100%; 
