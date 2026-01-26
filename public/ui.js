@@ -248,6 +248,7 @@ export function updateUI(data) {
 }
 
 function renderTable(elementId, meldsObj, red3sArray) {
+    
     const container = document.getElementById(elementId);
     if (!container) return;
     if (state.meldAnimationActive) return;
@@ -274,7 +275,7 @@ function renderTable(elementId, meldsObj, red3sArray) {
 
     const isDesktop = window.innerWidth > 800;
     const groupWidth = isDesktop ? 75 : 50;
-
+    
     // --- 1. RENDER BONUS STACKS (Red 3s / Canastas) ---
     // This logic was missing or truncated in the previous step
     let stackWidth = 0;
@@ -445,49 +446,51 @@ function renderTable(elementId, meldsObj, red3sArray) {
         }
     }
 
-    // --- 2. RENDER OPEN MELDS (With New Height Logic) ---
-    
-    // Config
-    const cardHeight = isDesktop ? 105 : 70;
-    const boxHeight = isDesktop ? 195 : 160; 
-    
-    // Horizontal space calc
-    let safeWidth = container.clientWidth || (isDesktop ? window.innerWidth * 0.4 : window.innerWidth - 60);
-    const availableWidth = safeWidth - stackWidth;
-    let horizMargin = isDesktop ? 20 : 5;
+    // --- 2. RENDER OPEN MELDS (Precision Horizontal Squeeze) ---
 
-    if (openMelds.length > 1) {
-        const totalCardWidth = openMelds.length * groupWidth;
-        const spacingSlots = openMelds.length - 1;
-        if (totalCardWidth + (spacingSlots * horizMargin) > availableWidth) {
-            horizMargin = (availableWidth - totalCardWidth) / spacingSlots;
-            horizMargin = Math.max(isDesktop ? -50 : -30, horizMargin);
-        }
+// Config
+const cardWidth = isDesktop ? 75 : 50;
+const cardHeight = isDesktop ? 105 : 70;
+const boxHeight = isDesktop ? 195 : 160; 
+
+// Horizontal space calculation
+let safeWidth = container.clientWidth || (isDesktop ? window.innerWidth * 0.4 : window.innerWidth - 60);
+const availableWidth = safeWidth - stackWidth;
+
+// Default spacing between meld columns
+let horizMargin = isDesktop ? 15 : 5; 
+
+// Calculate if we need to squeeze melds horizontally
+if (openMelds.length > 1) {
+    const totalRequiredWidth = openMelds.length * cardWidth;
+    const spacingSlots = openMelds.length - 1;
+    
+    // If the melds are wider than the screen, calculate a negative margin
+    if (totalRequiredWidth + (spacingSlots * horizMargin) > availableWidth) {
+        horizMargin = (availableWidth - totalRequiredWidth) / spacingSlots;
+        // Limit the overlap so ranks remain readable (approx -30px max on mobile)
+        horizMargin = Math.max(isDesktop ? -45 : -30, horizMargin);
     }
-
-    // Inside export function renderTable(elementId, meldsObj, red3sArray)...
+}
 
 openMelds.forEach((groupData, gIdx) => {
     const groupDiv = document.createElement("div");
     groupDiv.className = "meld-group";
-    const teamSuffix = (elementId === "my-melds") ? "my" : "enemy";
-    groupDiv.id = `meld-pile-${teamSuffix}-${groupData.rank}`;
     
-    groupDiv.style.position = "relative";
-    groupDiv.style.display = "flex";
-    groupDiv.style.flexDirection = "column";
-    groupDiv.style.alignItems = "center";
+    // Apply the dynamic horizontal margin
+    if (gIdx < openMelds.length - 1) {
+        groupDiv.style.marginRight = `${horizMargin}px`;
+    } else {
+        groupDiv.style.marginRight = "0px"; 
+    }
 
-    // Dynamic Vertical Squeeze (Cascade Effect)
+    // Vertical Cascade Logic
     const totalCards = groupData.cards.length;
-    // Default overlap: shows about 20-25px of the card spine
-    let activeMargin = isDesktop ? -75 : -50; 
+    let activeMargin = isDesktop ? -75 : -50; // Standard vertical overlap
 
-    // Prevent cards from flowing out of the meld box (boxHeight is ~160px on mobile)
     if (totalCards > 1) {
         const stackH = cardHeight + ((totalCards - 1) * (cardHeight + activeMargin));
         if (stackH > boxHeight) {
-            // Recalculate margin to fit exactly into the available boxHeight
             activeMargin = ((boxHeight - cardHeight) / (totalCards - 1)) - cardHeight;
         }
     }
@@ -495,14 +498,12 @@ openMelds.forEach((groupData, gIdx) => {
     let html = `<div class='meld-container' style="display:flex; flex-direction:column; align-items:center;">`;
 
     groupData.cards.forEach((c, cIdx) => { 
-        // Apply the negative margin to every card after the first one to create the stack
         const marginTop = (cIdx > 0) ? `margin-top:${activeMargin}px;` : "margin-top:0px;";
-        
-        // Z-index ensures the newer cards (bottom of cascade) are visually on top
+        // Higher z-index for lower cards in the cascade
         html += `
             <img src="${getCardImage(c)}" 
                  class="card-img meld-card" 
-                 style="${marginTop} z-index: ${cIdx}; position: relative; box-shadow: 0px -2px 5px rgba(0,0,0,0.2);">
+                 style="${marginTop} z-index: ${cIdx}; position: relative; box-shadow: 0px -1px 3px rgba(0,0,0,0.3);">
         `; 
     });
 
