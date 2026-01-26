@@ -209,7 +209,7 @@ h2 {
     display: grid; 
     height: 100%; width: 100%;
     /* Mobile: 5 Rows */
-    grid-template-columns: 25px 1fr 25px; 
+    grid-template-columns: 5px 1fr 5px; 
     grid-template-rows: 25px 30px 1fr 30px 110px; 
     grid-template-areas: 
         "top-info   top-info   top-info"
@@ -350,7 +350,8 @@ h2 {
     padding: 0 5px; 
     width: 100vw; 
     flex-wrap: nowrap !important;
-    justify-content: center; 
+    justify-content: flex-start !important;
+    padding-left: 5px !important;
     align-items: flex-start !important;
     height: 160px !important; 
     min-height: 160px !important; 
@@ -492,21 +493,24 @@ h2 {
     }
     #hud-left {
         grid-area: side-left !important; align-self: center; justify-self: center;
-        transform: rotate(90deg); background: rgba(0,0,0,0.5) !important; z-index: 50;
-        width: max-content; padding: 4px 10px; margin: 0; pointer-events: none;
+        transform: rotate(90deg); background: rgba(0,0,0,0.2) !important; z-index: 50;
+        width: max-content; white-space: nowrap; padding: 4px 10px; margin: 0 0 0 30px !important; pointer-events: none; border-radius: 0 0 4px 4px;
     }
     #hud-right {
         grid-area: side-right !important; align-self: center; justify-self: center;
-        transform: rotate(-90deg); background: rgba(0,0,0,0.5) !important; z-index: 50;
-        width: max-content; padding: 4px 10px; margin: 0; pointer-events: none;
+        transform: rotate(-90deg); background: rgba(0,0,0,0.2) !important; z-index: 50;
+        width: max-content; white-space: nowrap; padding: 4px 10px; margin: 0 30px 0 0 !important; pointer-events: none; border-radius: 0 0 4px 4px;
     }
     #hud-partner {
-        grid-area: top-info !important; background: rgba(0,0,0,0.5) !important;
+        grid-area: top-info !important; background: rgba(0,0,0,0.2) !important;
         border-radius: 0 0 10px 10px;
     }
     #timers-top { display: none; }
     /* Reclaim space from timer row */
-    #game-grid { grid-template-rows: 30px 0px 1fr 30px 110px !important; }
+    #game-grid { 
+    grid-template-rows: 30px 0px 1fr 30px 110px !important;
+    grid-template-columns: 5px 1fr 5px !important; 
+    }
 }
 
 /* ========================================= */
@@ -521,6 +525,19 @@ h2 {
 
     /* --- LAYOUT --- */
     /* --- Global Screen Header Styles --- */
+
+.menu-btn {
+        max-width: 300px;  /* Matches your input fields width */
+        margin-left: auto; /* Centers the button horizontally */
+        margin-right: auto;
+        width: 100%;       /* Ensures it fills space up to 300px */
+    }
+
+    /* specific fix for the landing page if you want them right-aligned */
+    .landing-cta .menu-btn {
+        margin-right: 0; 
+        /* or keep margin-right: auto if you want them centered there too */
+    }
 
 .menu-list {
         display: grid !important;
@@ -638,11 +655,11 @@ h2 {
     }
     /* --- HUD POSITIONS --- */
     #hud-left, #hud-right {
-        grid-area: center !important; align-self: center !important; position: static !important;
-        width: auto !important; height: auto !important; z-index: 100 !important; margin: 0 !important;
+        grid-area: center !important; position: static !important;
+        width: auto !important; height: auto !important; z-index: 100 !important;
     }
-    #hud-left { justify-self: start !important; margin-left: 10px !important; }
-    #hud-right { justify-self: end !important; margin-right: 10px !important; }
+    #hud-left { justify-self: start !important }
+    #hud-right { justify-self: end !important }
     #hud-partner { grid-area: timer-top; align-self: center; justify-self: center; transform: translateY(10px) !important; pointer-events: none; z-index: 100 !important; }
     #hud-me { grid-area: timer-bot; align-self: center; justify-self: center; transform: translateY(15px) !important; pointer-events: none; z-index: 100 !important; }
 

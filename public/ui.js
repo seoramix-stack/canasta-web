@@ -254,7 +254,25 @@ function renderTable(elementId, meldsObj, red3sArray) {
     if (state.meldAnimationActive) return;
     container.innerHTML = "";
 
-    // --- SETUP & SORTING ---
+    container.style.display = "flex";
+    container.style.flexDirection = "row";
+    container.style.alignItems = "flex-start"; 
+    container.style.justifyContent = "flex-start"; 
+    container.style.width = "100%"; 
+    container.style.paddingLeft = "10px"; 
+    container.style.boxSizing = "border-box";
+    container.style.overflowX = "hidden"; 
+
+    // --- 1. DEFINE DIMENSIONS ---
+    const isDesktop = window.innerWidth > 800;
+    const cardWidth = isDesktop ? 75 : 50;
+    const cardHeight = isDesktop ? 105 : 70; 
+    const boxHeight = container.clientHeight || 150;
+    const groupWidth = isDesktop ? 75 : 50;
+
+    // Helper to determine ID suffix
+    const suffix = (elementId === 'my-melds') ? 'my' : 'enemy';
+
     const rankPriority = ["A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3"];
     const openMelds = [];
     const closedMelds = [];
@@ -272,245 +290,179 @@ function renderTable(elementId, meldsObj, red3sArray) {
             }
         });
     }
-
-    const isDesktop = window.innerWidth > 800;
-    const groupWidth = isDesktop ? 75 : 50;
     
-    // --- 1. RENDER BONUS STACKS (Red 3s / Canastas) ---
-    // This logic was missing or truncated in the previous step
     let stackWidth = 0;
     const hasRed3s = (red3sArray && red3sArray.length > 0);
     const hasCanastas = (closedMelds.length > 0);
 
-    // Helper to calculate vertical spacing for stacks
     const getVerticalOffset = (itemCount) => {
-        const cardH = isDesktop ? 105 : 70;
         const defaultStep = isDesktop ? 45 : 25;
         const availableH = isDesktop ? 195 : (container.clientHeight || 150);
         
-        const neededH = (itemCount * defaultStep) + cardH;
+        const neededH = (itemCount * defaultStep) + cardHeight;
         if (neededH > availableH && itemCount > 1) {
-            const squeezed = (availableH - cardH) / itemCount;
+            const squeezed = (availableH - cardHeight) / itemCount;
             return Math.max(20, squeezed); 
         }
         return defaultStep;
     };
 
-    // Helper to create the stack container div
-    const createStackContainer = () => {
+    const createStackContainer = (specialId = null) => {
         const div = document.createElement("div");
         div.className = "meld-group";
+        if (specialId) div.id = specialId; // Assign ID if provided
         div.style.position = "relative";
-        div.style.marginRight = isDesktop ? "20px" : "15px";
+        div.style.marginRight = isDesktop ? "20px" : "10px";
         div.style.minWidth = "var(--card-w)";
+        div.style.zIndex = "1";
         return div;
     };
 
-    if (isDesktop) {
-        // === DESKTOP: SEPARATE COLUMNS ===
+    // --- 2. RENDER RED 3s ---
+    if (hasRed3s) {
+        // We give this a specific ID too, just in case
+        const r3Div = createStackContainer(`meld-pile-${suffix}-Red3`);
+        const offset = getVerticalOffset(red3sArray.length);
+        let top = 0;
+        let z = 1;
+
+        red3sArray.forEach(card => {
+            const img = document.createElement("img");
+            img.src = getCardImage(card);
+            img.className = "card-img meld-card";
+            img.style.position = "absolute";
+            img.style.top = `${top}px`;
+            img.style.zIndex = z++;
+            img.style.boxShadow = "2px 2px 0 #555";
+            r3Div.appendChild(img);
+            top += offset;
+        });
+
+        const spacer = document.createElement("div");
+        spacer.style.width = "var(--card-w)";
+        spacer.style.height = `calc(var(--card-h) + ${top - offset}px)`;
+        r3Div.appendChild(spacer);
         
-        // A. Red 3s
-        if (hasRed3s) {
-            const r3Div = createStackContainer();
-            const offset = getVerticalOffset(red3sArray.length);
-            let top = 0;
-            let z = 1;
+        container.appendChild(r3Div);
+        stackWidth += (groupWidth + (isDesktop ? 20 : 10));
+    }
 
-            red3sArray.forEach(card => {
-                const img = document.createElement("img");
-                img.src = getCardImage(card);
-                img.className = "card-img meld-card";
-                img.style.position = "absolute";
-                img.style.top = `${top}px`;
-                img.style.zIndex = z++;
-                img.style.boxShadow = "2px 2px 0 #555";
-                r3Div.appendChild(img);
-                top += offset;
-            });
-            // Spacer to give the div real height
-            const spacer = document.createElement("div");
-            spacer.style.width = "var(--card-w)";
-            spacer.style.height = `calc(var(--card-h) + ${top - offset}px)`;
-            r3Div.appendChild(spacer);
-            
-            container.appendChild(r3Div);
-            stackWidth += (groupWidth + 20);
-        }
+    // --- 3. RENDER CANASTAS ---
+    if (hasCanastas) {
+        // Canastas share one stack, so we might not be able to ID by rank easily here
+        // without changing the structure. For now, we leave it generic.
+        const cDiv = createStackContainer();
+        const offset = getVerticalOffset(closedMelds.length);
+        let top = 0;
+        let z = 1;
 
-        // B. Canastas (The Invisible Pile Fix)
-        if (hasCanastas) {
-            const cDiv = createStackContainer();
-            const offset = getVerticalOffset(closedMelds.length);
-            let top = 0;
-            let z = 1;
-
-            closedMelds.forEach(m => {
-                const pile = m.cards;
-                const isNatural = !pile.some(c => c.isWild);
-                
-                // Determine Top Card (Red for Natural, Black for Mixed)
-                let topCard = pile[0]; 
-                if (isNatural) {
-                    topCard = pile.find(c => c.suit === 'Hearts' || c.suit === 'Diamonds') || pile[0];
-                } else {
-                    topCard = pile.find(c => !c.isWild && (c.suit === 'Clubs' || c.suit === 'Spades')) || pile[0];
-                }
-
-                const wrapper = document.createElement("div");
-                wrapper.style.position = "absolute";
-                wrapper.style.top = `${top}px`;
-                wrapper.style.zIndex = z++;
-                
-                const badgeColor = isNatural ? "#d63031" : "#2d3436";
-                const badgeText = isNatural ? "NAT" : "MIX";
-
-                wrapper.innerHTML = `
-                    <img src="${getCardImage(topCard)}" class="card-img meld-card" style="box-shadow: 2px 2px 3px rgba(0,0,0,0.4); border:1px solid #000;">
-                    <div style="position: absolute; top: 4px; right: 4px; background: ${badgeColor}; color: white; font-size: 9px; font-weight: bold; padding: 1px 4px; border: 1px solid rgba(255,255,255,0.8); border-radius: 4px; z-index: 10;">
-                        ${badgeText}
-                    </div>
-                `;
-                cDiv.appendChild(wrapper);
-                top += offset;
-            });
-
-            const spacer = document.createElement("div");
-            spacer.style.width = "var(--card-w)";
-            spacer.style.height = `calc(var(--card-h) + ${top - offset}px)`;
-            cDiv.appendChild(spacer);
-
-            container.appendChild(cDiv);
-            stackWidth += (groupWidth + 20);
-        }
-
-    } else {
-        // === MOBILE: COMBINED STACK ===
-        if (hasRed3s || hasCanastas) {
-            const stackDiv = createStackContainer();
-            stackWidth = groupWidth + 15;
-
-            const totalItems = (hasRed3s ? red3sArray.length : 0) + closedMelds.length;
-            const offsetStep = getVerticalOffset(totalItems);
-
-            let zIndex = 1;
-            let topOffset = 0;
-
-            if (hasRed3s) {
-                red3sArray.forEach(card => {
-                    const img = document.createElement("img");
-                    img.src = getCardImage(card);
-                    img.className = "card-img meld-card";
-                    img.style.position = "absolute";
-                    img.style.top = `${topOffset}px`;
-                    img.style.zIndex = zIndex++;
-                    img.style.boxShadow = "2px 2px 0 #555";
-                    stackDiv.appendChild(img);
-                    topOffset += offsetStep;
-                });
-                if (hasCanastas) topOffset += (offsetStep * 0.5); 
+        closedMelds.forEach(m => {
+            const pile = m.cards;
+            const isNatural = !pile.some(c => c.isWild);
+            let topCard = pile[0]; 
+            if (isNatural) {
+                topCard = pile.find(c => c.suit === 'Hearts' || c.suit === 'Diamonds') || pile[0];
+            } else {
+                topCard = pile.find(c => !c.isWild && (c.suit === 'Clubs' || c.suit === 'Spades')) || pile[0];
             }
 
-            closedMelds.forEach(m => {
-                const pile = m.cards;
-                const isNatural = !pile.some(c => c.isWild);
-                let topCard = pile[0]; 
-                if (isNatural) {
-                    topCard = pile.find(c => c.suit === 'Hearts' || c.suit === 'Diamonds') || pile[0];
-                } else {
-                    topCard = pile.find(c => !c.isWild && (c.suit === 'Clubs' || c.suit === 'Spades')) || pile[0];
-                }
+            const wrapper = document.createElement("div");
+            wrapper.style.position = "absolute";
+            wrapper.style.top = `${top}px`;
+            wrapper.style.zIndex = z++;
+            
+            const badgeColor = isNatural ? "#d63031" : "#2d3436";
+            const badgeText = isNatural ? "NAT" : "MIX";
 
-                const wrapper = document.createElement("div");
-                wrapper.style.position = "absolute";
-                wrapper.style.top = `${topOffset}px`;
-                wrapper.style.zIndex = zIndex++;
-                
-                const badgeColor = isNatural ? "#d63031" : "#2d3436";
-                const badgeText = isNatural ? "NAT" : "MIX";
-                
-                wrapper.innerHTML = `
-                    <img src="${getCardImage(topCard)}" class="card-img meld-card" style="box-shadow: 2px 2px 3px rgba(0,0,0,0.4); border:1px solid #000;">
-                    <div style="position: absolute; top: 4px; right: 4px; background: ${badgeColor}; color: white; font-size: 9px; font-weight: bold; padding: 1px 4px; border: 1px solid rgba(255,255,255,0.8); border-radius: 4px; z-index: 10;">
-                        ${badgeText}
-                    </div>
-                `;
-                stackDiv.appendChild(wrapper);
-                topOffset += offsetStep;
-            });
+            wrapper.innerHTML = `
+                <img src="${getCardImage(topCard)}" class="card-img meld-card" style="box-shadow: 2px 2px 3px rgba(0,0,0,0.4); border:1px solid #000;">
+                <div style="position: absolute; top: 4px; right: 4px; background: ${badgeColor}; color: white; font-size: 9px; font-weight: bold; padding: 1px 4px; border: 1px solid rgba(255,255,255,0.8); border-radius: 4px; z-index: 10;">
+                    ${badgeText}
+                </div>
+            `;
+            cDiv.appendChild(wrapper);
+            top += offset;
+        });
 
-            const spacer = document.createElement("div");
-            spacer.style.width = "var(--card-w)";
-            spacer.style.height = `calc(var(--card-h) + ${topOffset}px)`;
-            stackDiv.appendChild(spacer);
-            container.appendChild(stackDiv);
+        const spacer = document.createElement("div");
+        spacer.style.width = "var(--card-w)";
+        spacer.style.height = `calc(var(--card-h) + ${top - offset}px)`;
+        cDiv.appendChild(spacer);
+
+        container.appendChild(cDiv);
+        stackWidth += (groupWidth + (isDesktop ? 20 : 10));
+    }
+
+    // --- 4. CALCULATE SPACE FOR OPEN MELDS ---
+    const rawContainerWidth = container.offsetWidth || container.clientWidth;
+    const containerWidth = (rawContainerWidth > 200) ? rawContainerWidth : (isDesktop ? 600 : 350);
+    const availableForOpen = Math.max(50, containerWidth - stackWidth - 20);
+
+    const minSpine = isDesktop ? 38 : 28; 
+    const maxOverlapAllowed = -(cardWidth - minSpine); 
+
+    let desiredMargin = isDesktop ? 15 : 5;
+    let finalMargin = desiredMargin;
+
+    if (openMelds.length > 1) {
+        const totalCardWidth = openMelds.length * cardWidth;
+        const spacingSlots = openMelds.length - 1;
+        const idealTotalWidth = totalCardWidth + (spacingSlots * desiredMargin);
+
+        if (idealTotalWidth > availableForOpen) {
+            const calculatedMargin = (availableForOpen - totalCardWidth) / spacingSlots;
+            finalMargin = Math.max(maxOverlapAllowed, calculatedMargin);
         }
     }
 
-    // --- 2. RENDER OPEN MELDS (Precision Horizontal Squeeze) ---
+    // --- 5. RENDER OPEN MELDS ---
+    openMelds.forEach((groupData, gIdx) => {
+        const groupDiv = document.createElement("div");
+        groupDiv.className = "meld-group";
+        
+        // --- FIX: ASSIGN THE ID SO ANIMATIONS.JS CAN FIND IT ---
+        // ID format: meld-pile-{my/enemy}-{Rank} (e.g., meld-pile-my-K)
+        groupDiv.id = `meld-pile-${suffix}-${groupData.rank}`;
 
-// Config
-const cardWidth = isDesktop ? 75 : 50;
-const cardHeight = isDesktop ? 105 : 70;
-const boxHeight = isDesktop ? 195 : 160; 
+        groupDiv.style.flexShrink = "0"; 
 
-// Horizontal space calculation
-let safeWidth = container.clientWidth || (isDesktop ? window.innerWidth * 0.4 : window.innerWidth - 60);
-const availableWidth = safeWidth - stackWidth;
-
-// Default spacing between meld columns
-let horizMargin = isDesktop ? 15 : 5; 
-
-// Calculate if we need to squeeze melds horizontally
-if (openMelds.length > 1) {
-    const totalRequiredWidth = openMelds.length * cardWidth;
-    const spacingSlots = openMelds.length - 1;
-    
-    // If the melds are wider than the screen, calculate a negative margin
-    if (totalRequiredWidth + (spacingSlots * horizMargin) > availableWidth) {
-        horizMargin = (availableWidth - totalRequiredWidth) / spacingSlots;
-        // Limit the overlap so ranks remain readable (approx -30px max on mobile)
-        horizMargin = Math.max(isDesktop ? -45 : -30, horizMargin);
-    }
-}
-
-openMelds.forEach((groupData, gIdx) => {
-    const groupDiv = document.createElement("div");
-    groupDiv.className = "meld-group";
-    
-    // Apply the dynamic horizontal margin
-    if (gIdx < openMelds.length - 1) {
-        groupDiv.style.marginRight = `${horizMargin}px`;
-    } else {
-        groupDiv.style.marginRight = "0px"; 
-    }
-
-    // Vertical Cascade Logic
-    const totalCards = groupData.cards.length;
-    let activeMargin = isDesktop ? -75 : -50; // Standard vertical overlap
-
-    if (totalCards > 1) {
-        const stackH = cardHeight + ((totalCards - 1) * (cardHeight + activeMargin));
-        if (stackH > boxHeight) {
-            activeMargin = ((boxHeight - cardHeight) / (totalCards - 1)) - cardHeight;
+        if (gIdx < openMelds.length - 1) {
+            groupDiv.style.marginRight = `${finalMargin}px`;
         }
-    }
+        
+        groupDiv.style.zIndex = 10 + gIdx; 
 
-    let html = `<div class='meld-container' style="display:flex; flex-direction:column; align-items:center;">`;
+        const totalCards = groupData.cards.length;
+        let activeMargin = isDesktop ? -75 : -50; 
 
-    groupData.cards.forEach((c, cIdx) => { 
-        const marginTop = (cIdx > 0) ? `margin-top:${activeMargin}px;` : "margin-top:0px;";
-        // Higher z-index for lower cards in the cascade
-        html += `
-            <img src="${getCardImage(c)}" 
-                 class="card-img meld-card" 
-                 style="${marginTop} z-index: ${cIdx}; position: relative; box-shadow: 0px -1px 3px rgba(0,0,0,0.3);">
-        `; 
+        if (totalCards > 1) {
+            const stackH = cardHeight + ((totalCards - 1) * (cardHeight + activeMargin));
+            if (stackH > boxHeight) {
+                activeMargin = ((boxHeight - cardHeight) / (totalCards - 1)) - cardHeight;
+            }
+        }
+
+        let html = `<div class='meld-container' style="display:flex; flex-direction:column; align-items:center;">`;
+
+        groupData.cards.forEach((c, cIdx) => { 
+            const marginTop = (cIdx > 0) ? `margin-top:${activeMargin}px;` : "margin-top:0px;";
+            
+            let transformStyle = "";
+            if (cIdx === 5) {
+                transformStyle = "transform: rotate(45deg);";
+            }
+
+            html += `
+                <img src="${getCardImage(c)}" 
+                     class="card-img meld-card" 
+                     style="${marginTop} ${transformStyle} z-index: ${cIdx}; position: relative; box-shadow: 0px -1px 3px rgba(0,0,0,0.3);">
+            `; 
+        });
+
+        html += "</div>";
+        groupDiv.innerHTML = html; 
+        container.appendChild(groupDiv);
     });
-
-    html += "</div>";
-    groupDiv.innerHTML = html; 
-    container.appendChild(groupDiv);
-});
 }
 
 function renderOtherHand(elementId, backsArray, orientation) {
@@ -747,7 +699,9 @@ export function renderLobbySeats(data, mySeat) {
     // Ensure we are on the lobby screen
     navTo('screen-lobby');
 
-    const container = document.getElementById('lobby-players');
+    const container = document.getElementById('lobby-players'); // <--- ADDED THIS LINE
+    if (!container) return;
+
     container.innerHTML = ""; 
     container.style.display = "flex";
     container.style.flexWrap = "wrap";
