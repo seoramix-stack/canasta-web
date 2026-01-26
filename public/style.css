@@ -361,7 +361,7 @@ h2 {
     width: 100vw; 
     flex-wrap: nowrap !important;
     justify-content: flex-start !important;
-    padding-left: 5px !important;
+    padding-left: 5px;
     align-items: flex-start !important;
     height: 160px !important; 
     min-height: 160px !important; 
@@ -438,6 +438,44 @@ h2 {
 /* === 7. MOBILE OVERRIDES (< 800px)     === */
 /* ========================================= */
 @media (max-width: 800px) {
+    .pile-area {
+        position: relative !important;
+        width: 100% !important;
+        height: 80px !important;
+        display: flex !important;
+        align-items: center !important;
+        margin: 0 !important;
+        /* Ensure no extra padding pushes the center point */
+        padding: 0 !important; 
+    }
+    .piles-group {
+        /* 1. Anchor the left edge to the middle of the screen */
+        position: absolute !important;
+        left: 50% !important; 
+        
+        /* 2. REMOVE the shift. This makes it "start" from the middle and grow right. */
+        transform: none !important; 
+        
+        /* 3. Standard Layout Settings */
+        flex: 0 0 auto !important; 
+        width: auto !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        
+        /* Ensure items inside (Discard -> Draw) flow left-to-right */
+        justify-content: flex-start !important; 
+        gap: 5px !important; 
+        z-index: 10; 
+    }
+
+
+    /* Adjust the inner groups to fit the tighter space */
+    .score-group {
+        flex: 1 !important;
+        padding-left: 36px !important;
+        text-align: flex-start !important;
+        align-items: flex-start !important;
+    }
     .landing-content {
         padding: 20px 15px !important; 
         min-height: 100vh;      /* Use full screen height */
@@ -489,18 +527,6 @@ h2 {
         font-size: 14px !important;
         margin-bottom: 10px;
     }
-    /* 1. GIVE SCOREBOARD MORE SPACE (50% width) */
-    .score-group {
-        flex: 0.9 !important;
-        padding-left: 5px;         
-    }
-    /* 2. PUSH PILES TO THE RIGHT */
-    .piles-group {
-        flex: 1 !important;
-        justify-content: flex-start !important; 
-        padding-left: 0 !important;
-        padding-right: 5px;        
-    }
     #hud-left {
         grid-area: side-left !important; align-self: center; justify-self: center;
         transform: rotate(90deg); background: rgba(0,0,0,0.2) !important; z-index: 50;
@@ -521,7 +547,7 @@ h2 {
     grid-template-rows: 30px 0px 1fr 30px 110px !important;
     grid-template-columns: 5px 1fr 5px !important; 
     }
-    /* ========================================= */
+/* ========================================= */
 /* === MOBILE SCOREBOARD FIXES           === */
 /* ========================================= */
 
@@ -1231,4 +1257,14 @@ h2 {
 @keyframes float-around {
     0% { transform: translateY(110vh) rotate(0deg); }
     100% { transform: translateY(-10vh) rotate(360deg); }
+}
+.meld-target-highlight {
+    filter: brightness(1.3) contrast(1.1);
+    box-shadow: 0 0 15px var(--accent-color) !important;
+    transform: scale(1.05);
+    z-index: 100 !important;
+    border: 2px solid var(--accent-color) !important;
+    background: rgba(241, 196, 15, 0.1);
+    border-radius: 8px;
+    cursor: pointer;
 }

@@ -247,32 +247,92 @@ export function updateUI(data) {
     state.gameStarted = true;
 }
 
-function renderTable(elementId, meldsObj, red3sArray) {
+// --- INTERACTION HELPER ---
+function attachMeldInteraction(element, rank) {
+    if (!rank) return;
     
+    // Store rank for retrieval during touch events
+    element.dataset.rank = rank; 
+
+    // 1. DESKTOP / SIMPLE CLICK
+    element.onclick = (e) => {
+        // Only trigger if we have cards selected (to act as a target)
+        if (state.selectedIndices.length > 0) {
+            e.stopPropagation(); // Prevent background click
+            window.handleMeldClick(e, rank);
+        }
+    };
+
+    // 2. MOBILE TOUCH & DRAG
+    element.addEventListener('touchstart', (e) => {
+        if (state.selectedIndices.length === 0) return;
+        
+        // Prevent scrolling while trying to select a pile
+        e.preventDefault(); 
+        
+        // Highlight this element immediately
+        element.classList.add('meld-target-highlight');
+        state.touchTarget = element; // Track globally in state (or module var)
+    });
+
+    element.addEventListener('touchmove', (e) => {
+        if (state.selectedIndices.length === 0) return;
+        e.preventDefault();
+
+        const touch = e.touches[0];
+        
+        // Find the element currently under the finger
+        const elUnderFinger = document.elementFromPoint(touch.clientX, touch.clientY);
+        if (!elUnderFinger) return;
+
+        // Look for a parent that is a meld target (has data-rank)
+        const meldTarget = elUnderFinger.closest('[data-rank]');
+
+        // If we moved to a NEW valid target
+        if (meldTarget && meldTarget !== state.touchTarget) {
+            // Un-highlight previous
+            if (state.touchTarget) state.touchTarget.classList.remove('meld-target-highlight');
+            
+            // Highlight new
+            meldTarget.classList.add('meld-target-highlight');
+            state.touchTarget = meldTarget;
+        } 
+        // If we drifted off any valid target
+        else if (!meldTarget && state.touchTarget) {
+            state.touchTarget.classList.remove('meld-target-highlight');
+            state.touchTarget = null;
+        }
+    });
+
+    element.addEventListener('touchend', (e) => {
+        if (state.selectedIndices.length === 0) return;
+        
+        // If we ended on a valid target, execute the meld
+        if (state.touchTarget) {
+            state.touchTarget.classList.remove('meld-target-highlight');
+            const targetRank = state.touchTarget.dataset.rank;
+            
+            if (targetRank) {
+                window.handleMeldClick(e, targetRank);
+            }
+        }
+        state.touchTarget = null;
+    });
+}
+
+function renderTable(elementId, meldsObj, red3sArray) {
     const container = document.getElementById(elementId);
     if (!container) return;
     if (state.meldAnimationActive) return;
     container.innerHTML = "";
 
-    container.style.display = "flex";
-    container.style.flexDirection = "row";
-    container.style.alignItems = "flex-start"; 
-    container.style.justifyContent = "flex-start"; 
-    container.style.width = "100%"; 
-    container.style.paddingLeft = "20px"; 
-    container.style.boxSizing = "border-box";
-    container.style.overflowX = "hidden"; 
-
-    // --- 1. DEFINE DIMENSIONS ---
+    // --- 1. SETUP DIMENSIONS & LAYOUT MODE ---
     const isDesktop = window.innerWidth > 800;
     const cardWidth = isDesktop ? 75 : 50;
     const cardHeight = isDesktop ? 105 : 70; 
     const boxHeight = container.clientHeight || 150;
-    const groupWidth = isDesktop ? 75 : 50;
-
-    // Helper to determine ID suffix
-    const suffix = (elementId === 'my-melds') ? 'my' : 'enemy';
-
+    
+    // --- 2. PREPARE DATA ---
     const rankPriority = ["A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3"];
     const openMelds = [];
     const closedMelds = [];
@@ -290,19 +350,17 @@ function renderTable(elementId, meldsObj, red3sArray) {
             }
         });
     }
-    
-    let stackWidth = 0;
-    const hasRed3s = (red3sArray && red3sArray.length > 0);
-    const hasCanastas = (closedMelds.length > 0);
 
+    const hasRed3s = (red3sArray && red3sArray.length > 0);
+    const suffix = (elementId === 'my-melds') ? 'my' : 'enemy';
+
+    // Helpers
     const getVerticalOffset = (itemCount) => {
         const defaultStep = isDesktop ? 45 : 25;
         const availableH = isDesktop ? 195 : (container.clientHeight || 150);
-        
         const neededH = (itemCount * defaultStep) + cardHeight;
         if (neededH > availableH && itemCount > 1) {
-            const squeezed = (availableH - cardHeight) / itemCount;
-            return Math.max(20, squeezed); 
+            return Math.max(20, (availableH - cardHeight) / itemCount); 
         }
         return defaultStep;
     };
@@ -310,184 +368,237 @@ function renderTable(elementId, meldsObj, red3sArray) {
     const createStackContainer = (specialId = null) => {
         const div = document.createElement("div");
         div.className = "meld-group";
-        if (specialId) div.id = specialId; // Assign ID if provided
+        if (specialId) div.id = specialId; 
         div.style.position = "relative";
-        div.style.marginRight = isDesktop ? "20px" : "10px";
         div.style.minWidth = "var(--card-w)";
         div.style.zIndex = "1";
         return div;
     };
 
-   // --- 2. COLLECT ALL GROUPS INTO ONE LIST (For Unified Squeezing) ---
-    const allGroups = [];
+    // --- 3. MOBILE VS DESKTOP RENDERING ---
 
-    // A. Add Red 3s
-    if (hasRed3s) {
-        allGroups.push({
-            type: 'red3',
-            cards: red3sArray,
-            id: `meld-pile-${suffix}-Red3`
-        });
-    }
+    if (!isDesktop) {
+        // === MOBILE LAYOUT (2 Columns) ===
+        container.style.display = "grid";
+        container.style.gridTemplateColumns = "50px 1fr"; // Fixed Left Col, Flex Right Col
+        container.style.gap = "1px";
+        container.style.paddingLeft = "34px"; 
+        container.style.paddingRight = "34px";
+        container.style.overflowX = "hidden";
+        container.style.alignItems = "start";
 
-    // B. Add Canastas (Closed Melds)
-    if (closedMelds.length > 0) {
-        allGroups.push({
-            type: 'canasta',
-            data: closedMelds, // array of {rank, cards}
-            id: `meld-pile-${suffix}-Canasta`
-        });
-    }
+        // LEFT COL: Red 3s & Canastas
+        const leftCol = document.createElement("div");
+        leftCol.style.display = "flex";
+        leftCol.style.flexDirection = "column"; // Vertical Stack
+        leftCol.style.gap = "15px"; // Space between piles vertically
+        leftCol.style.alignItems = "center";
+        leftCol.style.minWidth = "55px";
 
-    // C. Add Open Melds
-    openMelds.forEach(m => {
-        allGroups.push({
-            type: 'open',
-            cards: m.cards,
-            rank: m.rank,
-            id: `meld-pile-${suffix}-${m.rank}`
-        });
-    });
-
-    // --- 3. CALCULATE UNIFIED SQUEEZE ---
-    let availableWidth;
-
-    if (isDesktop) {
-        const rawContainerWidth = container.offsetWidth || container.clientWidth;
-        const safeWidth = (rawContainerWidth > 50) ? rawContainerWidth : window.innerWidth; 
-        availableWidth = safeWidth - 10; 
-    } else {
-        // MOBILE FIX: Reduce side reserve from 60 to 35.
-        // The side players only encroach about 20-30px into the board.
-        // This gives the table ~50px more space to breathe.
-        const sidePlayerReserve = 35; 
-        availableWidth = window.innerWidth - (sidePlayerReserve * 2);
-    }
-    
-    if (availableWidth < 100) availableWidth = 100;
-
-    const totalGroups = allGroups.length;
-    // INCREASED VISIBILITY: 
-    // If cards MUST overlap, ensure at least 25px (up from 20) is visible so they don't "disappear".
-    const minSpine = isDesktop ? 30 : 25; 
-    const maxOverlap = -(cardWidth - minSpine); 
-
-    let finalMargin = isDesktop ? 15 : 5; 
-
-    if (totalGroups > 1) {
-        const totalFullWidth = totalGroups * cardWidth;
-        const idealWidth = totalFullWidth + ((totalGroups - 1) * finalMargin);
-
-        if (idealWidth > availableWidth) {
-            // FORCE SQUEEZE logic
-            const stepSize = (availableWidth - cardWidth) / (totalGroups - 1);
-            const calculatedMargin = stepSize - cardWidth;
-            finalMargin = Math.max(maxOverlap, calculatedMargin);
-        }
-    }
-
-    // --- 4. RENDER LOOP ---
-    allGroups.forEach((group, gIdx) => {
-        // Use the helper to create the wrapper
-        const groupDiv = createStackContainer(group.id);
+        // RIGHT COL: Open Melds
+        const rightCol = document.createElement("div");
+        rightCol.style.display = "flex";
+        rightCol.style.flexDirection = "row"; // Horizontal Flow
+        rightCol.style.alignItems = "flex-start";
+        rightCol.style.height = "100%";
         
-        // Apply Margin to all except the last one
-        if (gIdx < totalGroups - 1) {
-            groupDiv.style.marginRight = `${finalMargin}px`;
+        // --- POPULATE LEFT COLUMN ---
+        
+        // A. Red 3s (Top Left)
+        if (hasRed3s) {
+            const r3Group = { type: 'red3', cards: red3sArray, id: `meld-pile-${suffix}-Red3` };
+            leftCol.appendChild(renderSingleGroup(r3Group, createStackContainer, getVerticalOffset, cardHeight, boxHeight, isDesktop, suffix));
         }
 
-        // Z-Index increases so left cards are covered by right cards
-        groupDiv.style.zIndex = 10 + gIdx; 
-
-        // RENDER CONTENT BASED ON TYPE
-        if (group.type === 'red3') {
-            const offset = getVerticalOffset(group.cards.length);
-            let top = 0; let z = 1;
-            group.cards.forEach(card => {
-                const img = document.createElement("img");
-                img.src = getCardImage(card);
-                img.className = "card-img meld-card";
-                img.style.position = "absolute";
-                img.style.top = `${top}px`;
-                img.style.zIndex = z++;
-                img.style.boxShadow = "2px 2px 0 #555";
-                groupDiv.appendChild(img);
-                top += offset;
-            });
-            // Spacer for height
-            const spacer = document.createElement("div");
-            spacer.style.width = "var(--card-w)";
-            spacer.style.height = `calc(var(--card-h) + ${top - offset}px)`;
-            groupDiv.appendChild(spacer);
-
-        } else if (group.type === 'canasta') {
-            const pileData = group.data; 
-            const offset = getVerticalOffset(pileData.length);
-            let top = 0; let z = 1;
-            
-            pileData.forEach(m => {
-                const pile = m.cards;
-                const isNatural = !pile.some(c => c.isWild);
-                let topCard = pile[0]; 
-                if (isNatural) {
-                    topCard = pile.find(c => c.suit === 'Hearts' || c.suit === 'Diamonds') || pile[0];
-                } else {
-                    topCard = pile.find(c => !c.isWild && (c.suit === 'Clubs' || c.suit === 'Spades')) || pile[0];
-                }
-
-                const wrapper = document.createElement("div");
-                wrapper.style.position = "absolute";
-                wrapper.style.top = `${top}px`;
-                wrapper.style.zIndex = z++;
+        // B. Canastas (Below Red 3s)
+        if (closedMelds.length > 0) {
+            // We stack canastas vertically in the left column
+            closedMelds.forEach((mData, idx) => {
+                const cGroup = { type: 'canasta', data: [mData], id: `meld-pile-${suffix}-Canasta-${idx}` };
+                const rendered = renderSingleGroup(cGroup, createStackContainer, getVerticalOffset, cardHeight, boxHeight, isDesktop, suffix);
                 
-                const badgeColor = isNatural ? "#d63031" : "#2d3436";
-                const badgeText = isNatural ? "NAT" : "MIX";
-
-                wrapper.innerHTML = `
-                    <img src="${getCardImage(topCard)}" class="card-img meld-card" style="box-shadow: 2px 2px 3px rgba(0,0,0,0.4); border:1px solid #000;">
-                    <div style="position: absolute; top: 4px; right: 4px; background: ${badgeColor}; color: white; font-size: 9px; font-weight: bold; padding: 1px 4px; border: 1px solid rgba(255,255,255,0.8); border-radius: 4px; z-index: 10;">
-                        ${badgeText}
-                    </div>
-                `;
-                groupDiv.appendChild(wrapper);
-                top += offset;
+                // Cascade overlap if there are many
+                if (idx > 0) rendered.style.marginTop = "-30px"; 
+                leftCol.appendChild(rendered);
             });
-            const spacer = document.createElement("div");
-            spacer.style.width = "var(--card-w)";
-            spacer.style.height = `calc(var(--card-h) + ${top - offset}px)`;
-            groupDiv.appendChild(spacer);
+        }
 
-        } else {
-            // Normal Open Meld
-            const totalCards = group.cards.length;
-            let activeMargin = isDesktop ? -75 : -50; 
+        const openGroups = openMelds.map(m => ({
+            type: 'open', cards: m.cards, rank: m.rank, id: `meld-pile-${suffix}-${m.rank}`
+        }));
+        // --- POPULATE RIGHT COLUMN (UPDATED SQUEEZE LOGIC) ---
+        if (openGroups.length > 0) {
+            const sidePlayerReserve = 34;
+            
+            const leftColWidth = 51;
+            
+            // Available Width = Screen - Left Pad(55) - Right Pad(55) - Red3 Column(60)
+            const availableWidth = window.innerWidth - (sidePlayerReserve * 2) - leftColWidth;
+            
+            let finalMargin = 5; 
+            const maxOverlap = -(cardWidth - 25); 
 
-            if (totalCards > 1) {
-                const stackH = cardHeight + ((totalCards - 1) * (cardHeight + activeMargin));
-                if (stackH > boxHeight) {
-                    activeMargin = ((boxHeight - cardHeight) / (totalCards - 1)) - cardHeight;
+            if (openGroups.length > 1) {
+                const totalFullWidth = openGroups.length * cardWidth;
+                const idealWidth = totalFullWidth + ((openGroups.length - 1) * finalMargin);
+
+                if (idealWidth > availableWidth) {
+                    // Now this squeeze calculation will be accurate
+                    const stepSize = (availableWidth - cardWidth) / (openGroups.length - 1);
+                    finalMargin = Math.max(maxOverlap, stepSize - cardWidth);
                 }
             }
-            
-            let html = `<div class='meld-container' style="display:flex; flex-direction:column; align-items:center;">`;
-            group.cards.forEach((c, cIdx) => { 
-                const marginTop = (cIdx > 0) ? `margin-top:${activeMargin}px;` : "margin-top:0px;";
-                let transformStyle = "";
-                // Rotate 6th card (Index 5)
-                if (cIdx === 5) transformStyle = "transform: rotate(45deg);"; 
 
-                html += `
-                    <img src="${getCardImage(c)}" 
-                         class="card-img meld-card" 
-                         style="${marginTop} ${transformStyle} z-index: ${cIdx}; position: relative; box-shadow: 0px -1px 3px rgba(0,0,0,0.3);">
-                `; 
+            openGroups.forEach((grp, idx) => {
+                const rendered = renderSingleGroup(grp, createStackContainer, getVerticalOffset, cardHeight, boxHeight, isDesktop, suffix);
+                if (idx < openGroups.length - 1) {
+                    rendered.style.marginRight = `${finalMargin}px`;
+                }
+                rightCol.appendChild(rendered);
             });
-            html += "</div>";
-            groupDiv.innerHTML = html;
         }
 
-        container.appendChild(groupDiv);
-    });
+        container.appendChild(leftCol);
+        container.appendChild(rightCol);
+
+    } else {
+        // === DESKTOP LAYOUT (Original Linear Row) ===
+        container.style.display = "flex";
+        container.style.flexDirection = "row";
+        container.style.paddingLeft = "160px";
+        
+        // Combine all into one list
+        const allGroups = [];
+        if (hasRed3s) allGroups.push({ type: 'red3', cards: red3sArray, id: `meld-pile-${suffix}-Red3` });
+        if (closedMelds.length > 0) allGroups.push({ type: 'canasta', data: closedMelds, id: `meld-pile-${suffix}-Canasta` });
+        openMelds.forEach(m => allGroups.push({ type: 'open', cards: m.cards, rank: m.rank, id: `meld-pile-${suffix}-${m.rank}` }));
+
+        // Desktop Squeeze
+        const rawContainerWidth = container.offsetWidth || container.clientWidth;
+        const availableWidth = rawContainerWidth - 20;
+        let finalMargin = 15;
+        const maxOverlap = -(cardWidth - 30);
+
+        if (allGroups.length > 1) {
+            const totalFullWidth = allGroups.length * cardWidth;
+            const idealWidth = totalFullWidth + ((allGroups.length - 1) * finalMargin);
+            if (idealWidth > availableWidth) {
+                const stepSize = (availableWidth - cardWidth) / (allGroups.length - 1);
+                finalMargin = Math.max(maxOverlap, stepSize - cardWidth);
+            }
+        }
+
+        allGroups.forEach((grp, idx) => {
+            const rendered = renderSingleGroup(grp, createStackContainer, getVerticalOffset, cardHeight, boxHeight, isDesktop, suffix);
+            if (idx < allGroups.length - 1) rendered.style.marginRight = `${finalMargin}px`;
+            rendered.style.zIndex = 10 + idx;
+            container.appendChild(rendered);
+        });
+    }
+}
+
+// --- HELPER TO RENDER A SINGLE GROUP (Extracted to avoid duplication) ---
+function renderSingleGroup(group, createStackContainer, getVerticalOffset, cardHeight, boxHeight, isDesktop, suffix) {
+    const groupDiv = createStackContainer(group.id);
+    
+    // RED 3s
+    if (group.type === 'red3') {
+        const offset = getVerticalOffset(group.cards.length);
+        let top = 0; let z = 1;
+        group.cards.forEach(card => {
+            const img = document.createElement("img");
+            img.src = getCardImage(card);
+            img.className = "card-img meld-card";
+            img.style.position = "absolute";
+            img.style.top = `${top}px`;
+            img.style.zIndex = z++;
+            img.style.boxShadow = "2px 2px 0 #555";
+            groupDiv.appendChild(img);
+            top += offset;
+        });
+        const spacer = document.createElement("div");
+        spacer.style.width = "var(--card-w)";
+        spacer.style.height = `calc(var(--card-h) + ${top - offset}px)`;
+        groupDiv.appendChild(spacer);
+    } 
+    // CANASTAS
+    else if (group.type === 'canasta') {
+        const pileData = group.data; 
+        // Note: Mobile might pass single canasta in array, Desktop passes all. Logic handles both.
+        const offset = getVerticalOffset(pileData.length);
+        let top = 0; let z = 1;
+        
+        pileData.forEach(m => {
+            const pile = m.cards;
+            const isNatural = !pile.some(c => c.isWild);
+            let topCard = pile[0]; 
+            if (isNatural) {
+                topCard = pile.find(c => c.suit === 'Hearts' || c.suit === 'Diamonds') || pile[0];
+            } else {
+                topCard = pile.find(c => !c.isWild && (c.suit === 'Clubs' || c.suit === 'Spades')) || pile[0];
+            }
+
+            const wrapper = document.createElement("div");
+            wrapper.style.position = "absolute";
+            wrapper.style.top = `${top}px`;
+            wrapper.style.zIndex = z++;
+            
+            // Re-attach click interaction (defined in previous step)
+            if (typeof attachMeldInteraction === 'function') {
+                attachMeldInteraction(wrapper, m.rank);
+            }
+
+            const badgeColor = isNatural ? "#d63031" : "#2d3436";
+            const badgeText = isNatural ? "NAT" : "MIX";
+
+            wrapper.innerHTML = `
+                <img src="${getCardImage(topCard)}" class="card-img meld-card" style="box-shadow: 2px 2px 3px rgba(0,0,0,0.4); border:1px solid #000;">
+                <div style="position: absolute; top: 4px; right: 4px; background: ${badgeColor}; color: white; font-size: 9px; font-weight: bold; padding: 1px 4px; border: 1px solid rgba(255,255,255,0.8); border-radius: 4px; z-index: 10;">
+                    ${badgeText}
+                </div>
+            `;
+            groupDiv.appendChild(wrapper);
+            top += offset;
+        });
+        const spacer = document.createElement("div");
+        spacer.style.width = "var(--card-w)";
+        spacer.style.height = `calc(var(--card-h) + ${top - offset}px)`;
+        groupDiv.appendChild(spacer);
+    } 
+    // OPEN MELDS
+    else {
+        // Re-attach click interaction
+        if (typeof attachMeldInteraction === 'function') {
+            attachMeldInteraction(groupDiv, group.rank);
+        }
+
+        const totalCards = group.cards.length;
+        let activeMargin = isDesktop ? -75 : -50; 
+
+        if (totalCards > 1) {
+            const stackH = cardHeight + ((totalCards - 1) * (cardHeight + activeMargin));
+            if (stackH > boxHeight) {
+                activeMargin = ((boxHeight - cardHeight) / (totalCards - 1)) - cardHeight;
+            }
+        }
+        
+        let html = `<div class='meld-container' style="display:flex; flex-direction:column; align-items:center;">`;
+        group.cards.forEach((c, cIdx) => { 
+            const marginTop = (cIdx > 0) ? `margin-top:${activeMargin}px;` : "margin-top:0px;";
+            let transformStyle = "";
+            if (cIdx === 5) transformStyle = "transform: rotate(45deg);"; 
+
+            html += `
+                <img src="${getCardImage(c)}" 
+                     class="card-img meld-card" 
+                     style="${marginTop} ${transformStyle} z-index: ${cIdx}; position: relative; box-shadow: 0px -1px 3px rgba(0,0,0,0.3);">
+            `; 
+        });
+        html += "</div>";
+        groupDiv.innerHTML = html;
+    }
+
+    return groupDiv;
 }
 
 function renderOtherHand(elementId, backsArray, orientation) {

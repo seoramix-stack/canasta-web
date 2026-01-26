@@ -100,36 +100,67 @@ function calculateMeldTarget(container, rank) {
     const rankPriority = ["A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3"];
     const isDesktop = window.innerWidth > 800;
     const groupWidth = isDesktop ? 75 : 50;
-    const margin = isDesktop ? 20 : 5;
-    const totalSlotWidth = groupWidth + margin;
-
     const suffix = (container.id === 'my-melds') ? 'my' : 'enemy';
     const pileId = `meld-pile-${suffix}-${rank}`;
     const pileEl = document.getElementById(pileId);
 
-    // SCENARIO A: CASCADE (Add to existing)
+    // --- 1. DETERMINE SEARCH CONTAINER & BASE COORDINATES ---
+    let searchContainer = container;
+    
+    // On Mobile, open melds live in the 2nd child (Right Column) of the grid
+    if (!isDesktop && container.children.length >= 2) {
+        searchContainer = container.children[1]; 
+    }
+
+    // Get the EXACT position of where the meld area starts
+    const cRect = searchContainer.getBoundingClientRect();
+    let startX, startY;
+
+    if (isDesktop) {
+        // FIX: Increase offset from 35 to 160 to clear the Left Player's hand/Sidebar
+        startX = cRect.left + 160; 
+        startY = cRect.top;
+    } else {
+        // Mobile Logic (Kept same as previous fix)
+        startX = cRect.left;
+        startY = cRect.top;
+        if (startX === 0 && startY === 0) {
+             const parentRect = container.getBoundingClientRect();
+             startX = parentRect.left + 34 + 50 + 1; 
+             startY = parentRect.top;
+        }
+    }
+
+    // --- 2. STRATEGY A: PILE ALREADY EXISTS ---
     if (pileEl) {
         const existingCards = pileEl.querySelectorAll('.meld-card');
         if (existingCards.length > 0) {
             const lastCard = existingCards[existingCards.length - 1];
             const lastRect = lastCard.getBoundingClientRect();
-            const offsetStep = isDesktop ? 22 : 18;
-            return {
-                left: lastRect.left,
-                top: lastRect.top + offsetStep,
-                width: lastRect.width,
-                height: lastRect.height
-            };
-        } else {
-            return pileEl.getBoundingClientRect();
+            
+            if (lastRect.width > 0 && lastRect.left >= startX - 5) {
+                const offsetStep = isDesktop ? 22 : 18;
+                return {
+                    left: lastRect.left,
+                    top: lastRect.top + offsetStep,
+                    width: lastRect.width,
+                    height: lastRect.height
+                };
+            }
+        }
+        
+        const pileRect = pileEl.getBoundingClientRect();
+        if (pileRect.width > 0 && pileRect.left >= startX - 5) {
+            return pileRect;
         }
     }
 
-    // SCENARIO B: SLIDE & INSERT (New Rank)
-    const existingGroups = Array.from(container.children).filter(el => el.classList.contains('meld-group'));
+    // --- 3. STRATEGY B: NEW PILE (CALCULATE SLOT) ---
+    const existingGroups = Array.from(searchContainer.children).filter(el => el.classList.contains('meld-group'));
     const newRankIdx = rankPriority.indexOf(rank);
     let pivotElement = null;
 
+    // Find insertion point (Rank Descending: A, K, Q...)
     for (let group of existingGroups) {
         const idParts = group.id.split('-');
         const groupRank = idParts[idParts.length - 1];
@@ -143,15 +174,14 @@ function calculateMeldTarget(container, rank) {
     let destRect = null;
 
     if (pivotElement) {
+        // Insert BEFORE pivot
         const pivotRect = pivotElement.getBoundingClientRect();
-        destRect = {
-            left: pivotRect.left,
-            top: pivotRect.top,
-            width: groupWidth,
-            height: isDesktop ? 105 : 70
-        };
+        // Use pivot's position, but ensure we don't go left of startX
+        const finalX = (pivotRect.width > 0) ? pivotRect.left : startX;
 
+        // Visual Slide Effect for existing groups
         let current = pivotElement;
+        const totalSlotWidth = groupWidth + (isDesktop ? 20 : 5);
         while (current) {
             if (current.classList.contains('meld-group')) {
                 current.style.transition = "transform 0.4s cubic-bezier(0.25, 1, 0.5, 1)";
@@ -159,26 +189,45 @@ function calculateMeldTarget(container, rank) {
             }
             current = current.nextElementSibling;
         }
+        
+        destRect = {
+            left: finalX,
+            top: pivotRect.top || startY,
+            width: groupWidth,
+            height: isDesktop ? 105 : 70
+        };
     } else {
+        // Append to END
         if (existingGroups.length > 0) {
             const lastGroup = existingGroups[existingGroups.length - 1];
             const lastRect = lastGroup.getBoundingClientRect();
+            const margin = isDesktop ? 15 : 5;
+            
+            // Use last group's position + margin
+            const finalX = (lastRect.width > 0) ? (lastRect.right + margin) : startX;
+            
             destRect = {
-                left: lastRect.right + margin,
-                top: lastRect.top,
+                left: finalX,
+                top: lastRect.top || startY,
                 width: groupWidth,
                 height: isDesktop ? 105 : 70
             };
         } else {
-            const cRect = container.getBoundingClientRect();
+            // First Meld! Directly use the calculated start positions
             destRect = {
-                left: cRect.left + 20,
-                top: cRect.top + 35,
+                left: startX,
+                top: startY,
                 width: groupWidth,
                 height: isDesktop ? 105 : 70
             };
         }
     }
+    
+    // FINAL SAFETY: Ensure we never target to the left of our container start
+    if (destRect.left < startX) {
+        destRect.left = startX;
+    }
+
     return destRect;
 }
 
