@@ -289,12 +289,22 @@ h2 {
 }
 
 .status-light {
-    background-color: var(--stone-grey); /* Inactive */
+    width: 15px;               /* Give it size! */
+    height: 15px;              /* Give it size! */
+    border-radius: 50%;        /* Make it a circle */
+    background-color: #e74c3c; /* RED (Not your turn) */
+    border: 2px solid rgba(0,0,0,0.3); /* Subtle border for depth */
+    box-shadow: inset 0 0 3px rgba(0,0,0,0.5); /* Inner shadow for "bulb" look */
+    transition: all 0.3s ease;
+    flex-shrink: 0;            /* Prevent it from getting squished in flexbox */
+    display: inline-block;     /* Ensure it sits correctly */
 }
 
 .status-light.active { 
-    background-color: #2ecc71; /* Bright Green for active turn */
-    box-shadow: 0 0 10px #2ecc71; 
+    background-color: #2ecc71 !important; /* GREEN (Your turn) */
+    box-shadow: 0 0 10px #2ecc71, inset 0 0 2px rgba(255,255,255,0.5); /* Glow effect */
+    border-color: #27ae60;
+    transform: scale(1.1); /* Slight pop when active */
 }
 .hud-name, .timer-text {
     font-family: 'Segoe UI', sans-serif !important; font-size: 14px !important; 
@@ -511,6 +521,62 @@ h2 {
     grid-template-rows: 30px 0px 1fr 30px 110px !important;
     grid-template-columns: 5px 1fr 5px !important; 
     }
+    /* ========================================= */
+/* === MOBILE SCOREBOARD FIXES           === */
+/* ========================================= */
+
+@media (max-width: 800px) {
+    
+    /* 1. HIDE THE HEADER ROW ("Category", "My Team", "Opponents") */
+    .score-table th {
+        display: none !important;
+    }
+
+    /* 2. COLOR CODING (Since headers are gone) */
+    
+    /* Column 2: My Team (Green) */
+    .score-table td:nth-child(2) {
+        color: #2ecc71 !important; /* Bright Green */
+        font-weight: bold;
+    }
+
+    /* Column 3: Opponents (Red) */
+    .score-table td:nth-child(3) {
+        color: #e74c3c !important; /* Bright Red */
+        font-weight: bold;
+    }
+
+    /* 3. FIT BLOCKS ON SCREEN */
+    
+    /* maximize the container width */
+    .score-box {
+        width: 98% !important;
+        padding: 10px 5px !important; /* Minimal padding */
+    }
+
+    /* Reduce general table font size */
+    .score-table {
+        font-size: 13px !important;
+    }
+
+    /* Tighter cell padding so columns don't overflow */
+    .score-table td {
+        padding: 6px 2px !important;
+    }
+
+    /* Reduce the massive font size of the Final Score row */
+    .score-table .total-row {
+        font-size: 16px !important; 
+        letter-spacing: 0px !important; /* Remove wide spacing */
+    }
+
+    /* Optional: Make the Category labels (Left Column) subtle/smaller */
+    .score-table td:first-child {
+        font-size: 11px !important;
+        color: #95a5a6 !important; /* Muted Grey */
+        width: 35%; /* Prevent labels from getting crushed */
+    }
+}
 }
 
 /* ========================================= */
@@ -809,7 +875,7 @@ h2 {
 }
 
 .score-table td { 
-    padding: 10px 8px; 
+    padding: 7px 5px; 
     border-bottom: 1px solid rgba(255, 255, 255, 0.1); /* Subtle divider */
     text-align: center; 
 }

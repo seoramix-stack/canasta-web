@@ -93,9 +93,10 @@ class CanastaGame {
     }
 
     resolveMatchStatus() {
-        if (this.finalScores) {
+        if (this.finalScores && !this.scoresCommitted) {
             this.cumulativeScores.team1 += this.finalScores.team1.total;
             this.cumulativeScores.team2 += this.finalScores.team2.total;
+            this.scoresCommitted = true;
         }
 
         const WIN = this.config.WIN_SCORE;
@@ -131,7 +132,7 @@ class CanastaGame {
         this.team1Melds = {}; this.team2Melds = {};
         this.team1Red3s = []; this.team2Red3s = [];
         this.finalScores = null;
-        
+        this.scoresCommitted = false;
         this.currentPlayer = this.roundStarter;
         this.turnPhase = "draw";
 
