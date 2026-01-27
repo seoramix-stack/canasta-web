@@ -1230,7 +1230,38 @@ function renderLeaderboard(players) {
         container.appendChild(row);
     });
 }
-// client.js
+
+window.manageSubscription = async () => {
+    const btn = document.getElementById('btn-manage-sub');
+    const originalText = btn.innerText;
+    
+    btn.innerText = "OPENING PORTAL...";
+    btn.disabled = true;
+
+    try {
+        const res = await fetch('/api/create-portal-session', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': state.playerToken 
+            }
+        });
+        
+        const data = await res.json();
+        
+        if (data.url) {
+            window.location.href = data.url; // Redirect to Stripe Portal
+        } else {
+            alert("Error: " + (data.error || "Could not open portal"));
+            btn.innerText = originalText;
+            btn.disabled = false;
+        }
+    } catch (e) {
+        alert("Connection Error");
+        btn.innerText = originalText;
+        btn.disabled = false;
+    }
+};
 
 window.openProfile = async () => {
     // 1. Show Screen
