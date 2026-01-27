@@ -448,7 +448,22 @@ evaluateSeatPileWorth(game, targetSeat) {
             }
         }
     }
+    decideGoOutPermission(game) {
+        // 1. Identify my team (Bot is the partner of the player asking)
+        const teamMelds = (this.seat % 2 === 0) ? game.team1Melds : game.team2Melds;
+        
+        // 2. Count our Canastas
+        const canastaCount = Object.values(teamMelds).filter(p => p.length >= 7).length;
 
+        // 3. LOGIC: If we met the requirement, say YES.
+        // (You can add fancier logic here later, e.g., if bot has a Red 3 in hand, say NO)
+        if (canastaCount >= game.config.MIN_CANASTAS_OUT) {
+            return true; // "Yes, you can go out"
+        } else {
+            return false; // "No, we don't have enough Canastas"
+        }
+    }
+    
     getCardValue(card) {
         if (card.rank === "Joker") return 50;
         if (card.rank === "2" || card.rank === "A") return 20;

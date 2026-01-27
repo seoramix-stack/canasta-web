@@ -391,7 +391,7 @@ function renderTable(elementId, meldsObj, red3sArray) {
         const leftCol = document.createElement("div");
         leftCol.style.display = "flex";
         leftCol.style.flexDirection = "column"; // Vertical Stack
-        leftCol.style.gap = "15px"; // Space between piles vertically
+        leftCol.style.gap = "0px"; // Space between piles vertically
         leftCol.style.alignItems = "center";
         leftCol.style.minWidth = "55px";
 
@@ -403,22 +403,51 @@ function renderTable(elementId, meldsObj, red3sArray) {
         rightCol.style.height = "100%";
         
         // --- POPULATE LEFT COLUMN ---
+        // 1. Calculate how many distinct groups are in this column
+        const red3Count = hasRed3s ? 1 : 0;
+        const canastaCount = closedMelds.length;
+        const totalGroups = red3Count + canastaCount;
+
+        // 2. Calculate Dynamic Squeeze Margin
+        // Default overlap is -45px (tight cascade).
+        // If groups won't fit, we squeeze them harder.
+        let cascadeMargin = -45; 
         
+        if (totalGroups > 1) {
+            // Available vertical space for the cascade spine
+            // boxHeight is usually ~160px on mobile
+            const availableSpine = boxHeight - cardHeight; 
+            
+            // If stacking them with -45px margin exceeds space, calculate new margin
+            // Formula: (Total Items - 1) * (CardHeight + Margin) = AvailableSpace
+            const neededHeight = cardHeight + ((totalGroups - 1) * (cardHeight + cascadeMargin));
+            
+            if (neededHeight > boxHeight) {
+                // Calculate the exact step size needed to fit perfectly
+                const stepSize = availableSpine / (totalGroups - 1);
+                cascadeMargin = stepSize - cardHeight;
+            }
+        }
         // A. Red 3s (Top Left)
         if (hasRed3s) {
             const r3Group = { type: 'red3', cards: red3sArray, id: `meld-pile-${suffix}-Red3` };
-            leftCol.appendChild(renderSingleGroup(r3Group, createStackContainer, getVerticalOffset, cardHeight, boxHeight, isDesktop, suffix));
+            const r3El = renderSingleGroup(r3Group, createStackContainer, getVerticalOffset, cardHeight, boxHeight, isDesktop, suffix);
+            r3El.style.zIndex = "1"; 
+            leftCol.appendChild(r3El);
         }
 
         // B. Canastas (Below Red 3s)
         if (closedMelds.length > 0) {
-            // We stack canastas vertically in the left column
             closedMelds.forEach((mData, idx) => {
                 const cGroup = { type: 'canasta', data: [mData], id: `meld-pile-${suffix}-Canasta-${idx}` };
                 const rendered = renderSingleGroup(cGroup, createStackContainer, getVerticalOffset, cardHeight, boxHeight, isDesktop, suffix);
                 
-                // Cascade overlap if there are many
-                if (idx > 0) rendered.style.marginTop = "-30px"; 
+                // Apply the calculated dynamic margin
+                if (idx > 0 || hasRed3s) {
+                    rendered.style.marginTop = `${cascadeMargin}px`;
+                }
+                
+                rendered.style.zIndex = 10 + idx; 
                 leftCol.appendChild(rendered);
             });
         }

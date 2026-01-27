@@ -76,19 +76,25 @@ window.startStripeCheckout = async () => {
     btn.disabled = true;
 
     try {
-        // In a real app, you fetch a session ID from your backend here
-        // const res = await fetch('/api/create-checkout-session', { ... });
-        // const data = await res.json();
-        // window.location.href = data.url; 
+        const res = await fetch('/api/create-checkout-session', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': state.playerToken // Send token so you know WHO subscribed
+            }
+        });
         
-        // FOR NOW: Simulate Success for testing
-        setTimeout(() => {
-            alert("Redirecting to Stripe Checkout...");
-            btn.innerText = "SUBSCRIBE NOW";
+        const data = await res.json();
+        
+        if (data.url) {
+            window.location.href = data.url; // Redirects user to real Stripe page
+        } else {
+            alert("Payment initialization failed");
             btn.disabled = false;
-        }, 1000);
+        }
     } catch (e) {
         alert("Connection Error");
+        btn.disabled = false;
     }
 };
 

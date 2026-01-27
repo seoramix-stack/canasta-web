@@ -27,3 +27,9 @@ self.addEventListener('fetch', (e) => {
     fetch(e.request).catch(() => caches.match(e.request))
   );
 });
+self.addEventListener('fetch', (event) => {
+  // Add this check at the very top of your fetch handler
+  if (event.request.url.includes('socket.io')) {
+    return; // Let the request go directly to the network
+  }
+  });
