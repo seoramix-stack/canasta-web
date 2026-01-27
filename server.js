@@ -150,13 +150,17 @@ app.get('/api/profile', async (req, res) => {
         return res.json({ 
             success: true, 
             username: "DevPlayer", 
-            stats: { rating: 1250, wins: 5, losses: 2 } 
+            stats: { rating: 1250, wins: 5, losses: 2 },
+            isPremium: true
         });
     }
 
     // 3. Find User in DB
     try {
-        const user = await User.findOne({ token: token });
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        
+        // Now find the user by their unique ID or Username from the token
+        const user = await User.findOne({ username: decoded.username });
         if (!user) return res.json({ success: false, message: "User not found" });
 
         // 4. Return Stats
@@ -168,7 +172,7 @@ app.get('/api/profile', async (req, res) => {
         });
     } catch (e) {
         console.error("Profile fetch error:", e);
-        res.status(500).json({ success: false, message: "Server error" });
+        res.status(401).json({ success: false, message: "Invalid Token" });
     }
 });
 
