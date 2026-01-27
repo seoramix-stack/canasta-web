@@ -13,6 +13,7 @@ const express = require('express');
 const rateLimit = require('express-rate-limit'); 
 
 const app = express();
+app.set('trust proxy', 1);
 app.post('/webhook', express.raw({type: 'application/json'}), async (request, response) => {
   const sig = request.headers['stripe-signature'];
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
