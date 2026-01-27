@@ -1459,32 +1459,64 @@ setInterval(() => {
 }, 1000);
 
 app.post('/api/create-checkout-session', async (req, res) => {
+    // 1. IDENTIFY THE USER
+    const token = req.headers.authorization;
+    let username = null;
+
+    if (token) {
+        // Option A: Check active session memory
+        if (playerSessions[token]) {
+            username = playerSessions[token].username;
+        } 
+        // Option B: Verify JWT (if server restarted)
+        else {
+            try {
+                const decoded = jwt.verify(token, process.env.JWT_SECRET);
+                username = decoded.username;
+            } catch (e) {
+                console.log("Checkout Auth Failed:", e.message);
+            }
+        }
+    }
+
+    // 2. REJECT IF UNKNOWN (Prevents "Payment for undefined")
+    if (!username) {
+        return res.status(401).json({ error: "Session expired. Please log in again." });
+    }
+
+    // 3. CREATE SESSION
     try {
         const protocol = req.headers['x-forwarded-proto'] || req.protocol;
         const host = req.get('host');
         const baseUrl = `${protocol}://${host}`;
+
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
+            // 4. ATTACH USERNAME TO METADATA (So Webhook can read it)
+            metadata: {
+                username: username 
+            },
             line_items: [{
                 price_data: {
                     currency: 'usd',
                     product_data: {
                         name: 'Canasta Club Premium',
                     },
-                    unit_amount: 290, // $2.90 in cents
+                    unit_amount: 290, 
                     recurring: {
-                        interval: 'month', // or 'year'
+                        interval: 'month', 
                     },
                 },
                 quantity: 1,
             }],
-            mode: 'subscription', // or 'payment' for one-time
+            mode: 'subscription',
             success_url: `${baseUrl}/?payment=success`,
             cancel_url: `${baseUrl}/?payment=cancelled`,
         });
 
         res.json({ url: session.url });
     } catch (e) {
+        console.error("Stripe Error:", e.message);
         res.status(500).json({ error: e.message });
     }
 });

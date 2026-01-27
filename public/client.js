@@ -89,29 +89,44 @@ window.startStripeCheckout = async () => {
     if (!state.playerToken) return alert("Please login first.");
     
     const btn = document.querySelector('#screen-subscribe .primary');
-    btn.innerText = "REDIRECTING...";
-    btn.disabled = true;
+    if(btn) {
+        btn.innerText = "REDIRECTING...";
+        btn.disabled = true;
+    }
 
     try {
         const res = await fetch('/api/create-checkout-session', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': state.playerToken // Send token so you know WHO subscribed
+                'Authorization': state.playerToken // MUST SEND TOKEN
             }
         });
         
         const data = await res.json();
         
+        // Handle the new 401 (Unauthorized) response
+        if (res.status === 401) {
+            alert(data.error || "Session expired. Please log in again.");
+            logout(); // Force logout so they can get a new token
+            return;
+        }
+        
         if (data.url) {
-            window.location.href = data.url; // Redirects user to real Stripe page
+            window.location.href = data.url; 
         } else {
-            alert("Payment initialization failed");
-            btn.disabled = false;
+            alert("Payment Error: " + (data.error || "Unknown"));
+            if(btn) {
+                btn.innerText = "SUBSCRIBE NOW";
+                btn.disabled = false;
+            }
         }
     } catch (e) {
-        alert("Connection Error");
-        btn.disabled = false;
+        alert("Connection Error. Check your internet.");
+        if(btn) {
+            btn.innerText = "SUBSCRIBE NOW";
+            btn.disabled = false;
+        }
     }
 };
 
