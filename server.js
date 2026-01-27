@@ -88,11 +88,14 @@ const server = http.createServer(app);
 const disconnectTimers = {};
 const io = new Server(server, {
     cors: {
-        origin: ["https://canastamaster.club", "http://canastamaster.club"], // Allow your domain
+        origin: ["https://canastamaster.club", 
+            "http://canastamaster.club",
+            "https://www.canastamaster.club",
+            "http://www.canastamaster.club"], // Allow your domain
         methods: ["GET", "POST"],
         credentials: true
     },
-    transports: ['websocket', 'polling'] // Force support for both
+    transports: ['polling', 'websocket'] // Force support for both
 });
 
 app.use(express.static('public')); 

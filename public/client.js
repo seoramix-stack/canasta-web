@@ -651,6 +651,7 @@ function initSocket(token) {
     const storedUser = localStorage.getItem("canasta_user"); 
     
     state.socket = io({
+        transports: ['polling', 'websocket'],
         auth: { token: token, username: storedUser }
     });
     state.socket.on('lobby_update', (data) => {
