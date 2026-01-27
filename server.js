@@ -553,51 +553,78 @@ io.on('connection', async (socket) => {
     
     // 2. GAME ACTIONS
     socket.on('act_request_rematch', () => {
-        const gameId = socket.data.gameId;
-        const game = games[gameId];
-        if (!game) return;
+    const gameId = socket.data.gameId;
+    const game = games[gameId];
+    if (!game) return;
 
-        // 1. Initialize Vote Set
-        if (!game.rematchVotes) game.rematchVotes = new Set();
+    // 1. Initialize Vote Set
+    if (!game.rematchVotes) game.rematchVotes = new Set();
+    
+    // 2. Register Vote
+    game.rematchVotes.add(socket.data.seat);
+    
+    // 3. Auto-vote for Bots
+    if (gameBots[gameId]) {
+        Object.keys(gameBots[gameId]).forEach(botSeat => {
+            game.rematchVotes.add(parseInt(botSeat));
+        });
+    }
+
+    const needed = game.config.PLAYER_COUNT;
+    
+    // 4. Send Status Update
+    io.to(gameId).emit('rematch_update', { 
+        current: game.rematchVotes.size, 
+        needed: needed 
+    });
+
+    // 5. Check if Everyone Accepted
+    if (game.rematchVotes.size >= needed) {
+        console.log(`[Rematch] All players accepted. Restarting Game ${gameId}.`);
         
-        // 2. Register Vote
-        game.rematchVotes.add(socket.data.seat);
-        
-        // 3. Auto-vote for Bots
-        if (gameBots[gameId]) {
-            Object.keys(gameBots[gameId]).forEach(botSeat => {
-                game.rematchVotes.add(parseInt(botSeat));
-            });
+        // A. Cancel Cleanup Timer
+        if (game.cleanupTimer) {
+            clearTimeout(game.cleanupTimer);
+            game.cleanupTimer = null; // Clear the reference
+        }
+        // 1. Unlock the match state FIRST
+        // (If we don't do this, game.resetMatch() might abort thinking the game is still over)
+        game.matchIsOver = false;
+
+        // 2. Clear Disconnect Flags
+        // (Ensure the server doesn't think the forfeiting player is still gone)
+        if (game.disconnectedPlayers) {
+            game.disconnectedPlayers = {};
+        }
+        // 3. Reset Game Logic
+        // (Now that matchIsOver is false, this will correctly redeal hands and deck)
+        game.resetMatch();
+        // 4. Hard Reset Timers for ALL players (0 to N-1)
+        game.bankTimers = {};
+        for (let i = 0; i < game.config.PLAYER_COUNT; i++) {
+            game.bankTimers[i] = 720; // 12 Minutes
         }
 
-        const needed = game.config.PLAYER_COUNT;
-        
-        // 4. Send Status Update
-        io.to(gameId).emit('rematch_update', { 
-            current: game.rematchVotes.size, 
-            needed: needed 
+        // 5. Initialize Turn Variables (Crucial for Bots)
+        game.turnPhase = 'draw'; 
+        game.roundStarter = 0;      // Reset starter to seat 0
+        game.currentPlayer = 0;     // Set current turn to seat 0
+        game.processingTurnFor = null;
+        game.rematchVotes.clear();
+        game.nextRoundReady = new Set();
+
+        // 6. Force Client Navigation (Deal Hand)
+        io.sockets.sockets.forEach((s) => {
+            if (s.data.gameId === gameId) {
+                sendUpdate(gameId, s.id, s.data.seat);
+            }
         });
 
-        // 5. Check if Everyone Accepted
-        if (game.rematchVotes.size >= needed) {
-            console.log(`[Rematch] All players accepted. Restarting Game ${gameId}.`);
-            
-            // A. Cancel Cleanup Timer
-            if (game.cleanupTimer) clearTimeout(game.cleanupTimer);
-            
-            // B. Reset Game Logic
-            game.resetMatch(); 
-            game.rematchVotes.clear();
-            game.nextRoundReady = new Set();
-
-            // This sends 'deal_hand', which forces the client to switch screens.
-            io.sockets.sockets.forEach((s) => {
-                if (s.data.gameId === gameId) {
-                    sendUpdate(gameId, s.id, s.data.seat);
-                }
-            });
-        }
-    });
+        // 5. KICKSTART THE BOTS
+        // We must manually trigger the bot check, otherwise they sit waiting forever.
+        checkBotTurn(gameId);
+    }
+});
 
     socket.on('act_ready', (data) => {
         const gameId = socket.data.gameId;
@@ -1028,6 +1055,7 @@ function sendUpdate(gameId, socketId, seat) {
         hand: game.players[seat],
         currentPlayer: game.currentPlayer, 
         phase: game.turnPhase,
+        bankTimers: game.bankTimers,
         topDiscard: topCard,
         previousDiscard: prevCard,
         freezingCard: freezingCard,
@@ -1438,11 +1466,14 @@ async function handleForfeit(gameId, loserSeat) {
     }
     
     // 3) Cleanup game from memory
-    setTimeout(() => {
+    // CHANGE: Assign this to game.cleanupTimer so Rematch can cancel it!
+    if (game.cleanupTimer) clearTimeout(game.cleanupTimer); // Safety clear
+    
+    game.cleanupTimer = setTimeout(() => { // <--- ADD "game.cleanupTimer ="
+        console.log(`[CLEANUP] Deleting forfeited Game ${gameId}`);
         delete games[gameId];
         delete gameBots[gameId];
-    }, 10000);
-    
+    }, 10000); // 10 seconds
 }
 setInterval(() => {
     Object.keys(games).forEach(gameId => {
@@ -1524,5 +1555,57 @@ app.post('/api/create-checkout-session', async (req, res) => {
     } catch (e) {
         console.error("Stripe Error:", e.message);
         res.status(500).json({ error: e.message });
+    }
+});
+app.post('/api/create-portal-session', async (req, res) => {
+    // 1. Identify the User
+    const token = req.headers.authorization;
+    let username = null;
+
+    if (token) {
+        if (playerSessions[token]) {
+            username = playerSessions[token].username;
+        } else {
+            try {
+                const decoded = jwt.verify(token, process.env.JWT_SECRET);
+                username = decoded.username;
+            } catch (e) {
+                console.log("Portal Auth Failed:", e.message);
+            }
+        }
+    }
+
+    if (!username) {
+        return res.status(401).json({ error: "Session expired. Please log in again." });
+    }
+
+    // 2. Get User's Stripe Customer ID from DB
+    if (DEV_MODE) {
+        return res.status(400).json({ error: "Cannot manage subscription in Dev Mode." });
+    }
+
+    try {
+        const user = await User.findOne({ username: username });
+        
+        if (!user || !user.stripeCustomerId) {
+            return res.status(400).json({ error: "No active subscription found." });
+        }
+
+        // 3. Create Stripe Portal Session
+        const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+        const host = req.get('host');
+        const returnUrl = `${protocol}://${host}/`;
+
+        const portalSession = await stripe.billingPortal.sessions.create({
+            customer: user.stripeCustomerId,
+            return_url: returnUrl,
+        });
+
+        // 4. Send URL back to client
+        res.json({ url: portalSession.url });
+
+    } catch (e) {
+        console.error("Stripe Portal Error:", e.message);
+        res.status(500).json({ error: "Could not create portal session." });
     }
 });

@@ -739,6 +739,11 @@ state.socket.on('penalty_notification', (data) => {
         state.mySeat = data.seat;
         UI.navTo('screen-game');
         document.getElementById('status').style.display = 'none';
+        if (data.bankTimers) {
+            state.seatTimers = data.bankTimers;
+            // Force a DOM update now so the user sees "12:00" instantly
+            updateTimerDOM(); 
+        }
         
         // Render UI first
         UI.updateUI(data);
