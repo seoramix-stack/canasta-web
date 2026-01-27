@@ -41,10 +41,30 @@ if (state.playerToken && state.playerUsername) {
         UI.navTo('screen-landing'); 
     }
 }
+document.addEventListener('DOMContentLoaded', () => {
+    // 1. Check URL for Stripe Flags
+    const urlParams = new URLSearchParams(window.location.search);
+    const paymentStatus = urlParams.get('payment');
+
+    if (paymentStatus === 'success') {
+        alert("🎉 PAYMENT SUCCESSFUL!\n\nThank you for supporting Canasta Master Club. Your Premium status is active.");
+        
+        // Optional: Clean the URL so the alert doesn't show again on refresh
+        window.history.replaceState({}, document.title, "/");
+        
+        // Force navigate home
+        if (state.playerToken) UI.navTo('screen-home');
+        
+    } else if (paymentStatus === 'cancelled') {
+        alert("Payment was cancelled. No charges were made.");
+        window.history.replaceState({}, document.title, "/");
+    }
+
 
 // Automatically fetch rankings for the landing page
 document.addEventListener('DOMContentLoaded', () => {
     fetchLeaderboardPreview();
+});
 });
 
 async function fetchLeaderboardPreview() {
@@ -65,9 +85,6 @@ async function fetchLeaderboardPreview() {
 }
 
 // --- 2. EXPOSE FUNCTIONS TO HTML (Crucial Step!) ---
-// client.js
-
-// 1. Mock Stripe Checkout Redirect
 window.startStripeCheckout = async () => {
     if (!state.playerToken) return alert("Please login first.");
     

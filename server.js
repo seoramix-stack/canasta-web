@@ -1,7 +1,6 @@
 // server.js
 require('dotenv').config();
-const Stripe = require('stripe');
-const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+
 const jwt = require('jsonwebtoken'); // Add this
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
@@ -1409,7 +1408,8 @@ setInterval(() => {
         }
     });
 }, 1000);
-
+const Stripe = require('stripe');
+const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 app.post('/api/create-checkout-session', async (req, res) => {
     try {
         const session = await stripe.checkout.sessions.create({
@@ -1421,12 +1421,15 @@ app.post('/api/create-checkout-session', async (req, res) => {
                         name: 'Canasta Club Premium',
                     },
                     unit_amount: 290, // $2.90 in cents
+                    recurring: {
+                        interval: 'month', // or 'year'
+                    },
                 },
                 quantity: 1,
             }],
             mode: 'subscription', // or 'payment' for one-time
-            success_url: 'https://yourdomain.com/success',
-            cancel_url: 'https://yourdomain.com/cancel',
+            success_url: `${baseUrl}/?payment=success`,
+            cancel_url: `${baseUrl}/?payment=cancelled`,
         });
 
         res.json({ url: session.url });
