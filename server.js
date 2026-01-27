@@ -88,10 +88,7 @@ const server = http.createServer(app);
 const disconnectTimers = {};
 const io = new Server(server, {
     cors: {
-        origin: ["https://canastamaster.club", 
-            "http://canastamaster.club",
-            "https://www.canastamaster.club",
-            "http://www.canastamaster.club"], // Allow your domain
+        origin: true,
         methods: ["GET", "POST"],
         credentials: true
     },

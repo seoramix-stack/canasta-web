@@ -650,7 +650,7 @@ function initSocket(token) {
     if (state.socket) return; 
     const storedUser = localStorage.getItem("canasta_user"); 
     
-    state.socket = io({
+    state.socket = io("https://canastamaster.club", {
         transports: ['polling', 'websocket'],
         auth: { token: token, username: storedUser }
     });
