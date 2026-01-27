@@ -179,7 +179,7 @@ window.goHome = () => {
     state.isStaging = false;
 
     // 2. Navigate to the public landing page instead of the lobby
-    window.navTo('screen-landing');
+    window.navTo('screen-home');
 };
 window.navTo = (screenId) => {
     UI.navTo(screenId);
@@ -297,7 +297,7 @@ window.connectToGame = (mode) => {
 window.leaveGame = () => {
     if(state.socket) state.socket.emit('leave_game');
     if(state.timerInterval) clearInterval(state.timerInterval);
-    window.navTo('screen-landing');
+    window.navTo('screen-home');
 };
 
 window.confirmLeave = () => {
