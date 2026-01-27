@@ -1290,6 +1290,17 @@ window.openProfile = async () => {
             
             const lossEl = document.getElementById('my-losses');
             if(lossEl) lossEl.innerText = data.stats.losses;
+            const badge = document.getElementById('premium-badge');
+            if (badge) {
+                badge.style.display = data.isPremium ? 'block' : 'none';
+            }
+
+            // 2. Toggle the Manage Subscription Button
+            // (Hide the 'Subscribe' button logic if you have one, or show 'Manage')
+            const manageBtn = document.getElementById('btn-manage-sub');
+            if (manageBtn) {
+                manageBtn.style.display = data.isPremium ? 'block' : 'none';
+            }
         }
     } catch (e) {
         console.error("Failed to load profile", e);

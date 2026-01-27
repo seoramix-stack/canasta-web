@@ -162,7 +162,8 @@ app.get('/api/profile', async (req, res) => {
         res.json({ 
             success: true, 
             username: user.username, 
-            stats: user.stats 
+            stats: user.stats,
+            isPremium: user.isPremium || false
         });
     } catch (e) {
         console.error("Profile fetch error:", e);
