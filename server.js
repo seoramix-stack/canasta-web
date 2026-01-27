@@ -1,6 +1,7 @@
 // server.js
 require('dotenv').config();
-
+const Stripe = require('stripe');
+const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 const jwt = require('jsonwebtoken'); // Add this
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
@@ -12,6 +13,54 @@ const express = require('express');
 const rateLimit = require('express-rate-limit'); 
 
 const app = express();
+app.post('/webhook', express.raw({type: 'application/json'}), async (request, response) => {
+  const sig = request.headers['stripe-signature'];
+  const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  let event;
+
+  try {
+    // 1. Verify the event came from real Stripe
+    event = stripe.webhooks.constructEvent(request.body, sig, endpointSecret);
+  } catch (err) {
+    console.log(`⚠️  Webhook signature verification failed.`, err.message);
+    return response.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  // 2. Handle the event
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object;
+    
+    // Retrieve the username we saved in Step 1
+    const username = session.metadata.username;
+    const customerId = session.customer; 
+    const subscriptionId = session.subscription;
+
+    console.log(`💰 WEBHOOK RECEIVED: Payment for ${username}`);
+
+    // Check if User model is ready (it's defined later in the file, but available at runtime)
+    if (!DEV_MODE && User) {
+        try {
+            await User.updateOne(
+                { username: username }, 
+                { 
+                    isPremium: true,
+                    stripeCustomerId: customerId,
+                    stripeSubscriptionId: subscriptionId
+                }
+            );
+            console.log(`✅ DATABASE UPDATED: ${username} is now Premium!`);
+        } catch (e) {
+            console.error("❌ DB Update Failed:", e);
+        }
+    }
+  }
+
+  // Return a 200 response to acknowledge receipt of the event
+  response.send();
+});
+
+// --- 2. NOW ACTIVATE NORMAL JSON PARSING ---
 app.use(express.json());
 
 // 2. CONFIGURE LIMITER
@@ -1408,8 +1457,7 @@ setInterval(() => {
         }
     });
 }, 1000);
-const Stripe = require('stripe');
-const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+
 app.post('/api/create-checkout-session', async (req, res) => {
     try {
         const protocol = req.headers['x-forwarded-proto'] || req.protocol;
