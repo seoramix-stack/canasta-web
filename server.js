@@ -1412,6 +1412,9 @@ const Stripe = require('stripe');
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 app.post('/api/create-checkout-session', async (req, res) => {
     try {
+        const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+        const host = req.get('host');
+        const baseUrl = `${protocol}://${host}`;
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
             line_items: [{
