@@ -11,6 +11,9 @@ const userSchema = new mongoose.Schema({
         losses: { type: Number, default: 0 },
         rating: { type: Number, default: 1200 }
     },
+    isPremium: { type: Boolean, default: false },
+    stripeCustomerId: { type: String },
+    stripeSubscriptionId: { type: String },
     // Social Arrays
     friends: [{ type: String }],
     blocked: [{ type: String }] 

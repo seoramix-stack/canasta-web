@@ -1290,6 +1290,7 @@ window.openProfile = async () => {
             
             const lossEl = document.getElementById('my-losses');
             if(lossEl) lossEl.innerText = data.stats.losses;
+            console.log("Premium Status:", data.isPremium);
             const badge = document.getElementById('premium-badge');
             if (badge) {
                 badge.style.display = data.isPremium ? 'block' : 'none';
