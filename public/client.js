@@ -1,5 +1,6 @@
 // client.js
 const isNative = !!window.Capacitor;
+const API_BASE = isNative ? 'https://canastamaster.club' : '';
 import { state, saveSession, logout } from './state.js';
 import * as UI from './ui.js';
 import * as Anim from './animations.js';
@@ -248,7 +249,7 @@ window.doLogin = async () => {
     const user = document.getElementById('login-user').value;
     const pass = document.getElementById('login-pass').value;
     try {
-        const res = await fetch('/api/login', {
+        const res = await fetch(`${API_BASE}/api/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: user, password: pass })
@@ -267,7 +268,7 @@ window.doRegister = async () => {
     if (!user || !pass) { alert("Please fill all fields"); return; }
 
     try {
-        const res = await fetch('/api/register', {
+        const res = await fetch(`${API_BASE}/api/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: user, password: pass })

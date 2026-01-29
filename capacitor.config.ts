@@ -4,11 +4,11 @@ const config: CapacitorConfig = {
     appId: 'club.canastamaster.app',
     appName: 'Canasta Master Club',
     webDir: 'public',
-    server: {
-        // Production: loads from your live server
-        url: 'https://canastamaster.club',
-        cleartext: false
-    },
+    // LOCAL TESTING: Comment this out to load from local files
+    // server: {
+    //     url: 'https://canastamaster.club',
+    //     cleartext: false
+    // },
     android: {
         // Allow mixed content for development if needed
         allowMixedContent: false
