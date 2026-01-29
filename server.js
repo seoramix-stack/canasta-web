@@ -345,16 +345,32 @@ io.on('connection', async (socket) => {
 
     // Helper function at bottom of server.js
     function broadcastLobby(gameId) {
-        const game = games[gameId];
-        if (!game) return;
-        
-        io.to(gameId).emit('lobby_update', {
-            names: game.names,
-            hostSeat: 0, // Simplified: Seat 0 is visually the "top"
-            maxPlayers: game.config.PLAYER_COUNT,
-            isHost: false // Client will check their own ID
-        });
+    const game = games[gameId];
+    if (!game) return;
+
+    // Find the current seat of the Host (by matching Socket ID)
+    let actualHostSeat = 0;
+    
+    const room = io.sockets.adapter.rooms.get(gameId);
+    if (room) {
+        for (const socketId of room) {
+            if (socketId === game.host) {
+                const hostSocket = io.sockets.sockets.get(socketId);
+                if (hostSocket && hostSocket.data.seat !== undefined) {
+                    actualHostSeat = hostSocket.data.seat;
+                }
+                break;
+            }
+        }
     }
+
+    io.to(gameId).emit('lobby_update', {
+        names: game.names,
+        hostSeat: actualHostSeat,
+        maxPlayers: game.config.PLAYER_COUNT,
+        isHost: false
+    });
+}
 
     // --- RECONNECTION LOGIC ---
     if (session) {
@@ -1306,19 +1322,6 @@ async function handleRoundEnd(gameId, io) {
     }
 }
 
-// Keep-Alive for Render (Optional for Local)
-const https = require('https'); 
-setInterval(() => {
-    // Only ping if NOT in dev mode, to prevent local errors
-    if (!DEV_MODE) {
-        const url = 'https://la-canasta.onrender.com/'; 
-        https.get(url, (res) => {
-             // console.log(`[Keep-Alive] Ping sent.`);
-        }).on('error', (e) => {
-             // console.error(`[Keep-Alive] Error: ${e.message}`);
-        });
-    }
-}, 14 * 60 * 1000); 
 
 const PORT = process.env.PORT || 3000;
 // --- MEMORY CLEANUP ---

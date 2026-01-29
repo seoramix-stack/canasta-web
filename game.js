@@ -1,6 +1,17 @@
 // game.js - v12.1: Configurable Rules & Refactored
 const { createCanastaDeck, shuffle } = require('./deck');
 
+const RANK_VALUES = {
+    "Joker": 50, "2": 20, "A": 20,
+    "K": 10, "Q": 10, "J": 10, "10": 10, "9": 10, "8": 10,
+    "7": 5, "6": 5, "5": 5, "4": 5, "3": 5 // Black 3 is 5
+};
+
+const RANK_ORDER = { 
+    "3": 0, "4": 1, "5": 2, "6": 3, "7": 4, "8": 5, "9": 6, 
+    "10": 7, "J": 8, "Q": 9, "K": 10, "A": 11, "2": 12, "Joker": 13 
+};
+
 class CanastaGame {
     constructor(customConfig = {}) {
         // --- CONFIGURATION ENGINE (Phase 1 & 2 Complete) ---
@@ -31,31 +42,18 @@ class CanastaGame {
         this.lastActionTime = Date.now(); 
         this.bankTimers = { 0: 720, 1: 720, 2: 720, 3: 720 };
         this.disconnectedPlayers = {}; // Track who is offline
-
-        // STATIC DATA (Moved here for performance)
-        this.RANK_VALUES = {
-            "Joker": 50, "2": 20, "A": 20,
-            "K": 10, "Q": 10, "J": 10, "10": 10, "9": 10, "8": 10,
-            "7": 5, "6": 5, "5": 5, "4": 5, "3": 5 // Black 3 is 5
-        };
-        
-        this.RANK_ORDER = { 
-            "3": 0, "4": 1, "5": 2, "6": 3, "7": 4, "8": 5, "9": 6, 
-            "10": 7, "J": 8, "Q": 9, "K": 10, "A": 11, "2": 12, "Joker": 13 
-        };
         this.lastActionTime = Date.now();
     }
 
     // --- HELPERS ---
     getCardValue(rank) {
-        // This ensures that 7 (number) matches "7" (string) in the lookup table
         const key = String(rank); 
-        return this.RANK_VALUES[key] || 0;
+        return RANK_VALUES[key] || 0;
     }
     
     sortHand(playerIndex) {
         this.players[playerIndex].sort((a, b) => {
-            let diff = this.RANK_ORDER[b.rank] - this.RANK_ORDER[a.rank];
+            let diff = RANK_ORDER[b.rank] - this.RANK_ORDER[a.rank];
             if (diff !== 0) return diff;
             return (a.suit < b.suit) ? -1 : 1;
         });

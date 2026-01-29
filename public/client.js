@@ -1,5 +1,5 @@
 // client.js
-
+const isNative = !!window.Capacitor;
 import { state, saveSession, logout } from './state.js';
 import * as UI from './ui.js';
 import * as Anim from './animations.js';
@@ -36,7 +36,6 @@ if (state.playerToken && state.playerUsername) {
     initSocket(state.playerToken);
     UI.navTo('screen-home');
 } else {
-    // We use the imported UI.navTo here because window.navTo isn't defined yet
     if (currentScreen !== 'screen-how-to' && currentScreen !== 'screen-login') {
         UI.navTo('screen-landing'); 
     }
@@ -197,6 +196,24 @@ window.navTo = (screenId) => {
         }
     }
 };
+function openSubscribeScreen() {
+    // If the user is not premium...
+    if (!state.isPremium) {
+        // ...and they are on a native mobile device...
+        if (isNative) {
+            // ...show the simple info screen.
+            UI.navTo('screen-subscribe-mobile-info');
+        } else {
+            // ...otherwise (on the web), show the real payment screen.
+            UI.navTo('screen-subscribe');
+        }
+    } else {
+        // If the user is already premium, just send them to their profile.
+        window.openProfile();
+    }
+}
+// Expose it to the HTML
+window.openSubscribeScreen = openSubscribeScreen;
 // --- BOT SPEED CONTROL (FIXED) ---
 document.addEventListener('DOMContentLoaded', () => {
     const botSpeedRange = document.getElementById('botSpeedRange');
