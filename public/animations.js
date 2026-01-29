@@ -100,6 +100,7 @@ function calculateMeldTarget(container, rank) {
     const rankPriority = ["A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3"];
     const isDesktop = window.innerWidth > 800;
     const groupWidth = isDesktop ? 75 : 50;
+    const groupHeight = isDesktop ? 105 : 70;
     const suffix = (container.id === 'my-melds') ? 'my' : 'enemy';
     const pileId = `meld-pile-${suffix}-${rank}`;
     const pileEl = document.getElementById(pileId);
@@ -117,9 +118,12 @@ function calculateMeldTarget(container, rank) {
     let startX, startY;
 
     if (isDesktop) {
-        // FIX: Increase offset from 35 to 160 to clear the Left Player's hand/Sidebar
         startX = cRect.left + 160; 
-        startY = cRect.top;
+        if (cRect.height > groupHeight) {
+            startY = cRect.top + (cRect.height - groupHeight) / 2;
+        } else {
+            startY = cRect.top;
+        }
     } else {
         // Mobile Logic (Kept same as previous fix)
         startX = cRect.left;
