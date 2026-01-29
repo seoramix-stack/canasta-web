@@ -37,7 +37,7 @@ if (state.playerToken && state.playerUsername) {
     UI.navTo('screen-home');
 } else {
     if (currentScreen !== 'screen-how-to' && currentScreen !== 'screen-login') {
-        UI.navTo('screen-landing'); 
+        UI.navTo('screen-landing');
     }
 }
 document.addEventListener('DOMContentLoaded', () => {
@@ -47,21 +47,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (paymentStatus === 'success') {
         alert("🎉 PAYMENT SUCCESSFUL!\n\nThank you for supporting Canasta Master Club. Your Premium status is active.");
-        
+
         // Optional: Clean the URL so the alert doesn't show again on refresh
         window.history.replaceState({}, document.title, "/");
-        
+
         // Force navigate home
         if (state.playerToken) UI.navTo('screen-home');
-        
+
     } else if (paymentStatus === 'cancelled') {
         alert("Payment was cancelled. No charges were made.");
         window.history.replaceState({}, document.title, "/");
     }
 
 
-// Automatically fetch rankings for the landing page
-fetchLeaderboardPreview();
+    // Automatically fetch rankings for the landing page
+    fetchLeaderboardPreview();
 });
 
 async function fetchLeaderboardPreview() {
@@ -73,7 +73,7 @@ async function fetchLeaderboardPreview() {
         if (data.success) {
             container.innerHTML = data.leaderboard.slice(0, 5).map((p, i) => `
                 <div class="lb-mini-row">
-                    <span>#${i+1} ${p.username}</span>
+                    <span>#${i + 1} ${p.username}</span>
                     <span class="gold">${Math.round(p.stats.rating)} ELO</span>
                 </div>
             `).join('');
@@ -84,9 +84,9 @@ async function fetchLeaderboardPreview() {
 // --- 2. EXPOSE FUNCTIONS TO HTML (Crucial Step!) ---
 window.startStripeCheckout = async () => {
     if (!state.playerToken) return alert("Please login first.");
-    
+
     const btn = document.querySelector('#screen-subscribe .primary');
-    if(btn) {
+    if (btn) {
         btn.innerText = "REDIRECTING...";
         btn.disabled = true;
     }
@@ -99,28 +99,28 @@ window.startStripeCheckout = async () => {
                 'Authorization': state.playerToken // MUST SEND TOKEN
             }
         });
-        
+
         const data = await res.json();
-        
+
         // Handle the new 401 (Unauthorized) response
         if (res.status === 401) {
             alert(data.error || "Session expired. Please log in again.");
             logout(); // Force logout so they can get a new token
             return;
         }
-        
+
         if (data.url) {
-            window.location.href = data.url; 
+            window.location.href = data.url;
         } else {
             alert("Payment Error: " + (data.error || "Unknown"));
-            if(btn) {
+            if (btn) {
                 btn.innerText = "SUBSCRIBE NOW";
                 btn.disabled = false;
             }
         }
     } catch (e) {
         alert("Connection Error. Check your internet.");
-        if(btn) {
+        if (btn) {
             btn.innerText = "SUBSCRIBE NOW";
             btn.disabled = false;
         }
@@ -227,7 +227,7 @@ document.addEventListener('DOMContentLoaded', () => {
     botSpeedRange.addEventListener('input', (e) => {
         const step = e.target.value;
         const actualMs = speedMap[step];
-        
+
         speedValueLabel.innerText = labelMap[step];
         localStorage.setItem('pref_bot_step', step);
 
@@ -264,7 +264,7 @@ window.doLogin = async () => {
 window.doRegister = async () => {
     const user = document.getElementById('reg-user').value;
     const pass = document.getElementById('reg-pass').value;
-    if(!user || !pass) { alert("Please fill all fields"); return; }
+    if (!user || !pass) { alert("Please fill all fields"); return; }
 
     try {
         const res = await fetch('/api/register', {
@@ -288,21 +288,21 @@ window.togglePass = (inputId, iconEl) => {
     const input = document.getElementById(inputId);
     if (input.type === "password") {
         input.type = "text";
-        iconEl.innerText = "🙈"; 
+        iconEl.innerText = "🙈";
     } else {
         input.type = "password";
-        iconEl.innerText = "👁️"; 
+        iconEl.innerText = "👁️";
     }
 };
 
 window.connectToGame = (mode) => {
     UI.navTo('screen-queue');
     const el = document.getElementById('queue-msg');
-    if(el) el.innerText = "Connecting...";
+    if (el) el.innerText = "Connecting...";
 
     // --- PHASE 3 UPDATE: SEND PLAYER COUNT ---
-    state.socket.emit('request_join', { 
-        mode: mode, 
+    state.socket.emit('request_join', {
+        mode: mode,
         difficulty: state.currentBotDiff,
         playerCount: state.currentPlayerCount,
         ruleset: state.currentRuleset
@@ -310,13 +310,13 @@ window.connectToGame = (mode) => {
 };
 
 window.leaveGame = () => {
-    if(state.socket) state.socket.emit('leave_game');
-    if(state.timerInterval) clearInterval(state.timerInterval);
+    if (state.socket) state.socket.emit('leave_game');
+    if (state.timerInterval) clearInterval(state.timerInterval);
     window.navTo('screen-home');
 };
 
 window.confirmLeave = () => {
-    UI.toggleGameMenu(); 
+    UI.toggleGameMenu();
     window.leaveGame();
 };
 
@@ -333,7 +333,7 @@ window.toggleSelect = (idx) => {
         state.selectedIndices.push(idx);
     }
     // Re-render only the hand to show selection
-    if (state.activeData) UI.renderHand(state.activeData.hand); 
+    if (state.activeData) UI.renderHand(state.activeData.hand);
 };
 
 window.handleDiscardClick = () => {
@@ -342,7 +342,7 @@ window.handleDiscardClick = () => {
         if (!state.activeData || state.activeData.phase !== 'playing') {
             // Shake the deck or show a toast to indicate "Draw First"
             const deck = document.getElementById('draw-area');
-            if(deck) {
+            if (deck) {
                 deck.style.transform = "translateX(5px)";
                 setTimeout(() => deck.style.transform = "none", 100);
             }
@@ -368,32 +368,32 @@ window.handleDiscardClick = () => {
 
 window.handleMeldClick = (event, targetRank) => {
     event.stopPropagation();
-    if(state.selectedIndices.length === 0) return;
-    
+    if (state.selectedIndices.length === 0) return;
+
     // 1. Analyze the cards the player is holding
     const cards = state.selectedIndices.map(i => state.activeData.hand[i]);
-    
+
     // 2. Check for Mismatch (Holding a Natural that doesn't match the pile)
     const isMismatch = cards.some(c => !c.isWild && c.rank !== targetRank);
 
     if (isMismatch) {
         console.log("Mismatch detected: Redirecting to New Meld logic.");
         // FIX: Attempt to start a new meld, but capture if it actually happened
-        const success = meldSelected(); 
-        
+        const success = meldSelected();
+
         // If meldSelected didn't successfully start a flow (returned false), 
         // we MUST clear selection so the user isn't stuck.
         if (!success) {
             state.selectedIndices = [];
-            if(state.activeData) UI.renderHand(state.activeData.hand);
+            if (state.activeData) UI.renderHand(state.activeData.hand);
         }
     } else {
         // Standard Add-to-Meld Logic
         Anim.animateMeld(state.selectedIndices, targetRank, UI.updateUI);
-        state.socket.emit('act_meld', { 
-            seat: state.mySeat, 
-            indices: state.selectedIndices, 
-            targetRank: targetRank 
+        state.socket.emit('act_meld', {
+            seat: state.mySeat,
+            indices: state.selectedIndices,
+            targetRank: targetRank
         });
         state.selectedIndices = [];
     }
@@ -439,15 +439,15 @@ window.meldSelected = () => {
 function handleStandardMeld() {
     const hand = state.activeData.hand;
     const cards = state.selectedIndices.map(i => hand[i]);
-    
+
     let targetRank = null;
     const natural = cards.find(c => !c.isWild);
-    
+
     if (natural) {
         targetRank = natural.rank;
     } else {
         targetRank = prompt("Rank (e.g., A, 7)?");
-        if(targetRank) targetRank = targetRank.toUpperCase().trim();
+        if (targetRank) targetRank = targetRank.toUpperCase().trim();
     }
 
     // FIX: If user cancels the prompt, return FALSE so we can clear selection
@@ -459,12 +459,12 @@ function handleStandardMeld() {
 
     Anim.animateMeld(state.selectedIndices, targetRank, UI.updateUI);
 
-    state.socket.emit('act_meld', { 
-        seat: state.mySeat, 
-        indices: state.selectedIndices, 
-        targetRank: targetRank 
+    state.socket.emit('act_meld', {
+        seat: state.mySeat,
+        indices: state.selectedIndices,
+        targetRank: targetRank
     });
-    
+
     state.selectedIndices = [];
     return true;
 }
@@ -474,65 +474,65 @@ function handleStandardMeld() {
 function startStagingMeld() {
     const hand = state.activeData.hand;
     const selectedCards = state.selectedIndices.map(i => hand[i]);
-    
+
     let targetRank = null;
     const natural = selectedCards.find(c => !c.isWild);
-    if(natural) targetRank = natural.rank;
+    if (natural) targetRank = natural.rank;
     else targetRank = prompt("Rank?");
-    
+
     if (!targetRank) return;
     targetRank = targetRank.toUpperCase().trim();
 
-    state.stagedMelds.push({ 
-        indices: [...state.selectedIndices], 
-        rank: targetRank, 
-        cards: selectedCards 
+    state.stagedMelds.push({
+        indices: [...state.selectedIndices],
+        rank: targetRank,
+        cards: selectedCards
     });
-    state.isStaging = true; 
-    state.selectedIndices = []; 
+    state.isStaging = true;
+    state.selectedIndices = [];
     renderStagingArea();
     UI.renderHand(hand); // Clear selection
 }
 
 function renderStagingArea() {
     document.getElementById('staging-panel').style.display = 'block';
-    const container = document.getElementById('staged-container'); 
+    const container = document.getElementById('staged-container');
     container.innerHTML = "";
-    
+
     let totalPoints = 0;
-    
+
     state.stagedMelds.forEach((meld, index) => {
-        const grp = document.createElement('div'); 
+        const grp = document.createElement('div');
         grp.className = 'meld-group';
         grp.onclick = () => addToStagedMeld(index);
         grp.style.cursor = 'pointer';
         grp.style.border = '1px dashed #f1c40f';
         grp.style.padding = '5px';
-        
+
         // 1. Calculate points from cards currently in HAND
         let meldPts = meld.cards.reduce((sum, c) => sum + getCardValue(c.rank), 0); // Use getCardValue helper safely
-        
+
         // 2. If this is the Pickup Meld, add the TOP CARD's value virtually
-        if (meld.isPickupKey) { 
-            meldPts += getCardValue(meld.rank); 
+        if (meld.isPickupKey) {
+            meldPts += getCardValue(meld.rank);
             // REMOVED: totalPoints += getCardValue(meld.rank); <--- THIS WAS THE BUG (Double Counting)
         }
-        
+
         // 3. Add the final correct meld total to the grand total
         totalPoints += meldPts;
-        
-        let html = `<span class='meld-label'>${meld.rank} (${meldPts})</span><div style='display:flex;'>`; 
-        meld.cards.forEach(c => { 
-            html += `<img src="${Anim.getCardImage(c)}" style="width:30px; height:45px; margin-right:2px;">`; 
+
+        let html = `<span class='meld-label'>${meld.rank} (${meldPts})</span><div style='display:flex;'>`;
+        meld.cards.forEach(c => {
+            html += `<img src="${Anim.getCardImage(c)}" style="width:30px; height:45px; margin-right:2px;">`;
         });
-        
+
         // Visual indicator for the "Ghost" card being picked up
         if (meld.isPickupKey) {
-             html += `<div style="width:30px; height:45px; border:1px dashed #f1c40f; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:10px; color:#f1c40f;">+1</div>`;
+            html += `<div style="width:30px; height:45px; border:1px dashed #f1c40f; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:10px; color:#f1c40f;">+1</div>`;
         }
 
-        html += "</div>"; 
-        grp.innerHTML = html; 
+        html += "</div>";
+        grp.innerHTML = html;
         container.appendChild(grp);
     });
 
@@ -548,10 +548,10 @@ function renderStagingArea() {
 
     const teamScore = (state.mySeat % 2 === 0) ? state.activeData.cumulativeScores.team1 : state.activeData.cumulativeScores.team2;
     const req = getOpeningReq(teamScore);
-    
-    document.getElementById('staged-pts').innerText = totalPoints; 
+
+    document.getElementById('staged-pts').innerText = totalPoints;
     document.getElementById('req-pts').innerText = req;
-    
+
     const btn = document.getElementById('btn-confirm-open');
     btn.disabled = (totalPoints < req);
     btn.style.opacity = (totalPoints < req) ? "0.5" : "1";
@@ -561,7 +561,7 @@ window.addToStagedMeld = (meldIndex) => {
     if (state.selectedIndices.length === 0) return alert("Select cards first.");
     const targetMeld = state.stagedMelds[meldIndex];
     const newCards = state.selectedIndices.map(i => state.activeData.hand[i]);
-    
+
     // Check rank
     if (newCards.some(c => !c.isWild && c.rank !== targetMeld.rank)) {
         return alert(`Cards must be ${targetMeld.rank} or Wild.`);
@@ -580,12 +580,12 @@ window.addNewStagedMeld = () => {
 };
 
 window.sendOpening = () => {
-    state.socket.emit('act_open_game', { 
-        seat: state.mySeat, 
-        melds: state.stagedMelds, 
-        pickup: state.pickupStaged 
-    }); 
-    window.cancelOpening(); 
+    state.socket.emit('act_open_game', {
+        seat: state.mySeat,
+        melds: state.stagedMelds,
+        pickup: state.pickupStaged
+    });
+    window.cancelOpening();
 };
 
 window.cancelOpening = () => {
@@ -593,13 +593,13 @@ window.cancelOpening = () => {
     state.isStaging = false;
     state.pickupStaged = false;
     document.getElementById('staging-panel').style.display = 'none';
-    if(state.activeData) UI.renderHand(state.activeData.hand);
+    if (state.activeData) UI.renderHand(state.activeData.hand);
 };
 
 window.selectPlayerCount = (count, btn) => {
     // 1. Update State
     state.currentPlayerCount = count;
-    
+
     // 2. Visual Feedback
     document.querySelectorAll('.p-count-btn').forEach(b => b.classList.remove('selected'));
     btn.classList.add('selected');
@@ -608,7 +608,7 @@ window.selectPlayerCount = (count, btn) => {
 window.selectRuleset = (mode, btn) => {
     // mode can be 'standard' (2/2) or 'easy' (1/1)
     state.currentRuleset = mode;
-    
+
     // Visual Feedback
     document.querySelectorAll('.rules-btn').forEach(b => b.classList.remove('selected'));
     btn.classList.add('selected');
@@ -651,10 +651,10 @@ function handlePickupAttempt() {
 
 // --- HELPERS ---
 function getCardValue(rank) {
-    if (rank === "Joker") return 50; 
-    if (rank === "2" || rank === "A") return 20; 
-    if (["8","9","10","J","Q","K"].includes(rank)) return 10; 
-    return 5; 
+    if (rank === "Joker") return 50;
+    if (rank === "2" || rank === "A") return 20;
+    if (["8", "9", "10", "J", "Q", "K"].includes(rank)) return 10;
+    return 5;
 }
 function getOpeningReq(score) {
     if (score < 0) return 15; if (score < 1500) return 50; if (score < 3000) return 90; return 120;
@@ -662,10 +662,13 @@ function getOpeningReq(score) {
 
 // --- 3. SOCKET SETUP ---
 function initSocket(token) {
-    if (state.socket) return; 
-    const storedUser = localStorage.getItem("canasta_user"); 
-    
-    state.socket = io({
+    if (state.socket) return;
+    const storedUser = localStorage.getItem("canasta_user");
+
+    // For native apps, connect to production server; for web, use relative path
+    const serverUrl = isNative ? 'https://canastamaster.club' : '';
+
+    state.socket = io(serverUrl, {
         transports: ['polling', 'websocket'],
         auth: { token: token, username: storedUser }
     });
@@ -688,30 +691,30 @@ function initSocket(token) {
         }
     });
     state.socket.on('ask_request', (data) => {
-    // "Partner, may I go out?"
-    document.getElementById('modal-partner-ask').style.display = 'flex';
-});
+        // "Partner, may I go out?"
+        document.getElementById('modal-partner-ask').style.display = 'flex';
+    });
 
-state.socket.on('ask_result', (data) => {
-    // Show toast/alert to everyone
-    // data.decision is true (YES) or false (NO)
-    const msg = data.decision ? "PARTNER SAID: YES ✅" : "PARTNER SAID: NO ❌";
-    
-    // Simple toast notification
-    const toast = document.createElement('div');
-    toast.style.cssText = "position:absolute; top:20%; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.8); color:white; padding:15px 30px; border-radius:30px; font-size:20px; z-index:4000; border:2px solid #f1c40f;";
-    toast.innerText = msg;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 3000);
-});
+    state.socket.on('ask_result', (data) => {
+        // Show toast/alert to everyone
+        // data.decision is true (YES) or false (NO)
+        const msg = data.decision ? "PARTNER SAID: YES ✅" : "PARTNER SAID: NO ❌";
 
-state.socket.on('penalty_notification', (data) => {
-    const el = document.getElementById('modal-penalty');
-    document.getElementById('penalty-msg').innerText = data.message;
-    el.style.display = 'flex';
-    // Hide after 3s automatically
-    setTimeout(() => el.style.display = 'none', 3000);
-});
+        // Simple toast notification
+        const toast = document.createElement('div');
+        toast.style.cssText = "position:absolute; top:20%; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.8); color:white; padding:15px 30px; border-radius:30px; font-size:20px; z-index:4000; border:2px solid #f1c40f;";
+        toast.innerText = msg;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    });
+
+    state.socket.on('penalty_notification', (data) => {
+        const el = document.getElementById('modal-penalty');
+        document.getElementById('penalty-msg').innerText = data.message;
+        el.style.display = 'flex';
+        // Hide after 3s automatically
+        setTimeout(() => el.style.display = 'none', 3000);
+    });
     state.socket.on('connect', () => console.log("Connected"));
     state.socket.on('ready_status', (data) => {
         // data.readySeats is an array of seat numbers who clicked start (e.g., [0, 2])
@@ -725,7 +728,7 @@ state.socket.on('penalty_notification', (data) => {
                     // (We use state.currentPlayerCount which holds 2 or 4)
                     if (i >= state.currentPlayerCount) {
                         el.style.display = 'none';
-                        continue; 
+                        continue;
                     } else {
                         el.style.display = 'flex'; // Reset to flex if re-using modal
                     }
@@ -743,10 +746,10 @@ state.socket.on('penalty_notification', (data) => {
     state.socket.on('queue_update', (data) => {
         UI.navTo('screen-queue');
         const el = document.getElementById('queue-msg');
-        
+
         // Support old format (just count) or new format (count + needed)
-        const needed = data.needed || 4; 
-        
+        const needed = data.needed || 4;
+
         if (el) el.innerText = `${data.count} / ${needed} Players Found`;
     });
 
@@ -757,9 +760,9 @@ state.socket.on('penalty_notification', (data) => {
         if (data.bankTimers) {
             state.seatTimers = data.bankTimers;
             // Force a DOM update now so the user sees "12:00" instantly
-            updateTimerDOM(); 
+            updateTimerDOM();
         }
-        
+
         // Render UI first
         UI.updateUI(data);
         // If scores are 0-0, reset timer. Otherwise, keep existing time.
@@ -770,58 +773,58 @@ state.socket.on('penalty_notification', (data) => {
         if (data.hand.length > 0) {
             const deckRect = document.getElementById('draw-area').getBoundingClientRect();
             // Simple deal animation
-            Anim.flyCard(deckRect, deckRect, "cards/BackRed.png"); 
+            Anim.flyCard(deckRect, deckRect, "cards/BackRed.png");
         }
     });
 
     state.socket.on('timer_sync', (data) => {
-    if (data.bankTimers) {
-        // Update the local state with the server's truth
-        state.seatTimers = data.bankTimers;
-        // Call your existing function to update the 12:00 labels
-        updateTimerDOM();
-    }
-});
+        if (data.bankTimers) {
+            // Update the local state with the server's truth
+            state.seatTimers = data.bankTimers;
+            // Call your existing function to update the 12:00 labels
+            updateTimerDOM();
+        }
+    });
 
     state.socket.on('update_game', (data) => {
         if (data.bankTimers) {
-        state.seatTimers = data.bankTimers;
-        updateTimerDOM();
-    }
-    // 1. Define the full update callback
-    const performFullUpdate = () => UI.updateUI(data);
-    // RESET AFK TIMER because an action happened
-        afkSeconds = 0; 
+            state.seatTimers = data.bankTimers;
+            updateTimerDOM();
+        }
+        // 1. Define the full update callback
+        const performFullUpdate = () => UI.updateUI(data);
+        // RESET AFK TIMER because an action happened
+        afkSeconds = 0;
         timeoutSent = false;
         UI.hideInactivityWarning(); // Remove warning if it was showing
-    if (state.activeData) {
-        // 2. Pass the FULL update function to animations
-        Anim.handleServerAnimations(state.activeData, data, performFullUpdate);
-    }
-    
-    // 3. Perform the initial update (unless locked by animation flags)
-    UI.updateUI(data);
-});
+        if (state.activeData) {
+            // 2. Pass the FULL update function to animations
+            Anim.handleServerAnimations(state.activeData, data, performFullUpdate);
+        }
+
+        // 3. Perform the initial update (unless locked by animation flags)
+        UI.updateUI(data);
+    });
     window.requestRematch = () => {
-    const btn = document.getElementById('btn-victory-start');
-    if(btn) {
-        btn.innerText = "WAITING FOR OTHERS...";
-        btn.disabled = true;
-        btn.style.opacity = "0.7";
-        btn.style.cursor = "default";
-    }
-    // Send signal to server
-    state.socket.emit('act_request_rematch');
-};
+        const btn = document.getElementById('btn-victory-start');
+        if (btn) {
+            btn.innerText = "WAITING FOR OTHERS...";
+            btn.disabled = true;
+            btn.style.opacity = "0.7";
+            btn.style.cursor = "default";
+        }
+        // Send signal to server
+        state.socket.emit('act_request_rematch');
+    };
 
     state.socket.on('match_over', (data) => {
-    // Hide the warning immediately when match ends
-    const warningEl = document.getElementById('inactivity-warning') || document.getElementById('afk-warning');
-    if (warningEl) warningEl.style.display = 'none';
+        // Hide the warning immediately when match ends
+        const warningEl = document.getElementById('inactivity-warning') || document.getElementById('afk-warning');
+        if (warningEl) warningEl.style.display = 'none';
         setTimeout(() => {
             // 1. Cleanup Animations
-            state.discardAnimationActive = false; 
-            state.meldAnimationActive = false;    
+            state.discardAnimationActive = false;
+            state.meldAnimationActive = false;
             document.querySelectorAll('.flying-card').forEach(el => el.remove());
 
             // 2. Close the Round-End Score Modal (so it doesn't block Victory)
@@ -829,21 +832,21 @@ state.socket.on('penalty_notification', (data) => {
             if (scoreModal) scoreModal.style.display = 'none';
 
             // --- 3. SETUP VICTORY SCREEN ---
-            
+
             // A. Set Team/Player Names in Table Headers
             const name1 = (data.names && data.names[0]) ? data.names[0] : "TEAM 1";
             const name2 = (data.names && data.names[1]) ? data.names[1] : "TEAM 2";
             const winLabel =
-            data.winner === 'team1'
-                ? (state.currentPlayerCount === 2 ? name1 : "TEAM 1")
-                : data.winner === 'team2'
-                ? (state.currentPlayerCount === 2 ? name2 : "TEAM 2")
-                : "";
+                data.winner === 'team1'
+                    ? (state.currentPlayerCount === 2 ? name1 : "TEAM 1")
+                    : data.winner === 'team2'
+                        ? (state.currentPlayerCount === 2 ? name2 : "TEAM 2")
+                        : "";
             const amITeam1 = (state.mySeat === 0 || state.mySeat === 2);
-            
+
             const lbl1 = document.getElementById('vic-header-1');
             const lbl2 = document.getElementById('vic-header-2');
-            
+
             if (state.currentPlayerCount === 2) {
                 // 2-Player: Use exact names
                 if (lbl1) lbl1.innerText = name1;
@@ -857,7 +860,7 @@ state.socket.on('penalty_notification', (data) => {
             // B. Populate The Detailed Table
             const round = data.lastRoundScores; // Sent from server
             const match = data.scores;          // Cumulative totals
-            
+
             // Helper to safely set text
             const setText = (id, val) => {
                 const el = document.getElementById(id);
@@ -866,26 +869,26 @@ state.socket.on('penalty_notification', (data) => {
 
             if (round) {
                 // --- TEAM 1 COLUMN ---
-                setText('vic-base-1',    round.team1.basePoints);
-                setText('vic-red3-1',    round.team1.red3Points);
+                setText('vic-base-1', round.team1.basePoints);
+                setText('vic-red3-1', round.team1.red3Points);
                 setText('vic-canasta-1', round.team1.canastaBonus);
-                setText('vic-bonus-1',   round.team1.goOutBonus);
-                setText('vic-deduct-1',  round.team1.deductions);
-                setText('vic-round-1',   round.team1.total);
-                
+                setText('vic-bonus-1', round.team1.goOutBonus);
+                setText('vic-deduct-1', round.team1.deductions);
+                setText('vic-round-1', round.team1.total);
+
                 // --- TEAM 2 COLUMN ---
-                setText('vic-base-2',    round.team2.basePoints);
-                setText('vic-red3-2',    round.team2.red3Points);
+                setText('vic-base-2', round.team2.basePoints);
+                setText('vic-red3-2', round.team2.red3Points);
                 setText('vic-canasta-2', round.team2.canastaBonus);
-                setText('vic-bonus-2',   round.team2.goOutBonus);
-                setText('vic-deduct-2',  round.team2.deductions);
-                setText('vic-round-2',   round.team2.total);
+                setText('vic-bonus-2', round.team2.goOutBonus);
+                setText('vic-deduct-2', round.team2.deductions);
+                setText('vic-round-2', round.team2.total);
 
                 // --- PREVIOUS SCORE CALCULATION ---
                 // (Match Total - Round Total = Score Before This Round)
                 const prev1 = match.team1 - round.team1.total;
                 const prev2 = match.team2 - round.team2.total;
-                
+
                 setText('vic-prev-1', prev1);
                 setText('vic-prev-2', prev2);
             }
@@ -910,10 +913,10 @@ state.socket.on('penalty_notification', (data) => {
                         vicTitle.style.color = "#f1c40f"; // Gold
                         vicSub.innerText = `${wName} WINS!`;
                     } else {
-                        
+
                         // Did I win?
                         const myWin = (data.winner === 'team1' && amITeam1) || (data.winner === 'team2' && !amITeam1);
-                        
+
                         vicTitle.innerText = myWin ? "VICTORY!" : "DEFEAT";
                         vicTitle.style.color = myWin ? "#f1c40f" : "#e74c3c"; // Gold vs Red
                         vicSub.innerText = `${winLabel} WINS THE MATCH`;
@@ -922,10 +925,10 @@ state.socket.on('penalty_notification', (data) => {
             }
 
             if (data.reason === 'forfeit') {
-            vicSub.innerText = `${winLabel} WINS (OPPONENT FORFEIT)`;
-            vicSub.style.color = "#e74c3c"; // Red text for emphasis
+                vicSub.innerText = `${winLabel} WINS (OPPONENT FORFEIT)`;
+                vicSub.style.color = "#e74c3c"; // Red text for emphasis
             } else {
-            vicSub.innerText = `${winLabel} WINS THE MATCH`;
+                vicSub.innerText = `${winLabel} WINS THE MATCH`;
             }
             // E. Handle Ratings (Existing Logic)
             const rateBox = document.getElementById('victory-ratings');
@@ -938,7 +941,7 @@ state.socket.on('penalty_notification', (data) => {
                 seatsToShow.forEach(seat => {
                     const rData = data.ratings[seat];
                     if (rData) {
-                        const name = (data.names && data.names[seat]) ? data.names[seat] : `Player ${seat+1}`;
+                        const name = (data.names && data.names[seat]) ? data.names[seat] : `Player ${seat + 1}`;
                         const isPos = rData.delta >= 0;
                         const color = isPos ? '#2ecc71' : '#e74c3c';
                         const sign = isPos ? '+' : '';
@@ -962,8 +965,8 @@ state.socket.on('penalty_notification', (data) => {
             // F. Setup Rematch Button
             const btn = document.getElementById('btn-victory-start');
             if (btn) {
-                btn.innerText = "WANT A REMATCH?"; 
-                btn.onclick = window.requestRematch; 
+                btn.innerText = "WANT A REMATCH?";
+                btn.onclick = window.requestRematch;
                 btn.disabled = false;
                 btn.style.opacity = "1";
                 btn.style.cursor = "pointer";
@@ -971,46 +974,46 @@ state.socket.on('penalty_notification', (data) => {
 
             // 4. Finally, Show the Screen
             UI.navTo('screen-victory');
-            
+
         }, 100);
     });
 
     state.socket.on('error_message', (msg) => alert(msg));
-    
+
     state.socket.on('private_created', (data) => {
         state.mySeat = data.seat;
-    UI.navTo('screen-lobby');
-    document.getElementById('lobby-room-id').innerText = data.gameId;
-    document.getElementById('lobby-host-controls').style.display = 'block';
-    document.getElementById('lobby-wait-msg').style.display = 'none';
-    
-    // Auto-fill join inputs for easy sharing testing
-    document.getElementById('join-id').value = data.gameId;
-});
+        UI.navTo('screen-lobby');
+        document.getElementById('lobby-room-id').innerText = data.gameId;
+        document.getElementById('lobby-host-controls').style.display = 'block';
+        document.getElementById('lobby-wait-msg').style.display = 'none';
 
-state.socket.on('rematch_update', (data) => {
-    const btn = document.getElementById('btn-victory-start');
-    if (btn && data.current && data.needed) {
-        btn.innerText = `WAITING (${data.current}/${data.needed})`;
-    }
-});
+        // Auto-fill join inputs for easy sharing testing
+        document.getElementById('join-id').value = data.gameId;
+    });
 
-state.socket.on('joined_private_success', (data) => {
-    state.mySeat = data.seat;
-    UI.navTo('screen-lobby');
-    document.getElementById('lobby-room-id').innerText = data.gameId;
-    document.getElementById('lobby-host-controls').style.display = 'none';
-    document.getElementById('lobby-wait-msg').style.display = 'block';
-});
+    state.socket.on('rematch_update', (data) => {
+        const btn = document.getElementById('btn-victory-start');
+        if (btn && data.current && data.needed) {
+            btn.innerText = `WAITING (${data.current}/${data.needed})`;
+        }
+    });
 
-state.socket.on('social_list_data', (data) => {
-    if (state.friendMode === 'search') return; // Don't overwrite search results
-    
-    const list = (state.friendMode === 'blocked') ? data.blocked : data.friends;
-    renderUserList(list, state.friendMode);
-});
+    state.socket.on('joined_private_success', (data) => {
+        state.mySeat = data.seat;
+        UI.navTo('screen-lobby');
+        document.getElementById('lobby-room-id').innerText = data.gameId;
+        document.getElementById('lobby-host-controls').style.display = 'none';
+        document.getElementById('lobby-wait-msg').style.display = 'block';
+    });
 
-state.socket.on('social_search_results', (names) => {
+    state.socket.on('social_list_data', (data) => {
+        if (state.friendMode === 'search') return; // Don't overwrite search results
+
+        const list = (state.friendMode === 'blocked') ? data.blocked : data.friends;
+        renderUserList(list, state.friendMode);
+    });
+
+    state.socket.on('social_search_results', (names) => {
         if (state.friendMode !== 'search') return;
         renderUserList(names, 'search');
     });
@@ -1018,8 +1021,8 @@ state.socket.on('social_search_results', (names) => {
     // Initial UI Update
     const pName = storedUser || "Player";
     const nameEl = document.querySelector('.p-name');
-if (nameEl) nameEl.innerText = pName;
-    UI.navTo('screen-home'); 
+    if (nameEl) nameEl.innerText = pName;
+    UI.navTo('screen-home');
 }
 
 // --- TIMER LOGIC ---
@@ -1078,24 +1081,24 @@ function updateTimerDOM() {
 // --- PRIVATE ROOM LOGIC ---
 
 window.doCreateRoom = () => {
-    const roomName = document.getElementById('create-room-name').value; 
-    
+    const roomName = document.getElementById('create-room-name').value;
+
     // Validation: Only Room Name required
     if (!roomName) return alert("Please enter a Room Name");
-    
-    state.socket.emit('request_create_private', { 
-        gameId: roomName, 
+
+    state.socket.emit('request_create_private', {
+        gameId: roomName,
         // No PIN sent
-        playerCount: state.currentPlayerCount || 4, 
+        playerCount: state.currentPlayerCount || 4,
         ruleset: state.currentRuleset || 'standard'
     });
 };
 
 window.doJoinPrivate = () => {
     const gameId = document.getElementById('join-id').value;
-    
+
     // Validation: Only Game ID required
-    if(!gameId) return alert("Please enter the Room Name");
+    if (!gameId) return alert("Please enter the Room Name");
 
     state.socket.emit('request_join_private', { gameId });
 };
@@ -1112,7 +1115,7 @@ window.showFriendTab = (mode) => {
     state.friendMode = mode;
     const content = document.getElementById('friend-content');
     const searchBar = document.getElementById('friend-search-bar');
-    
+
     content.innerHTML = "";
     searchBar.style.display = (mode === 'search') ? 'block' : 'none';
 
@@ -1128,7 +1131,7 @@ window.doUserSearch = () => {
 
 window.addFriend = (name, btn) => {
     state.socket.emit('social_add_friend', name);
-    
+
     // VISUAL FEEDBACK
     if (btn) {
         btn.innerText = "✔";       // Change to Checkmark
@@ -1152,11 +1155,11 @@ function renderUserList(items, mode) {
     items.forEach(item => {
         const row = document.createElement('div');
         row.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid #444; color:white;";
-        
+
         // Handle both Strings (Search/Blocked) and Objects (Friends with Status)
         let name = item;
         let isOnline = false;
-        
+
         if (typeof item === 'object') {
             name = item.username;
             isOnline = item.isOnline;
@@ -1189,7 +1192,7 @@ function renderUserList(items, mode) {
 window.openLeaderboard = async () => {
     // 1. Navigate
     UI.navTo('screen-leaderboard');
-    
+
     // 2. Show Loading State
     const container = document.getElementById('leaderboard-list');
     container.innerHTML = '<div style="text-align:center; margin-top:50px; color:#aaa;">Fetching rankings...</div>';
@@ -1237,7 +1240,7 @@ function renderLeaderboard(players) {
         // Special styling for Top 3
         let rankClass = 'rank-num';
         let rankIcon = index + 1;
-        
+
         if (index === 0) { rankClass += ' rank-1'; rankIcon = '🥇 ' + rankIcon; }
         else if (index === 1) { rankClass += ' rank-2'; rankIcon = '🥈 ' + rankIcon; }
         else if (index === 2) { rankClass += ' rank-3'; rankIcon = '🥉 ' + rankIcon; }
@@ -1255,21 +1258,21 @@ function renderLeaderboard(players) {
 window.manageSubscription = async () => {
     const btn = document.getElementById('btn-manage-sub');
     const originalText = btn.innerText;
-    
+
     btn.innerText = "OPENING PORTAL...";
     btn.disabled = true;
 
     try {
         const res = await fetch('/api/create-portal-session', {
             method: 'POST',
-            headers: { 
+            headers: {
                 'Content-Type': 'application/json',
-                'Authorization': state.playerToken 
+                'Authorization': state.playerToken
             }
         });
-        
+
         const data = await res.json();
-        
+
         if (data.url) {
             window.location.href = data.url; // Redirect to Stripe Portal
         } else {
@@ -1287,7 +1290,7 @@ window.manageSubscription = async () => {
 window.openProfile = async () => {
     // 1. Show Screen
     UI.navTo('screen-profile');
-    
+
     // 2. Prepare UI (Show loading state)
     document.getElementById('my-rating').innerText = "...";
     document.getElementById('my-wins').innerText = "...";
@@ -1308,9 +1311,9 @@ window.openProfile = async () => {
             document.getElementById('my-username').innerText = data.username;
             document.getElementById('my-rating').innerText = Math.round(data.stats.rating);
             document.getElementById('my-wins').innerText = data.stats.wins;
-            
+
             const lossEl = document.getElementById('my-losses');
-            if(lossEl) lossEl.innerText = data.stats.losses;
+            if (lossEl) lossEl.innerText = data.stats.losses;
             console.log("Premium Status:", data.isPremium);
             const badge = document.getElementById('premium-badge');
             if (badge) {
@@ -1332,12 +1335,12 @@ window.openProfile = async () => {
 window.askToGoOut = () => {
     // Close menu
     window.toggleGameMenu();
-    
+
     if (state.currentPlayerCount !== 4) {
         alert("Asking is only for 4-player games.");
         return;
     }
-    
+
     // UI Feedback
     alert("Asking partner...");
     state.socket.emit('act_ask_go_out', { seat: state.mySeat });
@@ -1352,7 +1355,7 @@ let isDrawing = false;
 window.drawCard = () => {
     if (isDrawing) return; // Block double clicks locally
     isDrawing = true;
-    
+
     // Re-enable after 1 second (safe timeout)
     setTimeout(() => { isDrawing = false; }, 1000);
 
@@ -1361,35 +1364,35 @@ window.drawCard = () => {
 let deferredPrompt;
 
 window.addEventListener('beforeinstallprompt', (e) => {
-  // Prevent the mini-infobar from appearing on mobile
-  e.preventDefault();
-  // Stash the event so it can be triggered later.
-  deferredPrompt = e;
-  
-  // OPTIONAL: Show your own UI button here
-  // showInstallButton();
+    // Prevent the mini-infobar from appearing on mobile
+    e.preventDefault();
+    // Stash the event so it can be triggered later.
+    deferredPrompt = e;
+
+    // OPTIONAL: Show your own UI button here
+    // showInstallButton();
 });
 
 // client.js - Updated Install Logic
 
 window.installApp = async () => {
-  // 1. Android / Desktop Chrome Logic
-  if (deferredPrompt) {
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    console.log("User response to install:", outcome);
-    deferredPrompt = null;
-    return;
-  }
+    // 1. Android / Desktop Chrome Logic
+    if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log("User response to install:", outcome);
+        deferredPrompt = null;
+        return;
+    }
 
-  // 2. iOS (iPhone/iPad) Logic
-  // iOS doesn't support a button, so we must show instructions.
-  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
-  if (isIOS) {
-    alert("To install on iOS:\n\n1. Tap the Share button (box with arrow)\n2. Scroll down and tap 'Add to Home Screen' ➕");
-    return;
-  }
+    // 2. iOS (iPhone/iPad) Logic
+    // iOS doesn't support a button, so we must show instructions.
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    if (isIOS) {
+        alert("To install on iOS:\n\n1. Tap the Share button (box with arrow)\n2. Scroll down and tap 'Add to Home Screen' ➕");
+        return;
+    }
 
-  // 3. Fallback (Already Installed or Not Supported)
-  alert("Installation not available.\n\nThe app might already be installed, or your browser (like Firefox/Brave) requires you to install manually from the menu.");
+    // 3. Fallback (Already Installed or Not Supported)
+    alert("Installation not available.\n\nThe app might already be installed, or your browser (like Firefox/Brave) requires you to install manually from the menu.");
 };

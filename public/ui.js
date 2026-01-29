@@ -659,7 +659,7 @@ function renderOtherHand(elementId, backsArray, orientation) {
             dynamicMargin = Math.min(defaultOverlap, calculatedMargin);
         }
     } else {
-        if (orientation === 'vert') dynamicMargin = -65;
+        if (orientation === 'vert') dynamicMargin = -45; // Mobile: less squeeze to show more card
         else dynamicMargin = -32;
     }
 
