@@ -62,9 +62,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 // Automatically fetch rankings for the landing page
-document.addEventListener('DOMContentLoaded', () => {
-    fetchLeaderboardPreview();
-});
+fetchLeaderboardPreview();
 });
 
 async function fetchLeaderboardPreview() {
@@ -942,6 +940,16 @@ state.socket.on('penalty_notification', (data) => {
                 });
             } else {
                 rateBox.style.display = 'none';
+            }
+
+            // F. Setup Rematch Button
+            const btn = document.getElementById('btn-victory-start');
+            if (btn) {
+                btn.innerText = "WANT A REMATCH?"; 
+                btn.onclick = window.requestRematch; 
+                btn.disabled = false;
+                btn.style.opacity = "1";
+                btn.style.cursor = "pointer";
             }
 
             // 4. Finally, Show the Screen
