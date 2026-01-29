@@ -1,14 +1,15 @@
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
-const mongoose = require('mongoose'); 
-const rateLimit = require('express-rate-limit'); 
+const mongoose = require('mongoose');
+const rateLimit = require('express-rate-limit');
+const cors = require('cors');
 const Stripe = require('stripe');
 const jwt = require('jsonwebtoken');
 const { Server } = require('socket.io');
 
 // Game Imports
-const { CanastaGame } = require('./game'); 
+const { CanastaGame } = require('./game');
 const { CanastaBot } = require('./bot');
 const { calculateEloChange } = require('./elo');
 
@@ -18,57 +19,60 @@ const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
-     console.error("FATAL ERROR: JWT_SECRET is not defined.");
-     process.exit(1);
+    console.error("FATAL ERROR: JWT_SECRET is not defined.");
+    process.exit(1);
 }
 
 app.set('trust proxy', 1);
-app.post('/webhook', express.raw({type: 'application/json'}), async (request, response) => {
-  const sig = request.headers['stripe-signature'];
-  const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+app.post('/webhook', express.raw({ type: 'application/json' }), async (request, response) => {
+    const sig = request.headers['stripe-signature'];
+    const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
-  let event;
+    let event;
 
-  try {
-    // 1. Verify the event came from real Stripe
-    event = stripe.webhooks.constructEvent(request.body, sig, endpointSecret);
-  } catch (err) {
-    console.log(`⚠️  Webhook signature verification failed.`, err.message);
-    return response.status(400).send(`Webhook Error: ${err.message}`);
-  }
+    try {
+        // 1. Verify the event came from real Stripe
+        event = stripe.webhooks.constructEvent(request.body, sig, endpointSecret);
+    } catch (err) {
+        console.log(`⚠️  Webhook signature verification failed.`, err.message);
+        return response.status(400).send(`Webhook Error: ${err.message}`);
+    }
 
-  // 2. Handle the event
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object;
-    
-    // Retrieve the username we saved in Step 1
-    const username = session.metadata.username;
-    const customerId = session.customer; 
-    const subscriptionId = session.subscription;
+    // 2. Handle the event
+    if (event.type === 'checkout.session.completed') {
+        const session = event.data.object;
 
-    console.log(`💰 WEBHOOK RECEIVED: Payment for ${username}`);
+        // Retrieve the username we saved in Step 1
+        const username = session.metadata.username;
+        const customerId = session.customer;
+        const subscriptionId = session.subscription;
 
-    // Check if User model is ready (it's defined later in the file, but available at runtime)
-    if (!DEV_MODE && User) {
-        try {
-            await User.updateOne(
-                { username: username }, 
-                { 
-                    isPremium: true,
-                    stripeCustomerId: customerId,
-                    stripeSubscriptionId: subscriptionId
-                }
-            );
-            console.log(`✅ DATABASE UPDATED: ${username} is now Premium!`);
-        } catch (e) {
-            console.error("❌ DB Update Failed:", e);
+        console.log(`💰 WEBHOOK RECEIVED: Payment for ${username}`);
+
+        // Check if User model is ready (it's defined later in the file, but available at runtime)
+        if (!DEV_MODE && User) {
+            try {
+                await User.updateOne(
+                    { username: username },
+                    {
+                        isPremium: true,
+                        stripeCustomerId: customerId,
+                        stripeSubscriptionId: subscriptionId
+                    }
+                );
+                console.log(`✅ DATABASE UPDATED: ${username} is now Premium!`);
+            } catch (e) {
+                console.error("❌ DB Update Failed:", e);
+            }
         }
     }
-  }
 
-  // Return a 200 response to acknowledge receipt of the event
-  response.send();
+    // Return a 200 response to acknowledge receipt of the event
+    response.send();
 });
+
+// Enable CORS for API routes (needed for Capacitor Android app)
+app.use(cors());
 
 app.use(express.json());
 
@@ -76,7 +80,7 @@ app.use(express.json());
 // Allow max 20 requests per 15 minutes from the same IP
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 20, 
+    max: 20,
     message: { success: false, message: "Too many attempts, please try again later." }
 });
 
@@ -93,10 +97,10 @@ const io = new Server(server, {
     transports: ['polling', 'websocket'] // Force support for both
 });
 
-app.use(express.static('public')); 
+app.use(express.static('public'));
 
 // --- 2. MONGODB & DEV MODE CONFIGURATION ---
-const MONGO_URI = process.env.MONGO_URI; 
+const MONGO_URI = process.env.MONGO_URI;
 let DEV_MODE = false; // Flag to track if we are testing locally
 
 if (!MONGO_URI) {
@@ -106,7 +110,7 @@ if (!MONGO_URI) {
     DEV_MODE = true;
 } else {
     if (MONGO_URI) console.log("DEBUG: Connection String starts with:", MONGO_URI.substring(0, 25) + "...");
-    
+
     mongoose.connect(MONGO_URI)
         .then(async () => {
             console.log("[DB] Connected to MongoDB");
@@ -131,13 +135,13 @@ app.use('/api', authRoutes(User, DEV_MODE));
 
 // --- GLOBAL STATE ---
 
-const games = {};      
-const gameBots = {};   
+const games = {};
+const gameBots = {};
 const playerSessions = {};
 const matchmakingService = require('./services/matchmaking')(
-    games, 
-    gameBots, 
-    playerSessions, 
+    games,
+    gameBots,
+    playerSessions,
     sendUpdate // This function is hoisted, so passing it here is safe
 );
 
@@ -148,9 +152,9 @@ app.get('/api/profile', async (req, res) => {
 
     // 2. Handle Dev Mode
     if (DEV_MODE) {
-        return res.json({ 
-            success: true, 
-            username: "DevPlayer", 
+        return res.json({
+            success: true,
+            username: "DevPlayer",
             stats: { rating: 1250, wins: 5, losses: 2 },
             isPremium: true
         });
@@ -159,15 +163,15 @@ app.get('/api/profile', async (req, res) => {
     // 3. Find User in DB
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        
+
         // Now find the user by their unique ID or Username from the token
         const user = await User.findOne({ username: decoded.username });
         if (!user) return res.json({ success: false, message: "User not found" });
 
         // 4. Return Stats
-        res.json({ 
-            success: true, 
-            username: user.username, 
+        res.json({
+            success: true,
+            username: user.username,
             stats: user.stats,
             isPremium: user.isPremium || false
         });
@@ -183,10 +187,10 @@ app.get('/api/leaderboard', async (req, res) => {
     if (DEV_MODE) {
         const mockData = Array.from({ length: 25 }, (_, i) => ({
             username: `Player_${i + 1}`,
-            stats: { 
-                rating: 2000 - (i * 50), 
-                wins: 50 - i, 
-                losses: 10 + i 
+            stats: {
+                rating: 2000 - (i * 50),
+                wins: 50 - i,
+                losses: 10 + i
             }
         }));
         return res.json({ success: true, leaderboard: mockData });
@@ -210,7 +214,7 @@ app.get('/api/leaderboard', async (req, res) => {
 io.on('connection', async (socket) => {
     // console.log('User connected:', socket.id);
     const token = socket.handshake.auth.token;
-    
+
     let validUser = null;
 
     // 1. VERIFY JWT & MANAGE SESSION
@@ -218,7 +222,7 @@ io.on('connection', async (socket) => {
         try {
             const decoded = jwt.verify(token, JWT_SECRET);
             validUser = decoded.username;
-            
+
             if (!playerSessions[token]) {
                 playerSessions[token] = { username: validUser };
             }
@@ -227,15 +231,15 @@ io.on('connection', async (socket) => {
             // --- UNIFIED RECONNECTION LOGIC ---
             const session = playerSessions[token];
             if (session && session.gameId) {
-                
+
                 // A. Cancel Forfeit Timer (If they returned quickly)
                 const timerKey = `${session.gameId}_${session.seat}`;
                 if (disconnectTimers[timerKey]) {
                     console.log(`[Reconnect] Player ${session.seat} returned! Forfeit cancelled.`);
                     clearTimeout(disconnectTimers[timerKey]);
                     delete disconnectTimers[timerKey];
-                    if(games[session.gameId] && games[session.gameId].disconnectedPlayers) {
-                         delete games[session.gameId].disconnectedPlayers[session.seat];
+                    if (games[session.gameId] && games[session.gameId].disconnectedPlayers) {
+                        delete games[session.gameId].disconnectedPlayers[session.seat];
                     }
                 }
 
@@ -243,7 +247,7 @@ io.on('connection', async (socket) => {
                 if (games[session.gameId]) {
                     socket.data.gameId = session.gameId;
                     socket.data.seat = session.seat;
-                    await socket.join(session.gameId); 
+                    await socket.join(session.gameId);
                     console.log(`[Reconnect] Player restored to Game ${session.gameId}`);
                     // Immediate update so they see the board
                     sendUpdate(session.gameId, socket.id, session.seat);
@@ -269,10 +273,10 @@ io.on('connection', async (socket) => {
                 console.log(`[Reconnect] Player ${session.seat} returned! Forfeit cancelled.`);
                 clearTimeout(disconnectTimers[timerKey]);
                 delete disconnectTimers[timerKey];
-                
+
                 // Unmark disconnect status
-                if(games[session.gameId].disconnectedPlayers) {
-                     delete games[session.gameId].disconnectedPlayers[session.seat];
+                if (games[session.gameId].disconnectedPlayers) {
+                    delete games[session.gameId].disconnectedPlayers[session.seat];
                 }
             }
         }
@@ -293,14 +297,14 @@ io.on('connection', async (socket) => {
         // 1. Check if user was in an active game
         if (gameId && games[gameId] && !games[gameId].matchIsOver) {
             console.log(`[Game ${gameId}] Player ${seat} disconnected. Starting 60s timer.`);
-            
+
             // 2. Mark in game state (optional, for UI status)
             games[gameId].disconnectedPlayers[seat] = true;
 
             // 3. Start 60-Second Forfeit Timer
             // We store it by username or seat, using a unique key
             const timerKey = `${gameId}_${seat}`;
-            
+
             disconnectTimers[timerKey] = setTimeout(() => {
                 console.log(`[Forfeit] Player ${seat} failed to reconnect. Ending Game ${gameId}.`);
                 handleForfeit(gameId, seat);
@@ -322,11 +326,11 @@ io.on('connection', async (socket) => {
         // Swap Names
         game.names[targetSeat] = game.names[currentSeat];
         game.names[currentSeat] = null;
-        
+
         // Update Socket Data
         socket.data.seat = targetSeat;
         socket.emit('seat_changed', { newSeat: targetSeat });
-        
+
         // Update Session if exists
         const token = socket.handshake.auth.token;
         if (token && playerSessions[token]) {
@@ -339,7 +343,7 @@ io.on('connection', async (socket) => {
     socket.on('act_host_start', () => {
         const gameId = socket.data.gameId;
         const game = games[gameId];
-        
+
         if (!game || !game.isLobby) return;
         if (game.host !== socket.id) return;
 
@@ -352,7 +356,7 @@ io.on('connection', async (socket) => {
         console.log(`[LOBBY] Host starting Game ${gameId}`);
 
         // 1. DEAL CARDS NOW
-        game.resetMatch(); 
+        game.resetMatch();
         game.isLobby = false;
 
         // 2. MOVE EVERYONE TO GAME SCREEN
@@ -366,21 +370,21 @@ io.on('connection', async (socket) => {
     });
 
     // 1. HANDLE JOIN
-    socket.on('request_join', async (data) => { 
+    socket.on('request_join', async (data) => {
         const token = socket.handshake.auth.token;
         const currentId = socket.data.gameId || (playerSessions[token] ? playerSessions[token].gameId : null);
 
         if (currentId) {
-             console.log(`[Switch] Force leaving old Game ${currentId} for new ${data.mode} game.`);
-             await socket.leave(currentId); 
-             if (token && playerSessions[token]) delete playerSessions[token];
-             socket.data.gameId = null;
-             socket.data.seat = null;
+            console.log(`[Switch] Force leaving old Game ${currentId} for new ${data.mode} game.`);
+            await socket.leave(currentId);
+            if (token && playerSessions[token]) delete playerSessions[token];
+            socket.data.gameId = null;
+            socket.data.seat = null;
         }
 
         if (data.mode === 'bot') {
             const pCount = parseInt(data.playerCount) || 4;
-            await startBotGame(socket, data.difficulty || 'medium', pCount, data.ruleset || 'standard'); 
+            await startBotGame(socket, data.difficulty || 'medium', pCount, data.ruleset || 'standard');
         } else {
             matchmakingService.joinGlobalGame(socket, data);
         }
@@ -390,20 +394,20 @@ io.on('connection', async (socket) => {
         // 1. Validate Input (Room Name is the ID)
         const requestedId = data.gameId ? data.gameId.trim() : "";
         const pCount = parseInt(data.playerCount) || 4;
-        const ruleset = data.ruleset || 'standard'; 
+        const ruleset = data.ruleset || 'standard';
 
         if (!requestedId) return socket.emit('error_message', "Please enter a Room Name.");
-        
+
         // 2. Check if Room ID is taken
         if (games[requestedId]) {
             return socket.emit('error_message', "Room Name already exists. Try another.");
         }
 
-        const gameId = requestedId; 
-        
+        const gameId = requestedId;
+
         // 3. Determine Base Config
-        let config = (pCount === 2) 
-            ? { PLAYER_COUNT: 2, HAND_SIZE: 15 } 
+        let config = (pCount === 2)
+            ? { PLAYER_COUNT: 2, HAND_SIZE: 15 }
             : { PLAYER_COUNT: 4, HAND_SIZE: 11 };
 
         if (ruleset === 'easy') {
@@ -421,15 +425,15 @@ io.on('connection', async (socket) => {
         games[gameId].host = socket.id;
         games[gameId].readySeats = new Set();
         games[gameId].matchIsOver = false; // Flag to track completion for cleanup
-        
+
         games[gameId].names = Array(pCount).fill(null);
         games[gameId].names[0] = socket.handshake.auth.username || "Host";
-        
+
         // Join Host
         socket.join(gameId);
         socket.data.gameId = gameId;
-        socket.data.seat = 0; 
-        
+        socket.data.seat = 0;
+
         // Send success (Removed PIN from payload)
         socket.emit('private_created', { gameId: gameId, seat: 0 });
         broadcastLobby(gameId);
@@ -441,7 +445,7 @@ io.on('connection', async (socket) => {
 
         if (!game) return socket.emit('error_message', "Game not found.");
         if (!game.isPrivate) return socket.emit('error_message', "Not a private game.");
-        
+
         // Find the first empty seat (null)
         let seat = game.names.findIndex(n => n === null);
         if (seat === -1) return socket.emit('error_message', "Room is full.");
@@ -450,18 +454,18 @@ io.on('connection', async (socket) => {
         socket.join(gameId);
         socket.data.gameId = gameId;
         socket.data.seat = seat;
-        
+
         // Update Name
-        const pName = socket.handshake.auth.username || `Player ${seat+1}`;
+        const pName = socket.handshake.auth.username || `Player ${seat + 1}`;
         game.names[seat] = pName;
 
         const token = socket.handshake.auth.token;
         if (token) {
             // Save the guest's session so the server remembers them
-            playerSessions[token] = { 
-                gameId: gameId, 
-                seat: seat, 
-                username: pName 
+            playerSessions[token] = {
+                gameId: gameId,
+                seat: seat,
+                username: pName
             };
         }
 
@@ -469,33 +473,33 @@ io.on('connection', async (socket) => {
         broadcastLobby(gameId);
         broadcastAll(gameId);
         socket.emit('joined_private_success', { gameId, seat });
-        
+
         // If full, auto-start logic? Or wait for Host to click start?
         // For now, let's auto-start if 4 join, or rely on Ready button.
     });
 
     // --- NEW: SOCIAL EVENTS ---
     socket.on('updateBotSpeed', ({ speed }) => {
-    const token = socket.handshake.auth.token;
-    
-    // 1. Prioritize the active game the socket is currently in
-    let targetGameId = socket.data.gameId;
+        const token = socket.handshake.auth.token;
 
-    // 2. Fallback: Check if the player session has a gameId assigned
-    if (!targetGameId && token && playerSessions[token]) {
-        targetGameId = playerSessions[token].gameId;
-    }
+        // 1. Prioritize the active game the socket is currently in
+        let targetGameId = socket.data.gameId;
 
-    if (targetGameId && games[targetGameId]) {
-        games[targetGameId].botDelayBase = speed;
-        console.log(`[BOT SPEED] Game ${targetGameId} updated to ${speed}ms`);
-    }
+        // 2. Fallback: Check if the player session has a gameId assigned
+        if (!targetGameId && token && playerSessions[token]) {
+            targetGameId = playerSessions[token].gameId;
+        }
 
-    // 3. Persist for future games
-    if (token && playerSessions[token]) {
-        playerSessions[token].botSpeed = speed;
-    }
-});
+        if (targetGameId && games[targetGameId]) {
+            games[targetGameId].botDelayBase = speed;
+            console.log(`[BOT SPEED] Game ${targetGameId} updated to ${speed}ms`);
+        }
+
+        // 3. Persist for future games
+        if (token && playerSessions[token]) {
+            playerSessions[token].botSpeed = speed;
+        }
+    });
 
     socket.on('social_search', async (query) => {
         if (DEV_MODE) return;
@@ -519,7 +523,7 @@ io.on('connection', async (socket) => {
     socket.on('social_block_user', async (targetUsername) => {
         if (DEV_MODE) return;
         const myName = socket.handshake.auth.username;
-        await User.updateOne({ username: myName }, { 
+        await User.updateOne({ username: myName }, {
             $addToSet: { blocked: targetUsername },
             $pull: { friends: targetUsername } // Remove from friends if blocked
         });
@@ -534,99 +538,99 @@ io.on('connection', async (socket) => {
         if (me) {
             // Fetch friend documents to see 'isOnline' status
             const friendDocs = await User.find({ username: { $in: me.friends } });
-            
+
             // Map to an array of objects: [{ username: "Bob", isOnline: true }, ...]
-            const friendData = friendDocs.map(f => ({ 
-                username: f.username, 
-                isOnline: f.isOnline 
+            const friendData = friendDocs.map(f => ({
+                username: f.username,
+                isOnline: f.isOnline
             }));
 
             // Send full object for friends, keep blocked as strings
             socket.emit('social_list_data', { friends: friendData, blocked: me.blocked });
         }
     });
-    
+
     // 2. GAME ACTIONS
     socket.on('act_request_rematch', () => {
-    const gameId = socket.data.gameId;
-    const game = games[gameId];
-    if (!game) return;
+        const gameId = socket.data.gameId;
+        const game = games[gameId];
+        if (!game) return;
 
-    // 1. Initialize Vote Set
-    if (!game.rematchVotes) game.rematchVotes = new Set();
-    
-    // 2. Register Vote
-    game.rematchVotes.add(socket.data.seat);
-    
-    // 3. Auto-vote for Bots
-    if (gameBots[gameId]) {
-        Object.keys(gameBots[gameId]).forEach(botSeat => {
-            game.rematchVotes.add(parseInt(botSeat));
+        // 1. Initialize Vote Set
+        if (!game.rematchVotes) game.rematchVotes = new Set();
+
+        // 2. Register Vote
+        game.rematchVotes.add(socket.data.seat);
+
+        // 3. Auto-vote for Bots
+        if (gameBots[gameId]) {
+            Object.keys(gameBots[gameId]).forEach(botSeat => {
+                game.rematchVotes.add(parseInt(botSeat));
+            });
+        }
+
+        const needed = game.config.PLAYER_COUNT;
+
+        // 4. Send Status Update
+        io.to(gameId).emit('rematch_update', {
+            current: game.rematchVotes.size,
+            needed: needed
         });
-    }
 
-    const needed = game.config.PLAYER_COUNT;
-    
-    // 4. Send Status Update
-    io.to(gameId).emit('rematch_update', { 
-        current: game.rematchVotes.size, 
-        needed: needed 
-    });
+        // 5. Check if Everyone Accepted
+        if (game.rematchVotes.size >= needed) {
+            console.log(`[Rematch] All players accepted. Restarting Game ${gameId}.`);
 
-    // 5. Check if Everyone Accepted
-    if (game.rematchVotes.size >= needed) {
-        console.log(`[Rematch] All players accepted. Restarting Game ${gameId}.`);
-        
-        // A. Cancel Cleanup Timer
-        if (game.cleanupTimer) {
-            clearTimeout(game.cleanupTimer);
-            game.cleanupTimer = null; // Clear the reference
-        }
-        // 1. Unlock the match state FIRST
-        // (If we don't do this, game.resetMatch() might abort thinking the game is still over)
-        game.matchIsOver = false;
-
-        // 2. Clear Disconnect Flags
-        // (Ensure the server doesn't think the forfeiting player is still gone)
-        if (game.disconnectedPlayers) {
-            game.disconnectedPlayers = {};
-        }
-        // 3. Reset Game Logic
-        // (Now that matchIsOver is false, this will correctly redeal hands and deck)
-        game.resetMatch();
-        // 4. Hard Reset Timers for ALL players (0 to N-1)
-        game.bankTimers = {};
-        for (let i = 0; i < game.config.PLAYER_COUNT; i++) {
-            game.bankTimers[i] = 720; // 12 Minutes
-        }
-
-        // 5. Initialize Turn Variables (Crucial for Bots)
-        game.turnPhase = 'draw'; 
-        game.roundStarter = 0;      // Reset starter to seat 0
-        game.currentPlayer = 0;     // Set current turn to seat 0
-        game.processingTurnFor = null;
-        game.rematchVotes.clear();
-        game.nextRoundReady = new Set();
-
-        // 6. Force Client Navigation (Deal Hand)
-        io.sockets.sockets.forEach((s) => {
-            if (s.data.gameId === gameId) {
-                sendUpdate(gameId, s.id, s.data.seat);
+            // A. Cancel Cleanup Timer
+            if (game.cleanupTimer) {
+                clearTimeout(game.cleanupTimer);
+                game.cleanupTimer = null; // Clear the reference
             }
-        });
+            // 1. Unlock the match state FIRST
+            // (If we don't do this, game.resetMatch() might abort thinking the game is still over)
+            game.matchIsOver = false;
 
-        // 5. KICKSTART THE BOTS
-        // We must manually trigger the bot check, otherwise they sit waiting forever.
-        checkBotTurn(gameId);
-    }
-});
+            // 2. Clear Disconnect Flags
+            // (Ensure the server doesn't think the forfeiting player is still gone)
+            if (game.disconnectedPlayers) {
+                game.disconnectedPlayers = {};
+            }
+            // 3. Reset Game Logic
+            // (Now that matchIsOver is false, this will correctly redeal hands and deck)
+            game.resetMatch();
+            // 4. Hard Reset Timers for ALL players (0 to N-1)
+            game.bankTimers = {};
+            for (let i = 0; i < game.config.PLAYER_COUNT; i++) {
+                game.bankTimers[i] = 720; // 12 Minutes
+            }
+
+            // 5. Initialize Turn Variables (Crucial for Bots)
+            game.turnPhase = 'draw';
+            game.roundStarter = 0;      // Reset starter to seat 0
+            game.currentPlayer = 0;     // Set current turn to seat 0
+            game.processingTurnFor = null;
+            game.rematchVotes.clear();
+            game.nextRoundReady = new Set();
+
+            // 6. Force Client Navigation (Deal Hand)
+            io.sockets.sockets.forEach((s) => {
+                if (s.data.gameId === gameId) {
+                    sendUpdate(gameId, s.id, s.data.seat);
+                }
+            });
+
+            // 5. KICKSTART THE BOTS
+            // We must manually trigger the bot check, otherwise they sit waiting forever.
+            checkBotTurn(gameId);
+        }
+    });
 
     socket.on('act_ready', (data) => {
         const gameId = socket.data.gameId;
         const game = games[gameId];
 
         if (!game) return;
-        
+
         if (!game.readySeats) game.readySeats = new Set();
         game.readySeats.add(data.seat);
 
@@ -642,19 +646,19 @@ io.on('connection', async (socket) => {
         console.log(`[Ready] Seat ${data.seat} Ready. Total: ${game.readySeats.size}/4`);
 
         if (game.readySeats.size === game.config.PLAYER_COUNT && game.currentPlayer === -1) {
-             console.log(`[Start] All players ready!`);
-             
-             if (game.roundStarter === undefined) game.roundStarter = 0;
-             game.currentPlayer = game.roundStarter;
-             game.turnPhase = 'draw'; 
-             game.processingTurnFor = null;
-            
-             // 1. Force everyone to the game screen (Client listens for 'deal_hand' to switch screens)
-             io.sockets.sockets.forEach((s) => {
-                 if (s.data.gameId === gameId) {
-                     sendUpdate(gameId, s.id, s.data.seat);
-                 }
-             });
+            console.log(`[Start] All players ready!`);
+
+            if (game.roundStarter === undefined) game.roundStarter = 0;
+            game.currentPlayer = game.roundStarter;
+            game.turnPhase = 'draw';
+            game.processingTurnFor = null;
+
+            // 1. Force everyone to the game screen (Client listens for 'deal_hand' to switch screens)
+            io.sockets.sockets.forEach((s) => {
+                if (s.data.gameId === gameId) {
+                    sendUpdate(gameId, s.id, s.data.seat);
+                }
+            });
         }
     });
 
@@ -677,10 +681,10 @@ io.on('connection', async (socket) => {
             // Bot Logic
             const bot = gameBots[gameId][partnerSeat];
             const decision = bot.decideGoOutPermission(game); // TRUE or FALSE
-            
+
             // Auto-reply
             game.goOutPermission = decision ? 'granted' : 'denied';
-            
+
             // Broadcast result immediately
             io.to(gameId).emit('ask_result', { seat: partnerSeat, decision: decision });
         } else {
@@ -702,18 +706,18 @@ io.on('connection', async (socket) => {
         if (game.goOutPermission !== 'pending') return;
 
         game.goOutPermission = data.decision ? 'granted' : 'denied';
-        
+
         // Broadcast result to everyone (so asking player sees it)
         io.to(gameId).emit('ask_result', { seat: data.seat, decision: data.decision });
     });
 
     socket.on('act_draw', (data) => {
         const gameId = socket.data.gameId;
-        const game = games[gameId]; 
+        const game = games[gameId];
         if (!game) return;
-        
+
         const result = game.drawFromDeck(data.seat);
-        
+
         // CHECK FOR DECK EMPTY GAME OVER
         if (result.success && result.message === "GAME_OVER_DECK_EMPTY") {
             handleRoundEnd(gameId, io);
@@ -721,10 +725,10 @@ io.on('connection', async (socket) => {
             broadcastAll(gameId, data.seat);
         } else {
             // If the error is "Wrong phase!" but it IS the player's turn...
-            if (result.message === "Wrong phase!" && 
-                game.currentPlayer === data.seat && 
+            if (result.message === "Wrong phase!" &&
+                game.currentPlayer === data.seat &&
                 game.turnPhase === 'playing') {
-                
+
                 // Resend state to this socket only (Sync fix)
                 sendUpdate(gameId, socket.id, data.seat);
             } else {
@@ -733,23 +737,23 @@ io.on('connection', async (socket) => {
             }
         }
     });
-    
+
     socket.on('act_pickup', (data) => {
-        const gameId = socket.data.gameId; 
-        const game = games[gameId];        
-        if (game) { 
-            let res = game.pickupDiscardPile(data.seat); 
-            res.success ? broadcastAll(gameId, data.seat) : socket.emit('error_message', res.message); 
-        }
-    });
-    
-    socket.on('act_meld', (data) => { 
         const gameId = socket.data.gameId;
         const game = games[gameId];
-        if (game) { 
+        if (game) {
+            let res = game.pickupDiscardPile(data.seat);
+            res.success ? broadcastAll(gameId, data.seat) : socket.emit('error_message', res.message);
+        }
+    });
+
+    socket.on('act_meld', (data) => {
+        const gameId = socket.data.gameId;
+        const game = games[gameId];
+        if (game) {
             // --- 1. GO OUT CHECK (Partner Enforcement) ---
             const hand = game.players[data.seat];
-            
+
             // Check if melding these cards results in an empty hand (Floating)
             // (If indices.length == hand.length, you are using all your cards)
             const willGoOut = (hand.length === data.indices.length);
@@ -760,14 +764,14 @@ io.on('connection', async (socket) => {
                 game.cumulativeScores[teamKey] -= 100;
 
                 // B. Notify Everyone
-                const name = (game.names && game.names[data.seat]) ? game.names[data.seat] : `Player ${data.seat+1}`;
-                io.to(gameId).emit('penalty_notification', { 
+                const name = (game.names && game.names[data.seat]) ? game.names[data.seat] : `Player ${data.seat + 1}`;
+                io.to(gameId).emit('penalty_notification', {
                     message: `${name} ignored partner! -100 pts.`
                 });
 
                 // C. Block the Move
                 socket.emit('error_message', "Partner said NO! You cannot go out.");
-                
+
                 // D. Force Update UI (to show score drop immediately)
                 broadcastAll(gameId);
                 return;
@@ -775,10 +779,10 @@ io.on('connection', async (socket) => {
             // ---------------------------------------------
 
             // 2. Perform Standard Meld
-            let res = game.meldCards(data.seat, data.indices, data.targetRank); 
-            
+            let res = game.meldCards(data.seat, data.indices, data.targetRank);
+
             if (res.success && res.message === "GAME_OVER") {
-                handleRoundEnd(gameId, io); 
+                handleRoundEnd(gameId, io);
             } else if (res.success) {
                 broadcastAll(gameId, data.seat);
             } else {
@@ -786,39 +790,39 @@ io.on('connection', async (socket) => {
             }
         }
     });
-    
-    socket.on('act_discard', (data) => { 
+
+    socket.on('act_discard', (data) => {
         const gameId = socket.data.gameId;
         const game = games[gameId];
-        if (game) { 
+        if (game) {
             // 1. PRE-CHECK: Is player trying to go out after being denied?
             let hand = game.players[data.seat];
             let willGoOut = (hand.length === 1); // If 1 card and discarding it -> 0 left
 
             // ONLY apply partner penalties in 4-player games
-        if (game.config.PLAYER_COUNT === 4) {
-            // Penalty Check 1: Ignoring "NO"
-            if (willGoOut && game.goOutPermission === 'denied') {
-                // ... (keep existing penalty logic here)
-                return; 
-            }
+            if (game.config.PLAYER_COUNT === 4) {
+                // Penalty Check 1: Ignoring "NO"
+                if (willGoOut && game.goOutPermission === 'denied') {
+                    // ... (keep existing penalty logic here)
+                    return;
+                }
 
-            // Penalty Check 2: Ignoring "YES"
-            if (!willGoOut && game.goOutPermission === 'granted') {
-                const teamKey = (data.seat % 2 === 0) ? 'team1' : 'team2';
-                game.cumulativeScores[teamKey] -= 100;
-                // ... (keep existing notification logic here)
+                // Penalty Check 2: Ignoring "YES"
+                if (!willGoOut && game.goOutPermission === 'granted') {
+                    const teamKey = (data.seat % 2 === 0) ? 'team1' : 'team2';
+                    game.cumulativeScores[teamKey] -= 100;
+                    // ... (keep existing notification logic here)
+                }
             }
-        }
 
             // Normal Execution
-            let res = game.discardFromHand(data.seat, data.index); 
-            
+            let res = game.discardFromHand(data.seat, data.index);
+
             // Reset permission state if turn ends
-            if (res.success) game.goOutPermission = null; 
+            if (res.success) game.goOutPermission = null;
 
             if (res.success && res.message === "GAME_OVER") {
-                handleRoundEnd(gameId, io); 
+                handleRoundEnd(gameId, io);
             } else if (res.success) {
                 broadcastAll(gameId, data.seat);
             } else {
@@ -826,12 +830,12 @@ io.on('connection', async (socket) => {
             }
         }
     });
-    
-    socket.on('act_open_game', (data) => { 
+
+    socket.on('act_open_game', (data) => {
         const gameId = socket.data.gameId;
         const game = games[gameId];
-        if (game) { 
-            let res = game.processOpening(data.seat, data.melds, data.pickup); 
+        if (game) {
+            let res = game.processOpening(data.seat, data.melds, data.pickup);
             if (res.success && res.message === "GAME_OVER") {
                 handleRoundEnd(gameId, io); // <--- NEW FLOW
             } else if (res.success) {
@@ -841,7 +845,7 @@ io.on('connection', async (socket) => {
             }
         }
     });
-    
+
     socket.on('act_next_round', () => {
         const gameId = socket.data.gameId;
         const game = games[gameId];
@@ -852,7 +856,7 @@ io.on('connection', async (socket) => {
 
         // Initialize set if missing
         if (!game.nextRoundReady) game.nextRoundReady = new Set();
-        
+
         // 1. Register this player's vote
         game.nextRoundReady.add(socket.data.seat);
 
@@ -876,8 +880,8 @@ io.on('connection', async (socket) => {
                 console.log(`[System] Cleanup timer cancelled for Game ${gameId}`);
             }
             // Start the round
-            game.startNextRound(); 
-            
+            game.startNextRound();
+
             // Clear votes for next time
             game.nextRoundReady = new Set();
 
@@ -888,50 +892,50 @@ io.on('connection', async (socket) => {
             // Do NOT broadcast yet. 
             // Other players stay on the scoreboard. 
             // This player waits.
-             console.log(`[Round] Player ${socket.data.seat} ready. Waiting for others (${game.nextRoundReady.size}/${needed}).`);
+            console.log(`[Round] Player ${socket.data.seat} ready. Waiting for others (${game.nextRoundReady.size}/${needed}).`);
         }
     });
 
     // --- TIMEOUT HANDLER ---
     socket.on('act_timeout', async () => {
-    const gameId = socket.data.gameId;
-    const game = games[gameId];
-    if (!game || game.matchIsOver) return;
+        const gameId = socket.data.gameId;
+        const game = games[gameId];
+        if (!game || game.matchIsOver) return;
 
-    // We trust the client's 60s trigger but add a small 2s buffer 
-    // to account for network lag vs the server's lastActionTime.
-    const now = Date.now();
-    const INACTIVITY_LIMIT = 58000; // 58s buffer (be slightly more lenient than 60s)
-    const timeSinceAction = now - game.lastActionTime;
+        // We trust the client's 60s trigger but add a small 2s buffer 
+        // to account for network lag vs the server's lastActionTime.
+        const now = Date.now();
+        const INACTIVITY_LIMIT = 58000; // 58s buffer (be slightly more lenient than 60s)
+        const timeSinceAction = now - game.lastActionTime;
 
-    if (timeSinceAction < INACTIVITY_LIMIT) {
-        console.log(`[TIMEOUT DENIED] Security check failed: ${timeSinceAction}ms`);
-        return;
-    }
+        if (timeSinceAction < INACTIVITY_LIMIT) {
+            console.log(`[TIMEOUT DENIED] Security check failed: ${timeSinceAction}ms`);
+            return;
+        }
 
-    console.log(`[TIMEOUT] Ending Game ${gameId}. Player ${game.currentPlayer} is AFK.`);
-    handleForfeit(gameId, game.currentPlayer); 
-});
+        console.log(`[TIMEOUT] Ending Game ${gameId}. Player ${game.currentPlayer} is AFK.`);
+        handleForfeit(gameId, game.currentPlayer);
+    });
 
-    socket.on('leave_game', async () => { 
+    socket.on('leave_game', async () => {
         const gameId = socket.data.gameId;
         const token = socket.handshake.auth.token;
         const game = games[gameId];
-        
+
         // 1. Remove from matchmaking queue
         matchmakingService.removeSocketFromQueue(socket.id);
 
         console.log(`[Leave] User requesting to leave Game ${gameId}`);
-        
+
         // 2. Remove from session tracking
         if (token && playerSessions[token]) delete playerSessions[token];
         socket.data.gameId = null;
         socket.data.seat = null;
-        
+
         // 3. Leave the socket room & Clean up
         if (gameId) {
-            await socket.leave(gameId); 
-            
+            await socket.leave(gameId);
+
             // Handle Lobby Leave
             if (game && game.isPrivate && game.isLobby) {
                 const seat = socket.data.seat;
@@ -951,7 +955,7 @@ io.on('connection', async (socket) => {
             }
         }
     });
-    });
+});
 
 // --- HELPER FUNCTIONS ---
 
@@ -965,7 +969,7 @@ function broadcastLobby(gameId) {
 
     // Find the current seat of the Host (by matching Socket ID)
     let actualHostSeat = 0;
-    
+
     const room = io.sockets.adapter.rooms.get(gameId);
     if (room) {
         for (const socketId of room) {
@@ -990,9 +994,9 @@ function broadcastLobby(gameId) {
 async function startBotGame(humanSocket, difficulty, playerCount = 4, ruleset = 'standard') {
     const gameId = generateGameId();
     const pCountInt = parseInt(playerCount);
-    
-    const gameConfig = (playerCount === 2) 
-        ? { PLAYER_COUNT: 2, HAND_SIZE: 15 } 
+
+    const gameConfig = (playerCount === 2)
+        ? { PLAYER_COUNT: 2, HAND_SIZE: 15 }
         : { PLAYER_COUNT: 4, HAND_SIZE: 11 };
 
     if (ruleset === 'easy') {
@@ -1004,9 +1008,9 @@ async function startBotGame(humanSocket, difficulty, playerCount = 4, ruleset = 
     }
 
     games[gameId] = new CanastaGame(gameConfig);
-    
+
     const token = humanSocket.handshake.auth.token;
-    
+
     // FETCH SAVED SPEED
     if (token && playerSessions[token] && playerSessions[token].botSpeed) {
         games[gameId].botDelayBase = playerSessions[token].botSpeed;
@@ -1015,7 +1019,7 @@ async function startBotGame(humanSocket, difficulty, playerCount = 4, ruleset = 
     }
 
     games[gameId].resetMatch();
-    
+
     const userName = humanSocket.handshake.auth.username || "Player";
     gameBots[gameId] = {};
 
@@ -1029,19 +1033,19 @@ async function startBotGame(humanSocket, difficulty, playerCount = 4, ruleset = 
         }
     }
 
-    await humanSocket.join(gameId); 
+    await humanSocket.join(gameId);
     humanSocket.data.seat = 0;
     humanSocket.data.gameId = gameId;
 
     // 3. Update the session using the 'token' variable we already declared above
     if (token) {
         const existingName = playerSessions[token] ? playerSessions[token].username : "Player";
-        
-        playerSessions[token] = { 
+
+        playerSessions[token] = {
             ...playerSessions[token], // Keep botSpeed
-            gameId: gameId, 
-            seat: 0, 
-            username: existingName 
+            gameId: gameId,
+            seat: 0,
+            username: existingName
         };
     }
 
@@ -1060,12 +1064,12 @@ function getFreezingCard(game) {
 }
 
 function sendUpdate(gameId, socketId, seat) {
-    const game = games[gameId]; 
+    const game = games[gameId];
     if (!game) return;
 
     const pile = game.discardPile;
-    const topCard = pile.length > 0 ? pile[pile.length-1] : null;
-    const prevCard = pile.length > 1 ? pile[pile.length-2] : null; 
+    const topCard = pile.length > 0 ? pile[pile.length - 1] : null;
+    const prevCard = pile.length > 1 ? pile[pile.length - 2] : null;
     const names = getPlayerNames(gameId);
     const freezingCard = getFreezingCard(game);
     const isFrozen = !!freezingCard;
@@ -1073,23 +1077,23 @@ function sendUpdate(gameId, socketId, seat) {
     const nextDeckCard = game.deck.length > 0 ? game.deck[0] : null;
     const nextDeckColor = nextDeckCard ? nextDeckCard.deckType : 'Red';
 
-    io.to(socketId).emit('deal_hand', { 
-        seat: seat, 
+    io.to(socketId).emit('deal_hand', {
+        seat: seat,
         hand: game.players[seat],
-        currentPlayer: game.currentPlayer, 
+        currentPlayer: game.currentPlayer,
         phase: game.turnPhase,
         bankTimers: game.bankTimers,
         topDiscard: topCard,
         previousDiscard: prevCard,
         freezingCard: freezingCard,
-        team1Melds: game.team1Melds, 
+        team1Melds: game.team1Melds,
         team2Melds: game.team2Melds,
-        team1Red3s: game.team1Red3s, 
+        team1Red3s: game.team1Red3s,
         team2Red3s: game.team2Red3s,
         names: names,
-        scores: game.finalScores, 
+        scores: game.finalScores,
         cumulativeScores: game.cumulativeScores,
-        isFrozen: isFrozen, 
+        isFrozen: isFrozen,
         handSizes: game.players.map(p => p.length),
         deckSize: game.deck.length,
         maxPlayers: game.config.PLAYER_COUNT,
@@ -1099,14 +1103,14 @@ function sendUpdate(gameId, socketId, seat) {
 }
 
 function broadcastAll(gameId, activeSeat) {
-    const game = games[gameId]; 
+    const game = games[gameId];
     if (!game) return;
 
     game.lastActive = Date.now();
 
     const pile = game.discardPile;
-    const topCard = pile.length > 0 ? pile[pile.length-1] : null;
-    const prevCard = pile.length > 1 ? pile[pile.length-2] : null;
+    const topCard = pile.length > 0 ? pile[pile.length - 1] : null;
+    const prevCard = pile.length > 1 ? pile[pile.length - 2] : null;
     const freezingCard = getFreezingCard(game);
     const isFrozen = !!freezingCard;
     const handBacks = game.players.map(p => p.map(c => c.deckType));
@@ -1118,26 +1122,26 @@ function broadcastAll(gameId, activeSeat) {
         if (s.data.gameId === gameId) {
             let update = {
                 bankTimers: game.bankTimers,
-                currentPlayer: game.currentPlayer, 
+                currentPlayer: game.currentPlayer,
                 handBacks: handBacks,
                 nextDeckColor: nextDeckColor,
                 phase: game.turnPhase,
                 topDiscard: topCard,
                 previousDiscard: prevCard,
                 freezingCard: freezingCard,
-                team1Melds: game.team1Melds, 
+                team1Melds: game.team1Melds,
                 team2Melds: game.team2Melds,
-                team1Red3s: game.team1Red3s, 
+                team1Red3s: game.team1Red3s,
                 team2Red3s: game.team2Red3s,
                 names: names,
-                scores: game.finalScores, 
+                scores: game.finalScores,
                 cumulativeScores: game.cumulativeScores,
-                isFrozen: isFrozen, 
+                isFrozen: isFrozen,
                 handSizes: game.players.map(p => p.length),
                 deckSize: game.deck.length,
                 maxPlayers: game.config.PLAYER_COUNT
             };
-            
+
             let seat = s.data.seat;
             if (seat !== undefined && game.players[seat]) {
                 update.hand = game.players[seat];
@@ -1158,7 +1162,7 @@ function checkBotTurn(gameId) {
 
     if (bot && game.processingTurnFor !== curr) {
         game.processingTurnFor = curr;
-        
+
         // Always grab the freshest speed from the game object
         const baseSpeed = game.botDelayBase || 350;
         const delay = (game.turnPhase === 'draw') ? baseSpeed : Math.floor(baseSpeed / 2);
@@ -1166,19 +1170,19 @@ function checkBotTurn(gameId) {
         setTimeout(() => {
             bot.executeTurn(game, (updatedSeat) => {
                 if (game.turnPhase === 'game_over') {
-                    handleRoundEnd(gameId, io);    
+                    handleRoundEnd(gameId, io);
                 } else {
-                    broadcastAll(gameId, updatedSeat); 
+                    broadcastAll(gameId, updatedSeat);
                 }
             })
-            .then(() => {
-                game.processingTurnFor = null; 
-                checkBotTurn(gameId); // Recursively check for next action
-            })
-            .catch(err => {
-                console.error(`[BOT ERROR]`, err);
-                game.processingTurnFor = null; 
-            });
+                .then(() => {
+                    game.processingTurnFor = null;
+                    checkBotTurn(gameId); // Recursively check for next action
+                })
+                .catch(err => {
+                    console.error(`[BOT ERROR]`, err);
+                    game.processingTurnFor = null;
+                });
         }, delay);
     }
 }
@@ -1199,14 +1203,14 @@ async function handleRoundEnd(gameId, io) {
 
     // 2. Set the cleanup timer safely now that 'game' is defined
     if (game.cleanupTimer) clearTimeout(game.cleanupTimer);
-    
+
     game.cleanupTimer = setTimeout(() => {
         delete games[gameId];
         delete gameBots[gameId];
     }, 60000);
 
     // 3. Reset votes for the next round
-    game.nextRoundReady = new Set(); 
+    game.nextRoundReady = new Set();
 
     // 4. Commit scores and check if match is over
     const result = game.resolveMatchStatus();
@@ -1223,24 +1227,24 @@ async function handleRoundEnd(gameId, io) {
         if (!DEV_MODE) {
             try {
                 const players = {};
-                const playerCount = game.config.PLAYER_COUNT; 
+                const playerCount = game.config.PLAYER_COUNT;
 
                 // Loop through all EXPECTED seats (0 to N-1)
                 for (let i = 0; i < playerCount; i++) {
                     // Retrieve the token we saved at the start of the game
                     const token = (game.playerTokens && game.playerTokens[i]) ? game.playerTokens[i] : null;
-                    
+
                     if (token) {
                         const userDoc = await User.findOne({ token: token });
                         if (userDoc) players[i] = userDoc;
                     }
                 }
-                
+
                 console.log(`[ELO] Found ${Object.keys(players).length} / ${playerCount} players for rating update.`);
-                
+
                 // Check if we found all players in the DB (regardless of if they are online)
                 if (Object.keys(players).length === playerCount && game.isRated) {
-        
+
                     // A. Calculate Average Ratings Dynamically
                     let team1Rating, team2Rating;
 
@@ -1260,7 +1264,7 @@ async function handleRoundEnd(gameId, io) {
 
                     // C. Calculate Delta
                     const delta = calculateEloChange(team1Rating, team2Rating, s1, s2);
-                    
+
                     // D. Apply Updates & Save
                     const savePromises = [];
 
@@ -1268,12 +1272,12 @@ async function handleRoundEnd(gameId, io) {
                     for (let seat = 0; seat < playerCount; seat++) {
                         const isTeam1 = (seat === 0 || seat === 2);
                         const change = isTeam1 ? delta : -delta;
-                        
+
                         players[seat].stats.rating += change;
-                        
+
                         const winnerTeam = (result.winner === 'team1') ? 0 : 1; // 0=Team1, 1=Team2
                         const won = (winnerTeam === 0 && isTeam1) || (winnerTeam === 1 && !isTeam1);
-                        
+
                         if (won) players[seat].stats.wins++;
                         else players[seat].stats.losses++;
 
@@ -1314,18 +1318,18 @@ async function handleRoundEnd(gameId, io) {
             delete gameBots[gameId];
         }, 60000);
 
-    } 
+    }
     // 6. CASE B: JUST A ROUND END
     else {
         // ROUND OVER (Not Match Over)
-        
+
         // Ensure finalScores is populated. If logic failed previously, force a calc.
         if (!game.finalScores) {
             console.log("⚠️ [Warning] finalScores missing at round end. Recalculating...");
-            game.finalScores = game.calculateScores(); 
+            game.finalScores = game.calculateScores();
         }
 
-        broadcastAll(gameId); 
+        broadcastAll(gameId);
     }
 }
 
@@ -1342,7 +1346,7 @@ setInterval(() => {
         const game = games[gameId];
         // If a game has no "lastActive" timestamp, mark it now
         if (!game.lastActive) game.lastActive = now;
-        
+
         // If inactive for 30+ mins, delete it
         if (now - game.lastActive > STALE_TIMEOUT) {
             delete games[gameId];
@@ -1350,17 +1354,17 @@ setInterval(() => {
             deletedCount++;
         }
     });
-    
+
     if (deletedCount > 0) {
         console.log(`[CLEANUP] Removed ${deletedCount} stale games to free memory.`);
         // Force garbage collection if exposed (optional, requires --expose-gc)
-        if (global.gc) global.gc(); 
+        if (global.gc) global.gc();
     }
-}, 5 * 60 * 1000); 
+}, 5 * 60 * 1000);
 
 // Update timestamp on every move
 // (You need to add `games[gameId].lastActive = Date.now()` inside broadcastAll or sendUpdate)
-server.listen(PORT, '0.0.0.0', () => { 
+server.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
     if (DEV_MODE) console.log("⚠️  DEV MODE ACTIVE: DB Disabled. Use ANY login.");
 });
@@ -1438,7 +1442,7 @@ async function handleForfeit(gameId, loserSeat) {
                 const onLosingTeam = (playerCount === 2)
                     ? (seat === loserSeat)
                     : ((isTeam1Loser && (seat === 0 || seat === 2)) ||
-                       (!isTeam1Loser && (seat === 1 || seat === 3)));
+                        (!isTeam1Loser && (seat === 1 || seat === 3)));
 
                 if (onLosingTeam) {
                     if (seat === loserSeat) {
@@ -1457,7 +1461,7 @@ async function handleForfeit(gameId, loserSeat) {
                         players[seat].stats.losses++;
                         updates[seat] = { delta: baseLoss, newRating: players[seat].stats.rating };
                     }
-                    } else {
+                } else {
                     // Rule 3: Winners gain the standard win amount
                     const winPoints = Math.abs(baseLoss);
                     players[seat].stats.rating += winPoints;
@@ -1474,11 +1478,11 @@ async function handleForfeit(gameId, loserSeat) {
             console.error("Forfeit Elo Error:", e);
         }
     }
-    
+
     // 3) Cleanup game from memory
     // CHANGE: Assign this to game.cleanupTimer so Rematch can cancel it!
     if (game.cleanupTimer) clearTimeout(game.cleanupTimer); // Safety clear
-    
+
     game.cleanupTimer = setTimeout(() => { // <--- ADD "game.cleanupTimer ="
         console.log(`[CLEANUP] Deleting forfeited Game ${gameId}`);
         delete games[gameId];
@@ -1498,7 +1502,7 @@ setInterval(() => {
                     handleForfeit(gameId, activeSeat);
                 }
             }
-            
+
             // NEW: Every second, send the current bank timers to everyone in this game room
             io.to(gameId).emit('timer_sync', { bankTimers: game.bankTimers });
         }
@@ -1514,7 +1518,7 @@ app.post('/api/create-checkout-session', async (req, res) => {
         // Option A: Check active session memory
         if (playerSessions[token]) {
             username = playerSessions[token].username;
-        } 
+        }
         // Option B: Verify JWT (if server restarted)
         else {
             try {
@@ -1541,7 +1545,7 @@ app.post('/api/create-checkout-session', async (req, res) => {
             payment_method_types: ['card'],
             // 4. ATTACH USERNAME TO METADATA (So Webhook can read it)
             metadata: {
-                username: username 
+                username: username
             },
             line_items: [{
                 price_data: {
@@ -1549,9 +1553,9 @@ app.post('/api/create-checkout-session', async (req, res) => {
                     product_data: {
                         name: 'Canasta Club Premium',
                     },
-                    unit_amount: 290, 
+                    unit_amount: 290,
                     recurring: {
-                        interval: 'month', 
+                        interval: 'month',
                     },
                 },
                 quantity: 1,
@@ -1596,7 +1600,7 @@ app.post('/api/create-portal-session', async (req, res) => {
 
     try {
         const user = await User.findOne({ username: username });
-        
+
         if (!user || !user.stripeCustomerId) {
             return res.status(400).json({ error: "No active subscription found." });
         }
