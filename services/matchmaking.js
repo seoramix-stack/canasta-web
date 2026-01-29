@@ -3,8 +3,9 @@ const { CanastaGame } = require('../game');
 const { CanastaBot } = require('../bot');
 
 const BOT_NAMES = [
-    "Alex", "Sarah", "Mike", "Jessica", "David", "Emily", 
-    "Chris", "Anna", "Robert", "Laura", "James", "Linda"
+    "Alex", "Sara", "Mike", "Jessica", "David", "Emily",
+    "Anna", "Robert", "Laura", "James", "Linda",
+    "Tom", "Sophie", "Daniel", "Maria", "Kevin", "Rachel"
 ];
 
 const matchmakingQueues = {

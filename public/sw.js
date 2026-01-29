@@ -12,8 +12,8 @@ const ASSETS = [
   '/cards/BackBlue.png'
 ];
 
-// Install Event
 self.addEventListener('install', (e) => {
+  self.skipWaiting();
   e.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(ASSETS);
@@ -21,15 +21,22 @@ self.addEventListener('install', (e) => {
   );
 });
 
-// Fetch Event (Network first, fall back to cache)
+self.addEventListener('activate', (e) => {
+  e.waitUntil(clients.claim()); 
+});
+
 self.addEventListener('fetch', (e) => {
+  const url = new URL(e.request.url);
+
+  // IGNORE SOCKET.IO 
+  if (url.pathname.includes('socket.io') || url.pathname.includes('/api/')) {
+    return; 
+  }
+
+  // 2. CACHE STRATEGY 
   e.respondWith(
-    fetch(e.request).catch(() => caches.match(e.request))
+    caches.match(e.request).then((cachedResponse) => {
+      return cachedResponse || fetch(e.request);
+    })
   );
 });
-self.addEventListener('fetch', (event) => {
-  // Add this check at the very top of your fetch handler
-  if (event.request.url.includes('socket.io')) {
-    return; // Let the request go directly to the network
-  }
-  });

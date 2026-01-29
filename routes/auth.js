@@ -1,4 +1,3 @@
-// routes/auth.js
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
@@ -16,7 +15,6 @@ module.exports = (User, DEV_MODE) => {
     router.post('/register', async (req, res) => {
         const { username, password } = req.body;
         
-        // [DEV MODE BYPASS]
         if (DEV_MODE) {
             const token = jwt.sign({ username, id: 'dev_id' }, JWT_SECRET);
             return res.json({ success: true, token: token, username: username });
@@ -28,23 +26,26 @@ module.exports = (User, DEV_MODE) => {
             const existing = await User.findOne({ username });
             if (existing) return res.json({ success: false, message: "Username taken" });
 
-            // 1. HASH THE PASSWORD
             const salt = await bcrypt.genSalt(10);
             const hashedPassword = await bcrypt.hash(password, salt);
 
-            // 2. CREATE USER (Don't save token to DB, it's stateless now)
+            // 1. Create User
             const newUser = new User({ 
                 username, 
                 password: hashedPassword 
             });
             await newUser.save();
 
-            // 3. GENERATE JWT
+            // 2. Generate Token
             const token = jwt.sign(
                 { id: newUser._id, username: newUser.username }, 
                 JWT_SECRET, 
-                { expiresIn: '7d' } // Token expires in 7 days
+                { expiresIn: '7d' }
             );
+
+            // 3. SAVE TOKEN TO DB
+            newUser.token = token;
+            await newUser.save();
 
             console.log(`[AUTH] Registered: ${username}`);
             res.json({ success: true, token: token, username: username });
@@ -59,7 +60,6 @@ module.exports = (User, DEV_MODE) => {
     router.post('/login', async (req, res) => {
         const { username, password } = req.body;
 
-        // [DEV MODE BYPASS]
         if (DEV_MODE) {
             const token = jwt.sign({ username, id: 'dev_id' }, JWT_SECRET);
             return res.json({ success: true, token: token, username: username });
@@ -69,16 +69,19 @@ module.exports = (User, DEV_MODE) => {
             const user = await User.findOne({ username });
             if (!user) return res.json({ success: false, message: "User not found" });
 
-            // 4. COMPARE PASSWORD HASHES
             const isMatch = await bcrypt.compare(password, user.password);
             if (!isMatch) return res.json({ success: false, message: "Invalid credentials" });
 
-            // 5. GENERATE JWT
             const token = jwt.sign(
                 { id: user._id, username: user.username }, 
                 JWT_SECRET, 
                 { expiresIn: '7d' }
             );
+
+            // 4. UPDATE USER STATE
+            user.token = token;
+            user.isOnline = true;
+            await user.save();
 
             console.log(`[AUTH] Login: ${username}`);
             res.json({ success: true, token: token, username: username });

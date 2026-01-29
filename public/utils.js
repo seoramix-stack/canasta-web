@@ -1,18 +1,25 @@
-// utils.js
-
-/**
- * Adds a "tap" listener that works instantly on mobile and desktop.
- * Replaces standard onclick to remove the 300ms mobile delay.
- */
 export function addTapListener(element, callback) {
     if (!element) return;
 
-    // We use 'pointerup' which is the modern standard for both mouse & touch
+    let startX = 0;
+    let startY = 0;
+
+    element.addEventListener('pointerdown', (e) => {
+        startX = e.clientX;
+        startY = e.clientY;
+    });
+
     element.addEventListener('pointerup', (e) => {
-        // Prevent default browser behaviors (like zooming or selecting text)
-        e.preventDefault(); 
-        
-        // Execute the action
-        callback(e);
+        const diffX = Math.abs(e.clientX - startX);
+        const diffY = Math.abs(e.clientY - startY);
+
+        if (diffX < 10 && diffY < 10) {
+            e.preventDefault();
+            callback(e);
+        }
     }, { passive: false });
+}
+
+export function calculateStepSize(totalTime, elapsed) {
+    return Math.max(0, Math.min(100, (elapsed / totalTime) * 100));
 }

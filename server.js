@@ -1,18 +1,27 @@
-// server.js
 require('dotenv').config();
+const express = require('express');
+const http = require('http');
+const mongoose = require('mongoose'); 
+const rateLimit = require('express-rate-limit'); 
 const Stripe = require('stripe');
+const jwt = require('jsonwebtoken');
+const { Server } = require('socket.io');
+
+// Game Imports
+const { CanastaGame } = require('./game'); 
+const { CanastaBot } = require('./bot');
+const { calculateEloChange } = require('./elo');
+
+const app = express();
+const server = http.createServer(app);
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
-const jwt = require('jsonwebtoken'); // Add this
+
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
      console.error("FATAL ERROR: JWT_SECRET is not defined.");
      process.exit(1);
 }
-const express = require('express');
-// 1. IMPORT RATE LIMITER
-const rateLimit = require('express-rate-limit'); 
 
-const app = express();
 app.set('trust proxy', 1);
 app.post('/webhook', express.raw({type: 'application/json'}), async (request, response) => {
   const sig = request.headers['stripe-signature'];
@@ -61,7 +70,6 @@ app.post('/webhook', express.raw({type: 'application/json'}), async (request, re
   response.send();
 });
 
-// --- 2. NOW ACTIVATE NORMAL JSON PARSING ---
 app.use(express.json());
 
 // 2. CONFIGURE LIMITER
@@ -73,18 +81,8 @@ const authLimiter = rateLimit({
 });
 
 // 3. APPLY TO AUTH ROUTES
-// (Place this before your app.use('/api', ...) or route definitions)
 app.use('/api/register', authLimiter);
 app.use('/api/login', authLimiter);
-
-const http = require('http');
-const { Server } = require('socket.io');
-const mongoose = require('mongoose'); 
-const { CanastaGame } = require('./game'); 
-const { CanastaBot } = require('./bot');
-const { calculateEloChange } = require('./elo');
-app.use(express.json());
-const server = http.createServer(app);
 const disconnectTimers = {};
 const io = new Server(server, {
     cors: {
@@ -107,19 +105,22 @@ if (!MONGO_URI) {
     console.log("👉  [SYSTEM] Stats will not be saved.");
     DEV_MODE = true;
 } else {
-    if (MONGO_URI) {
-    // Show the first 25 chars to verify protocol/user, hide the password part
-    console.log("DEBUG: Connection String starts with:", MONGO_URI.substring(0, 25) + "...");
-}
+    if (MONGO_URI) console.log("DEBUG: Connection String starts with:", MONGO_URI.substring(0, 25) + "...");
+    
     mongoose.connect(MONGO_URI)
-        .then(() => console.log("[DB] Connected to MongoDB"))
+        .then(async () => {
+            console.log("[DB] Connected to MongoDB");
+            if (User) {
+                await User.updateMany({}, { isOnline: false });
+                console.log("[SYSTEM] Reset all user online statuses.");
+            }
+        })
         .catch(err => console.error("[DB] Connection Error:", err));
 }
 
 // --- 3. DATABASE MODELS ---
 let User;
 if (!DEV_MODE) {
-    // Import the model from the new file
     User = require('./models/user');
 }
 
@@ -212,25 +213,51 @@ io.on('connection', async (socket) => {
     
     let validUser = null;
 
-    // 1. VERIFY JWT
+    // 1. VERIFY JWT & MANAGE SESSION
     if (token) {
         try {
-            // This throws an error if the token is fake or expired
             const decoded = jwt.verify(token, JWT_SECRET);
             validUser = decoded.username;
             
-            // If verified, link or create session
             if (!playerSessions[token]) {
                 playerSessions[token] = { username: validUser };
             }
-            // Update username in session just in case
             playerSessions[token].username = validUser;
-            
+
+            // --- UNIFIED RECONNECTION LOGIC ---
+            const session = playerSessions[token];
+            if (session && session.gameId) {
+                
+                // A. Cancel Forfeit Timer (If they returned quickly)
+                const timerKey = `${session.gameId}_${session.seat}`;
+                if (disconnectTimers[timerKey]) {
+                    console.log(`[Reconnect] Player ${session.seat} returned! Forfeit cancelled.`);
+                    clearTimeout(disconnectTimers[timerKey]);
+                    delete disconnectTimers[timerKey];
+                    if(games[session.gameId] && games[session.gameId].disconnectedPlayers) {
+                         delete games[session.gameId].disconnectedPlayers[session.seat];
+                    }
+                }
+
+                // B. Restore Socket to Game
+                if (games[session.gameId]) {
+                    socket.data.gameId = session.gameId;
+                    socket.data.seat = session.seat;
+                    await socket.join(session.gameId); 
+                    console.log(`[Reconnect] Player restored to Game ${session.gameId}`);
+                    // Immediate update so they see the board
+                    sendUpdate(session.gameId, socket.id, session.seat);
+                } else {
+                    console.log(`[Cleanup] Removing stale session for game ${session.gameId}`);
+                    delete playerSessions[token];
+                }
+            }
+
         } catch (err) {
             console.log(`[AUTH FAIL] Invalid Token for socket ${socket.id}`);
-            // Optional: socket.disconnect() if you want to be strict
         }
     }
+
     const session = playerSessions[token];
     if (session) {
         if (games[session.gameId]) {
@@ -276,7 +303,7 @@ io.on('connection', async (socket) => {
             
             disconnectTimers[timerKey] = setTimeout(() => {
                 console.log(`[Forfeit] Player ${seat} failed to reconnect. Ending Game ${gameId}.`);
-                handleForfeit(gameId, seat); // <--- We will write this function next
+                handleForfeit(gameId, seat);
             }, 60000); // 1 Minute
         }
     });
@@ -306,11 +333,6 @@ io.on('connection', async (socket) => {
             playerSessions[token].seat = targetSeat;
         }
 
-        // If I was host (Seat 0), I am still host logic-wise, 
-        // but for simplicity in this code, let's say Seat 0 is always "Admin".
-        // If Host moves, we might lose control. 
-        // FIX: Keep game.host = socket.id so seat doesn't matter for permissions.
-
         broadcastLobby(gameId);
     });
 
@@ -319,7 +341,7 @@ io.on('connection', async (socket) => {
         const game = games[gameId];
         
         if (!game || !game.isLobby) return;
-        if (game.host !== socket.id) return; // Only Host can start
+        if (game.host !== socket.id) return;
 
         // Check if all seats have names
         const filledSeats = game.names.filter(n => n !== null).length;
@@ -342,49 +364,6 @@ io.on('connection', async (socket) => {
             }
         });
     });
-
-    // Helper function at bottom of server.js
-    function broadcastLobby(gameId) {
-    const game = games[gameId];
-    if (!game) return;
-
-    // Find the current seat of the Host (by matching Socket ID)
-    let actualHostSeat = 0;
-    
-    const room = io.sockets.adapter.rooms.get(gameId);
-    if (room) {
-        for (const socketId of room) {
-            if (socketId === game.host) {
-                const hostSocket = io.sockets.sockets.get(socketId);
-                if (hostSocket && hostSocket.data.seat !== undefined) {
-                    actualHostSeat = hostSocket.data.seat;
-                }
-                break;
-            }
-        }
-    }
-
-    io.to(gameId).emit('lobby_update', {
-        names: game.names,
-        hostSeat: actualHostSeat,
-        maxPlayers: game.config.PLAYER_COUNT,
-        isHost: false
-    });
-}
-
-    // --- RECONNECTION LOGIC ---
-    if (session) {
-        if (games[session.gameId]) {
-            socket.data.gameId = session.gameId;
-            socket.data.seat = session.seat;
-            await socket.join(session.gameId); 
-            console.log(`[Reconnect] Player restored to Game ${session.gameId}`);
-            sendUpdate(session.gameId, socket.id, session.seat);
-        } else {
-            console.log(`[Cleanup] Removing stale session for game ${session.gameId}`);
-            delete playerSessions[token];
-        }
-    }
 
     // 1. HANDLE JOIN
     socket.on('request_join', async (data) => { 
@@ -978,6 +957,34 @@ io.on('connection', async (socket) => {
 
 function generateGameId() {
     return 'game_' + Math.random().toString(36).substr(2, 9);
+}
+
+function broadcastLobby(gameId) {
+    const game = games[gameId];
+    if (!game) return;
+
+    // Find the current seat of the Host (by matching Socket ID)
+    let actualHostSeat = 0;
+    
+    const room = io.sockets.adapter.rooms.get(gameId);
+    if (room) {
+        for (const socketId of room) {
+            if (socketId === game.host) {
+                const hostSocket = io.sockets.sockets.get(socketId);
+                if (hostSocket && hostSocket.data.seat !== undefined) {
+                    actualHostSeat = hostSocket.data.seat;
+                }
+                break;
+            }
+        }
+    }
+
+    io.to(gameId).emit('lobby_update', {
+        names: game.names,
+        hostSeat: actualHostSeat,
+        maxPlayers: game.config.PLAYER_COUNT,
+        isHost: false
+    });
 }
 
 async function startBotGame(humanSocket, difficulty, playerCount = 4, ruleset = 'standard') {
