@@ -1,6 +1,7 @@
 // client.js
 const isNative = !!window.Capacitor;
-const API_BASE = isNative ? 'https://canastamaster.club' : '';
+// DEV: Use local server IP for testing | PROD: Use 'https://canastamaster.club'
+const API_BASE = isNative ? 'http://192.168.68.51:3000' : '';
 import { state, saveSession, logout } from './state.js';
 import * as UI from './ui.js';
 import * as Anim from './animations.js';
@@ -666,8 +667,8 @@ function initSocket(token) {
     if (state.socket) return;
     const storedUser = localStorage.getItem("canasta_user");
 
-    // For native apps, connect to production server; for web, use relative path
-    const serverUrl = isNative ? 'https://canastamaster.club' : '';
+    // Use API_BASE for consistency (same server for API and WebSocket)
+    const serverUrl = API_BASE;
 
     state.socket = io(serverUrl, {
         transports: ['polling', 'websocket'],
