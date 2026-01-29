@@ -767,9 +767,9 @@ h2 {
     #enemy-melds {
         margin-top: 18px !important;   /* Clears the "BOT 1" timer text */
         padding-top: 20px !important;
-        height: 195px !important;      /* Fixed height for the "Green Box" */
-        max-height: 195px !important;
-        min-height: 195px !important;
+        height: 270px !important;      /* Fixed height for the "Green Box" */
+        max-height: 270px !important;
+        min-height: 270px !important;
         justify-content: center !important;
         display: flex !important;
         align-items: flex-start !important;
@@ -780,9 +780,9 @@ h2 {
     #my-melds {
         /* Symmetric height for user, keeping spacing we liked before */
         padding-top: 20px !important;
-        height: 195px !important;
-        max-height: 195px !important;
-        min-height: 195px !important;
+        height: 270px !important;
+        max-height: 270px !important;
+        min-height: 270px !important;
         margin-bottom: 0px !important; 
         justify-content: center !important;
         padding-left: 0 !important;

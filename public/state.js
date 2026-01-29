@@ -18,6 +18,7 @@ export const state = {
     gameStarted: false,
     isTransitioning: false,
     discardAnimationActive: false,
+    isSwiping: false,
     meldAnimationActive: false
 };
 
