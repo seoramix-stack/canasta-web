@@ -24,6 +24,12 @@ if (!JWT_SECRET) {
 }
 
 app.set('trust proxy', 1);
+
+// DEBUG LOGGING
+app.use((req, res, next) => {
+    console.log(`[INCOMING] ${req.method} ${req.url} from ${req.ip}`);
+    next();
+});
 app.post('/webhook', express.raw({ type: 'application/json' }), async (request, response) => {
     const sig = request.headers['stripe-signature'];
     const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -1623,3 +1629,4 @@ app.post('/api/create-portal-session', async (req, res) => {
         res.status(500).json({ error: "Could not create portal session." });
     }
 });
+

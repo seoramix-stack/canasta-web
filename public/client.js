@@ -260,7 +260,7 @@ window.doLogin = async () => {
             saveSession(data.token, data.username);
             initSocket(data.token);
         } else { alert(data.message); }
-    } catch (e) { alert("Server Error"); }
+    } catch (e) { alert("DEBUG: Login Failed! " + e.message); console.error(e); }
 };
 
 window.doRegister = async () => {
@@ -283,7 +283,7 @@ window.doRegister = async () => {
         } else {
             alert(data.message);
         }
-    } catch (e) { alert("Server error"); }
+    } catch (e) { alert("DEBUG: Register Failed! " + e.message); console.error(e); }
 };
 
 window.togglePass = (inputId, iconEl) => {
