@@ -24,12 +24,6 @@ if (!JWT_SECRET) {
 }
 
 app.set('trust proxy', 1);
-
-// DEBUG LOGGING
-app.use((req, res, next) => {
-    console.log(`[INCOMING] ${req.method} ${req.url} from ${req.ip}`);
-    next();
-});
 app.post('/webhook', express.raw({ type: 'application/json' }), async (request, response) => {
     const sig = request.headers['stripe-signature'];
     const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -96,11 +90,16 @@ app.use('/api/login', authLimiter);
 const disconnectTimers = {};
 const io = new Server(server, {
     cors: {
-        origin: true,
+        origin: [
+            'https://canastamaster.club',
+            'capacitor://localhost',
+            'http://localhost',
+            'http://localhost:8080'
+        ],
         methods: ["GET", "POST"],
         credentials: true
     },
-    transports: ['polling', 'websocket'] // Force support for both
+    transports: ['polling', 'websocket']
 });
 
 app.use(express.static('public'));
@@ -115,7 +114,7 @@ if (!MONGO_URI) {
     console.log("👉  [SYSTEM] Stats will not be saved.");
     DEV_MODE = true;
 } else {
-    if (MONGO_URI) console.log("DEBUG: Connection String starts with:", MONGO_URI.substring(0, 25) + "...");
+    // MongoDB connected (connection string hidden for security)
 
     mongoose.connect(MONGO_URI)
         .then(async () => {
