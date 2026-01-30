@@ -1340,7 +1340,7 @@ async function handleRoundEnd(gameId, io) {
 }
 
 
-const PORT = process.env.PORT || 8080;
+
 // --- MEMORY CLEANUP ---
 // Runs every 5 minutes to remove stuck games older than 30 minutes
 setInterval(() => {
@@ -1630,3 +1630,9 @@ app.post('/api/create-portal-session', async (req, res) => {
     }
 });
 
+// --- START SERVER ---
+const PORT = process.env.PORT || 8080;
+server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    console.log(`Serving static files from: ${path.join(__dirname, 'public')}`);
+});
