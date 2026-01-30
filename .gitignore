@@ -1,3 +1,19 @@
 node_modules
 .env
 .DS_Store
+
+# Android / Gradle
+android/build/
+android/app/build/
+android/.gradle/
+android/capacitor-cordova-android-plugins/build/
+android/.idea/
+*.iml
+
+# Gradle Wrapper cache (auto-downloaded)
+.gradle/
+HHH/
+**/wrapper/dists/
+
+# Capacitor build cache
+node_modules/@capacitor/android/capacitor/build/

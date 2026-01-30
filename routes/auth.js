@@ -5,8 +5,8 @@ const jwt = require('jsonwebtoken');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
-     console.error("FATAL ERROR: JWT_SECRET is not defined.");
-     process.exit(1);
+    console.error("FATAL ERROR: JWT_SECRET is not defined.");
+    process.exit(1);
 }
 
 module.exports = (User, DEV_MODE) => {
@@ -14,8 +14,9 @@ module.exports = (User, DEV_MODE) => {
     // REGISTER ROUTE
     router.post('/register', async (req, res) => {
         const { username, password } = req.body;
-        
+
         if (DEV_MODE) {
+            console.log('[AUTH DEBUG] DEV_MODE Register for:', username);
             const token = jwt.sign({ username, id: 'dev_id' }, JWT_SECRET);
             return res.json({ success: true, token: token, username: username });
         }
@@ -30,16 +31,16 @@ module.exports = (User, DEV_MODE) => {
             const hashedPassword = await bcrypt.hash(password, salt);
 
             // 1. Create User
-            const newUser = new User({ 
-                username, 
-                password: hashedPassword 
+            const newUser = new User({
+                username,
+                password: hashedPassword
             });
             await newUser.save();
 
             // 2. Generate Token
             const token = jwt.sign(
-                { id: newUser._id, username: newUser.username }, 
-                JWT_SECRET, 
+                { id: newUser._id, username: newUser.username },
+                JWT_SECRET,
                 { expiresIn: '7d' }
             );
 
@@ -61,6 +62,7 @@ module.exports = (User, DEV_MODE) => {
         const { username, password } = req.body;
 
         if (DEV_MODE) {
+            console.log('[AUTH DEBUG] DEV_MODE Login for:', username);
             const token = jwt.sign({ username, id: 'dev_id' }, JWT_SECRET);
             return res.json({ success: true, token: token, username: username });
         }
@@ -73,8 +75,8 @@ module.exports = (User, DEV_MODE) => {
             if (!isMatch) return res.json({ success: false, message: "Invalid credentials" });
 
             const token = jwt.sign(
-                { id: user._id, username: user.username }, 
-                JWT_SECRET, 
+                { id: user._id, username: user.username },
+                JWT_SECRET,
                 { expiresIn: '7d' }
             );
 

@@ -1340,7 +1340,7 @@ async function handleRoundEnd(gameId, io) {
 }
 
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 // --- MEMORY CLEANUP ---
 // Runs every 5 minutes to remove stuck games older than 30 minutes
 setInterval(() => {

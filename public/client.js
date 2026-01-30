@@ -1,7 +1,7 @@
 // client.js
 const isNative = !!window.Capacitor;
-// DEV: Use local server IP for testing | PROD: Use 'https://canastamaster.club'
-const API_BASE = isNative ? 'http://192.168.68.51:3000' : '';
+// DEV: Use localhost:8080 (via ADB reverse tcp:8080 tcp:8080)
+const API_BASE = isNative ? 'http://localhost:8080' : '';
 import { state, saveSession, logout } from './state.js';
 import * as UI from './ui.js';
 import * as Anim from './animations.js';
