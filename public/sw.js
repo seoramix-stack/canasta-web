@@ -1,4 +1,4 @@
-const CACHE_NAME = 'canasta-master-v1';
+const CACHE_NAME = 'canasta-master-v2';
 const ASSETS = [
   '/',
   '/index.html',
@@ -7,6 +7,8 @@ const ASSETS = [
   '/ui.js',
   '/animations.js',
   '/state.js',
+  '/utils.js',
+  '/manifest.json',
   '/Canasta logo.png',
   '/cards/BackRed.png',
   '/cards/BackBlue.png'
@@ -22,7 +24,7 @@ self.addEventListener('install', (e) => {
 });
 
 self.addEventListener('activate', (e) => {
-  e.waitUntil(clients.claim()); 
+  e.waitUntil(clients.claim());
 });
 
 self.addEventListener('fetch', (e) => {
@@ -30,7 +32,7 @@ self.addEventListener('fetch', (e) => {
 
   // IGNORE SOCKET.IO 
   if (url.pathname.includes('socket.io') || url.pathname.includes('/api/')) {
-    return; 
+    return;
   }
 
   // 2. CACHE STRATEGY 
