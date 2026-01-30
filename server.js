@@ -103,7 +103,12 @@ const io = new Server(server, {
 });
 
 const path = require('path');
+
+// 1. Serve 'public' using __dirname (Standard)
 app.use(express.static(path.join(__dirname, 'public')));
+
+// 2. Fallback: Serve 'public' from Current Working Directory (Fix for some hosting envs)
+app.use(express.static(path.join(process.cwd(), 'public')));
 
 // --- 2. MONGODB & DEV MODE CONFIGURATION ---
 const MONGO_URI = process.env.MONGO_URI;
