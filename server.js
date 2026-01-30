@@ -1375,10 +1375,7 @@ setInterval(() => {
 
 // Update timestamp on every move
 // (You need to add `games[gameId].lastActive = Date.now()` inside broadcastAll or sendUpdate)
-server.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on port ${PORT}`);
-    if (DEV_MODE) console.log("⚠️  DEV MODE ACTIVE: DB Disabled. Use ANY login.");
-});
+
 async function handleForfeit(gameId, loserSeat) {
     const game = games[gameId];
     if (!game) return;
