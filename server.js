@@ -102,7 +102,8 @@ const io = new Server(server, {
     transports: ['polling', 'websocket']
 });
 
-app.use(express.static('public'));
+const path = require('path');
+app.use(express.static(path.join(__dirname, 'public')));
 
 // --- 2. MONGODB & DEV MODE CONFIGURATION ---
 const MONGO_URI = process.env.MONGO_URI;
