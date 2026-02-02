@@ -879,11 +879,8 @@
                 MENU</button>
         </div>
     </div>
-    <!-- Socket.IO CDN Fallback -->
-    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"
-        integrity="sha384-Gr6Lu2Ajx28mzwyVR8CFkULdCU7kMlZ9UthydroVj82CJ8085B09pYLP+I2NjNCa"
-        crossorigin="anonymous"></script>
-    <script>window.io || document.write('<script src="/socket.io/socket.io.js"><\/script>')</script>
+    <!-- Socket.IO Local (Vendored) -->
+    <script src="socket.io.js"></script>
     <script type="module" src="client.js"></script>
 </body>
 

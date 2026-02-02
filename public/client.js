@@ -1,10 +1,12 @@
 // client.js
-const isNative = !!window.Capacitor;
-// DEV/PROD: Explicitly pointing to production server as requested
-const API_BASE = isNative ? 'https://canastamaster.club' : '';
+// 1. Imports (Must be at the top for Modules)
 import { state, saveSession, logout } from './state.js';
 import * as UI from './ui.js';
 import * as Anim from './animations.js';
+
+const isNative = !!window.Capacitor;
+// DEV/PROD: Explicitly pointing to production server as requested
+const API_BASE = isNative ? 'https://canastamaster.club' : '';
 
 window.switchSeat = (targetSeat) => {
     if (state.socket) state.socket.emit('act_switch_seat', targetSeat);
