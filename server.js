@@ -22,6 +22,12 @@ if (!JWT_SECRET) {
      process.exit(1);
 }
 
+const cors = require('cors');
+app.use(cors({
+    origin: true, // Allows your mobile app to connect
+    credentials: true
+}));
+
 app.set('trust proxy', 1);
 app.post('/webhook', express.raw({type: 'application/json'}), async (request, response) => {
   const sig = request.headers['stripe-signature'];

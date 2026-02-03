@@ -68,7 +68,7 @@ async function fetchLeaderboardPreview() {
     const container = document.getElementById('landing-leaderboard-list');
     if (!container) return;
     try {
-        const res = await fetch('/api/leaderboard');
+        const res = await fetch('https://canastamaster.club/api/leaderboard');
         const data = await res.json();
         if (data.success) {
             container.innerHTML = data.leaderboard.slice(0, 5).map((p, i) => `
@@ -92,7 +92,7 @@ window.startStripeCheckout = async () => {
     }
 
     try {
-        const res = await fetch('/api/create-checkout-session', {
+        const res = await fetch('https://canastamaster.club/api/create-checkout-session', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -248,7 +248,7 @@ window.doLogin = async () => {
     const user = document.getElementById('login-user').value;
     const pass = document.getElementById('login-pass').value;
     try {
-        const res = await fetch('/api/login', {
+        const res = await fetch('https://canastamaster.club/api/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: user, password: pass })
@@ -267,7 +267,7 @@ window.doRegister = async () => {
     if(!user || !pass) { alert("Please fill all fields"); return; }
 
     try {
-        const res = await fetch('/api/register', {
+        const res = await fetch('https://canastamaster.club/api/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: user, password: pass })
@@ -665,9 +665,9 @@ function initSocket(token) {
     if (state.socket) return; 
     const storedUser = localStorage.getItem("canasta_user"); 
     
-    state.socket = io({
-        transports: ['polling', 'websocket'],
-        auth: { token: token, username: storedUser }
+    state.socket = io("https://canastamaster.club", {
+    transports: ['polling', 'websocket'],
+    auth: { token: token, username: storedUser }
     });
     state.socket.on('lobby_update', (data) => {
         // This triggers the UI update whenever someone joins or switches seats
@@ -1196,7 +1196,7 @@ window.openLeaderboard = async () => {
 
     // 3. Fetch Data
     try {
-        const res = await fetch('/api/leaderboard');
+        const res = await fetch('https://canastamaster.club/api/login');
         const data = await res.json();
 
         if (data.success) {
@@ -1260,7 +1260,7 @@ window.manageSubscription = async () => {
     btn.disabled = true;
 
     try {
-        const res = await fetch('/api/create-portal-session', {
+        const res = await fetch('https://canastamaster.club/api/create-portal-session', {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
@@ -1297,7 +1297,7 @@ window.openProfile = async () => {
     if (!token) return;
 
     try {
-        const res = await fetch('/api/profile', {
+        const res = await fetch('https://canastamaster.club/api/profile', {
             method: 'GET',
             headers: { 'Authorization': token }
         });
