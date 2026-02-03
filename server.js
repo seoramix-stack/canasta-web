@@ -92,11 +92,11 @@ app.use('/api/login', authLimiter);
 const disconnectTimers = {};
 const io = new Server(server, {
     cors: {
-        origin: true,
+        origin: ["https://localhost", "http://localhost", "capacitor://localhost"],
         methods: ["GET", "POST"],
         credentials: true
     },
-    transports: ['polling', 'websocket'] // Force support for both
+    transports: ['polling', 'websocket']
 });
 
 app.use(express.static('public')); 

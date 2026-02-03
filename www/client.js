@@ -666,9 +666,9 @@ function initSocket(token) {
     const storedUser = localStorage.getItem("canasta_user"); 
     
     state.socket = io("https://canastamaster.club", {
-    transports: ['polling', 'websocket'],
+    transports: ['websocket'],
     auth: { token: token, username: storedUser }
-    });
+});
     state.socket.on('lobby_update', (data) => {
         // This triggers the UI update whenever someone joins or switches seats
         UI.renderLobbySeats(data, state.mySeat);
