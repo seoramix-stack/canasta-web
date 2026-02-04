@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">Canasta Master Club</string>
     <string name="title_activity_main">Canasta Master Club</string>
-    <string name="package_name">club.canastamaster.app</string>
-    <string name="custom_url_scheme">club.canastamaster.app</string>
+    <string name="package_name">com.canastamaster.app</string>
+    <string name="custom_url_scheme">com.canastamaster.app</string>
 </resources>

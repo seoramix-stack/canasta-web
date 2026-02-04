@@ -23,6 +23,12 @@ if (!JWT_SECRET) {
     process.exit(1);
 }
 
+const cors = require('cors');
+app.use(cors({
+    origin: true, // Allows your mobile app to connect
+    credentials: true
+}));
+
 app.set('trust proxy', 1);
 app.post('/webhook', express.raw({ type: 'application/json' }), async (request, response) => {
     const sig = request.headers['stripe-signature'];
@@ -109,6 +115,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // 2. Fallback: Serve 'public' from Current Working Directory (Fix for some hosting envs)
 app.use(express.static(path.join(process.cwd(), 'public')));
+    transports: ['polling', 'websocket']
+});
+
+app.use(express.static('public')); 
 
 // --- 2. MONGODB & DEV MODE CONFIGURATION ---
 const MONGO_URI = process.env.MONGO_URI;
