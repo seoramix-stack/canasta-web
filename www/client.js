@@ -250,11 +250,7 @@ window.doLogin = async () => {
     const user = document.getElementById('login-user').value;
     const pass = document.getElementById('login-pass').value;
     try {
-<<<<<<< HEAD:public/client.js
-        const res = await fetch(`${API_BASE}/api/login`, {
-=======
         const res = await fetch('https://canastamaster.club/api/login', {
->>>>>>> origin/before-android-wrapper:www/client.js
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: user, password: pass })
@@ -273,11 +269,7 @@ window.doRegister = async () => {
     if (!user || !pass) { alert("Please fill all fields"); return; }
 
     try {
-<<<<<<< HEAD:public/client.js
-        const res = await fetch(`${API_BASE}/api/register`, {
-=======
         const res = await fetch('https://canastamaster.club/api/register', {
->>>>>>> origin/before-android-wrapper:www/client.js
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: user, password: pass })
