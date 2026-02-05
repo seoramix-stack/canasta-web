@@ -6,6 +6,8 @@
   "scripts": {
     "build": "echo 'No build step required',",
     "start": "node server.js",
+    "dev": "node dev-server.js",
+    "dev:full": "DEV_MODE=true node server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -14,8 +16,10 @@
   "type": "commonjs",
   "dependencies": {
     "@capacitor/android": "^8.0.2",
+    "@capacitor/app": "^8.0.0",
     "@capacitor/cli": "^8.0.2",
     "@capacitor/core": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.2.3",

@@ -16,6 +16,14 @@ const config: CapacitorConfig = {
     android: {
         // Allow mixed content for development if needed
         allowMixedContent: false
+    },
+    plugins: {
+        SystemBars: {
+            // Hide system navigation bar for immersive experience
+            hidden: true,
+            // Use fade animation when showing/hiding
+            animation: 'FADE'
+        }
     }
 };
 

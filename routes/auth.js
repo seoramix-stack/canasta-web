@@ -24,7 +24,7 @@ module.exports = (User, DEV_MODE) => {
         if (!username || !password) return res.json({ success: false, message: "Missing fields" });
 
         try {
-            const existing = await User.findOne({ username });
+            const existing = await User.findOne({ username: username.toLowerCase() });
             if (existing) return res.json({ success: false, message: "Username taken" });
 
             const salt = await bcrypt.genSalt(10);
@@ -32,7 +32,7 @@ module.exports = (User, DEV_MODE) => {
 
             // 1. Create User
             const newUser = new User({
-                username,
+                username: username.toLowerCase(),
                 password: hashedPassword
             });
             await newUser.save();
@@ -68,7 +68,7 @@ module.exports = (User, DEV_MODE) => {
         }
 
         try {
-            const user = await User.findOne({ username });
+            const user = await User.findOne({ username: username.toLowerCase() });
             if (!user) return res.json({ success: false, message: "User not found" });
 
             const isMatch = await bcrypt.compare(password, user.password);

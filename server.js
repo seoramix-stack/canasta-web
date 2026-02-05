@@ -128,9 +128,19 @@ if (!MONGO_URI) {
     mongoose.connect(MONGO_URI)
         .then(async () => {
             console.log("[DB] Connected to MongoDB");
-            if (User) {
-                await User.updateMany({}, { isOnline: false });
-                console.log("[SYSTEM] Reset all user online statuses.");
+            try {
+                if (User) {
+                    console.log("[DB] Starting to reset online statuses...");
+                    const result = await Promise.race([
+                        User.updateMany({}, { isOnline: false }),
+                        new Promise((_, reject) => 
+                            setTimeout(() => reject(new Error('Timeout')), 5000)
+                        )
+                    ]);
+                    console.log("[SYSTEM] Reset all user online statuses.");
+                }
+            } catch (err) {
+                console.error("[DB] Error resetting online statuses:", err.message);
             }
         })
         .catch(err => console.error("[DB] Connection Error:", err));

@@ -699,6 +699,7 @@ h2 {
     flex-direction: column;
     justify-content: center;
     padding-left: 10px;
+    padding-top: max(10px, env(safe-area-inset-top));
     margin-right: 5px;
     color: #f1c40f;
     font-weight: bold;
@@ -1781,6 +1782,7 @@ h2 {
 #enemy-melds {
     position: relative;
     z-index: 1;
+    padding-top: env(safe-area-inset-top);
     /* Ensures cards stay on top */
 }
 

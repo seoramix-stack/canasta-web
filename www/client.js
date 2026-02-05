@@ -7,6 +7,32 @@ import { state, saveSession, logout } from './state.js';
 import * as UI from './ui.js';
 import * as Anim from './animations.js';
 
+// Enable immersive/fullscreen mode on native app
+if (isNative) {
+    // Import and use StatusBar to hide system bars
+    Promise.all([
+        import('@capacitor/status-bar').catch(() => null),
+        import('@capacitor/app').catch(() => null)
+    ]).then(([StatusBarModule, AppModule]) => {
+        try {
+            // Hide status bar
+            if (StatusBarModule?.StatusBar) {
+                StatusBarModule.StatusBar.hide().catch(err => 
+                    console.log('Could not hide status bar:', err)
+                );
+            }
+            // Hide app controls/navigation bar
+            if (AppModule?.App) {
+                AppModule.App.hide().catch(err => 
+                    console.log('Could not hide app controls:', err)
+                );
+            }
+        } catch (err) {
+            console.log('Immersive mode setup error:', err);
+        }
+    }).catch(err => console.log('Plugin import error:', err));
+}
+
 window.switchSeat = (targetSeat) => {
     if (state.socket) state.socket.emit('act_switch_seat', targetSeat);
 };

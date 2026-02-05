@@ -1,0 +1,50 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Dev Server (Recommended)",
+      "program": "${workspaceFolder}/dev-server.js",
+      "restart": true,
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Full Server (with DB)",
+      "program": "${workspaceFolder}/server.js",
+      "restart": true,
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "env": {
+        "DEV_MODE": "true"
+      }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Production Server",
+      "program": "${workspaceFolder}/server.js",
+      "restart": true,
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Test Setup Validation",
+      "program": "${workspaceFolder}/test-setup.js",
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Dev + Browser",
+      "configurations": ["Dev Server (Recommended)"],
+      "preLaunchTask": "open-dev-browser"
+    }
+  ]
+}
