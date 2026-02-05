@@ -1,0 +1,6 @@
+[dotenv@17.2.3] injecting env (2) from .env -- tip: ⚙️  write to custom object with { processEnv: myObject }
+⚠️  [SYSTEM] MONGO_URI missing. Starting in DEV MODE.
+👉  [SYSTEM] Login bypassed: Use ANY username/password.
+👉  [SYSTEM] Stats will not be saved.
+Server running on port 8080
+Serving static files from: /home/mint/projects/canasta-web/www

@@ -1,7 +1,8 @@
 // client.js
 const isNative = !!window.Capacitor;
 // DEV/PROD: Explicitly pointing to production server as requested
-const API_BASE = isNative ? 'https://canastamaster.club' : '';
+// const API_BASE = isNative ? 'https://canastamaster.club' : '';
+const API_BASE = 'http://192.168.68.51:8080';
 import { state, saveSession, logout } from './state.js';
 import * as UI from './ui.js';
 import * as Anim from './animations.js';
@@ -31,17 +32,48 @@ document.addEventListener('mousedown', resetActivity);
 document.addEventListener('touchstart', resetActivity);
 document.addEventListener('keydown', resetActivity);
 document.addEventListener('click', resetActivity);
-// --- 1. INITIALIZATION ---
-const currentScreen = document.querySelector('.active-screen')?.id;
+async function initializeSession() {
+    const token = state.playerToken;
+    if (!token) return;
 
-if (state.playerToken && state.playerUsername) {
-    initSocket(state.playerToken);
-    UI.navTo('screen-home');
-} else {
-    if (currentScreen !== 'screen-how-to' && currentScreen !== 'screen-login') {
-        UI.navTo('screen-landing');
+    initSocket(token); // Initialize socket connection
+
+    try {
+        const res = await fetch(`${API_BASE}/api/profile`, {
+            method: 'GET',
+            headers: { 'Authorization': token }
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            state.isPremium = data.isPremium;
+
+            // Update UI elements that might be visible on the home screen
+            const badge = document.getElementById('premium-badge');
+            if (badge) {
+                badge.style.display = data.isPremium ? 'block' : 'none';
+            }
+             const nameEl = document.querySelector('.p-name');
+            if (nameEl) nameEl.innerText = data.username;
+        }
+    } catch (e) {
+        console.error("Failed to load profile on startup", e);
     }
 }
+
+// --- 1. INITIALIZATION ---
+(async () => {
+    const currentScreen = document.querySelector('.active-screen')?.id;
+
+    if (state.playerToken && state.playerUsername) {
+        await initializeSession();
+        UI.navTo('screen-home');
+    } else {
+        if (currentScreen !== 'screen-how-to' && currentScreen !== 'screen-login') {
+            UI.navTo('screen-landing');
+        }
+    }
+})();
 document.addEventListener('DOMContentLoaded', () => {
     // 1. Check URL for Stripe Flags
     const urlParams = new URLSearchParams(window.location.search);
@@ -70,7 +102,7 @@ async function fetchLeaderboardPreview() {
     const container = document.getElementById('landing-leaderboard-list');
     if (!container) return;
     try {
-        const res = await fetch('https://canastamaster.club/api/leaderboard');
+        const res = await fetch(`${API_BASE}/api/leaderboard`);
         const data = await res.json();
         if (data.success) {
             container.innerHTML = data.leaderboard.slice(0, 5).map((p, i) => `
@@ -94,7 +126,7 @@ window.startStripeCheckout = async () => {
     }
 
     try {
-        const res = await fetch('https://canastamaster.club/api/create-checkout-session', {
+        const res = await fetch(`${API_BASE}/api/create-checkout-session`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -250,7 +282,7 @@ window.doLogin = async () => {
     const user = document.getElementById('login-user').value;
     const pass = document.getElementById('login-pass').value;
     try {
-        const res = await fetch('https://canastamaster.club/api/login', {
+        const res = await fetch(`${API_BASE}/api/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: user, password: pass })
@@ -269,7 +301,7 @@ window.doRegister = async () => {
     if (!user || !pass) { alert("Please fill all fields"); return; }
 
     try {
-        const res = await fetch('https://canastamaster.club/api/register', {
+        const res = await fetch(`${API_BASE}/api/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: user, password: pass })
@@ -664,26 +696,13 @@ function getOpeningReq(score) {
 
 // --- 3. SOCKET SETUP ---
 function initSocket(token) {
-<<<<<<< HEAD:public/client.js
-    if (state.socket) return;
-    const storedUser = localStorage.getItem("canasta_user");
-
-    // Use API_BASE for consistency (same server for API and WebSocket)
-    const serverUrl = API_BASE;
-
-    state.socket = io(serverUrl, {
-        transports: ['polling', 'websocket'],
-        auth: { token: token, username: storedUser }
-    });
-=======
     if (state.socket) return; 
     const storedUser = localStorage.getItem("canasta_user"); 
     
-    state.socket = io("https://canastamaster.club", {
+    state.socket = io(API_BASE, {
     transports: ['websocket'],
     auth: { token: token, username: storedUser }
 });
->>>>>>> origin/before-android-wrapper:www/client.js
     state.socket.on('lobby_update', (data) => {
         // This triggers the UI update whenever someone joins or switches seats
         UI.renderLobbySeats(data, state.mySeat);
@@ -1034,7 +1053,6 @@ function initSocket(token) {
     const pName = storedUser || "Player";
     const nameEl = document.querySelector('.p-name');
     if (nameEl) nameEl.innerText = pName;
-    UI.navTo('screen-home');
 }
 
 // --- TIMER LOGIC ---
@@ -1211,7 +1229,7 @@ window.openLeaderboard = async () => {
 
     // 3. Fetch Data
     try {
-        const res = await fetch('https://canastamaster.club/api/login');
+        const res = await fetch(`${API_BASE}/api/leaderboard`);
         const data = await res.json();
 
         if (data.success) {
@@ -1275,7 +1293,7 @@ window.manageSubscription = async () => {
     btn.disabled = true;
 
     try {
-        const res = await fetch('https://canastamaster.club/api/create-portal-session', {
+        const res = await fetch(`${API_BASE}/api/create-portal-session`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1312,7 +1330,7 @@ window.openProfile = async () => {
     if (!token) return;
 
     try {
-        const res = await fetch('https://canastamaster.club/api/profile', {
+        const res = await fetch(`${API_BASE}/api/profile`, {
             method: 'GET',
             headers: { 'Authorization': token }
         });

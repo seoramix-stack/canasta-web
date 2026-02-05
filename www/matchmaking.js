@@ -1,6 +1,6 @@
 // services/matchmaking.js
-const { CanastaGame } = require('../game');
-const { CanastaBot } = require('../bot');
+const { CanastaGame } = require('./game.js');
+const { CanastaBot } = require('./bot.js');
 
 const BOT_NAMES = [
     "Alex", "Sara", "Mike", "Jessica", "David", "Emily",

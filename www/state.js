@@ -3,6 +3,7 @@ export const state = {
     socket: null,
     playerToken: localStorage.getItem("canasta_token"),
     playerUsername: localStorage.getItem("canasta_user"),
+    isPremium: false,
     currentBotDiff: 'medium',
     currentPlayerCount: 4,
     currentRuleset: 'standard',

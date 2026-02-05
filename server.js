@@ -9,9 +9,9 @@ const jwt = require('jsonwebtoken');
 const { Server } = require('socket.io');
 
 // Game Imports
-const { CanastaGame } = require('./game');
-const { CanastaBot } = require('./bot');
-const { calculateEloChange } = require('./elo');
+const { CanastaGame } = require('./www/game.js');
+const { CanastaBot } = require('./www/bot.js');
+const { calculateEloChange } = require('./www/elo.js');
 
 const app = express();
 const server = http.createServer(app);
@@ -22,12 +22,6 @@ if (!JWT_SECRET) {
     console.error("FATAL ERROR: JWT_SECRET is not defined.");
     process.exit(1);
 }
-
-const cors = require('cors');
-app.use(cors({
-    origin: true, // Allows your mobile app to connect
-    credentials: true
-}));
 
 app.set('trust proxy', 1);
 app.post('/webhook', express.raw({ type: 'application/json' }), async (request, response) => {
@@ -78,7 +72,10 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (request, 
 });
 
 // Enable CORS for API routes (needed for Capacitor Android app)
-app.use(cors());
+app.use(cors({
+    origin: true, // Allows your mobile app to connect
+    credentials: true
+}));
 
 app.use(express.json());
 
@@ -111,14 +108,10 @@ const io = new Server(server, {
 const path = require('path');
 
 // 1. Serve 'public' using __dirname (Standard)
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'www')));
 
 // 2. Fallback: Serve 'public' from Current Working Directory (Fix for some hosting envs)
-app.use(express.static(path.join(process.cwd(), 'public')));
-    transports: ['polling', 'websocket']
-});
-
-app.use(express.static('public')); 
+app.use(express.static(path.join(process.cwd(), 'www')));
 
 // --- 2. MONGODB & DEV MODE CONFIGURATION ---
 const MONGO_URI = process.env.MONGO_URI;
@@ -159,7 +152,7 @@ app.use('/api', authRoutes(User, DEV_MODE));
 const games = {};
 const gameBots = {};
 const playerSessions = {};
-const matchmakingService = require('./services/matchmaking')(
+const matchmakingService = require('./www/matchmaking.js')(
     games,
     gameBots,
     playerSessions,
@@ -1646,5 +1639,5 @@ app.post('/api/create-portal-session', async (req, res) => {
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
-    console.log(`Serving static files from: ${path.join(__dirname, 'public')}`);
+    console.log(`Serving static files from: ${path.join(__dirname, 'www')}`);
 });

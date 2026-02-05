@@ -1,5 +1,9 @@
 {
   "appId": "com.canastamaster.app",
   "appName": "Canasta Master Club",
-  "webDir": "www"
+  "webDir": "www",
+  "server": {
+    "url": "http://192.168.68.51:3000",
+    "cleartext": true
+  }
 }
