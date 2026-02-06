@@ -366,6 +366,7 @@ class CanastaGame {
 
         // Canasta Requirement to Go Out
         if (hand.length === 1) {
+            let canastaCount = Object.values(teamMelds).filter(p => p.length >= 7).length;
             if (canastaCount < this.config.MIN_CANASTAS_OUT) {
                 return { success: false, message: `Need ${this.config.MIN_CANASTAS_OUT} Canastas to go out.` };
             }

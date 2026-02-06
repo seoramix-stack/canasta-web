@@ -935,7 +935,7 @@ h2 {
         grid-area: top-info !important;
         background: transparent !important;
         border: none !important;
-        transform: translateY(60px);
+        transform: translateY(55px);
         z-index: 20;
     }
 
