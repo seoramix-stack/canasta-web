@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
     appName: 'Canasta Master Club',
     webDir: 'www',
     server: {
-        url: 'https://your-app-name.onrender.com',
+        url: 'https://canastamaster.club',
         cleartext: false
     },
     android: {
