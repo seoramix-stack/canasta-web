@@ -123,11 +123,12 @@ if (!MONGO_URI) {
     console.log("👉  [SYSTEM] Stats will not be saved.");
     DEV_MODE = true;
 } else {
-    // MongoDB connected (connection string hidden for security)
-
-    mongoose.connect(MONGO_URI)
+    console.log("[DB] Attempting to connect to MongoDB...");
+    mongoose.connect(MONGO_URI, {
+        serverSelectionTimeoutMS: 5000 // Fail fast if connection is blocked
+    })
         .then(async () => {
-            console.log("[DB] Connected to MongoDB");
+            console.log(`[DB] Connected to MongoDB: ${mongoose.connection.name}`);
             try {
                 if (User) {
                     console.log("[DB] Starting to reset online statuses...");
@@ -156,6 +157,17 @@ if (!DEV_MODE) {
 const authRoutes = require('./routes/auth');
 // Mount the routes at '/api', passing in User and the DEV_MODE flag
 app.use('/api', authRoutes(User, DEV_MODE));
+
+// Health check route to verify DB connection status live
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+        readyState: mongoose.connection.readyState,
+        devMode: DEV_MODE,
+        dbName: mongoose.connection.name || 'none'
+    });
+});
 
 // --- GLOBAL STATE ---
 
