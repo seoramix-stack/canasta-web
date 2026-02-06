@@ -1,8 +1,7 @@
 // client.js
 const isNative = !!window.Capacitor;
 // DEV/PROD: Explicitly pointing to production server as requested
-// const API_BASE = isNative ? 'https://canastamaster.club' : '';
-const API_BASE = 'http://192.168.68.51:8080';
+const API_BASE = 'https://canastamaster.club';
 import { state, saveSession, logout } from './state.js';
 import * as UI from './ui.js';
 import * as Anim from './animations.js';
