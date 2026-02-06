@@ -933,8 +933,10 @@ h2 {
 
     #hud-partner {
         grid-area: top-info !important;
-        background: rgba(0, 0, 0, 0.2) !important;
-        border-radius: 0 0 10px 10px;
+        background: transparent !important;
+        border: none !important;
+        transform: translateY(70px);
+        z-index: 20;
     }
 
     #timers-top {
@@ -943,8 +945,12 @@ h2 {
 
     /* Reclaim space from timer row */
     #game-grid {
-        grid-template-rows: 55px 0px 1fr 30px 110px !important;
+        grid-template-rows: 75px 0px 1fr 30px 110px !important;
         grid-template-columns: 5px 1fr 5px !important;
+    }
+
+    #partner-zone {
+        overflow: visible !important;
     }
 
     #enemy-melds {
