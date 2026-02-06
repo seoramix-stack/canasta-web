@@ -81,6 +81,8 @@ module.exports = (User, DEV_MODE) => {
                 return res.json({ success: false, message: "User not found" });
             }
 
+            console.log(`[AUTH] Comparing password for ${username}. Hash in DB starts with: ${user.password.substring(0, 10)}...`);
+            
             const isMatch = await bcrypt.compare(password, user.password);
             if (!isMatch) {
                 console.log(`[AUTH] Password mismatch for: ${username}`);
@@ -96,7 +98,10 @@ module.exports = (User, DEV_MODE) => {
             // 4. UPDATE USER STATE
             user.token = token;
             user.isOnline = true;
-            await user.save();
+            
+            // Use findOneAndUpdate or updateOne to bypass "pre-save" hooks 
+            // that might be re-hashing your password accidentally.
+            await User.updateOne({ _id: user._id }, { $set: { token: token, isOnline: true } });
 
             console.log(`[AUTH] Login: ${username}`);
             res.json({ success: true, token: token, username: username });
