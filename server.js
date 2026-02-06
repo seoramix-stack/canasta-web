@@ -149,7 +149,7 @@ if (!MONGO_URI) {
 // --- 3. DATABASE MODELS ---
 let User;
 if (!DEV_MODE) {
-    User = require('./models/user');
+    User = require('./www/user');
 }
 
 // --- 4. ROUTE MOUNTING ---
