@@ -6,5 +6,11 @@
     "url": "https://canastamaster.club",
     "cleartext": false,
     "allowNavigation": ["canastamaster.club"]
+  },
+  "plugins": {
+    "SystemBars": {
+      "hidden": true,
+      "animation": "FADE"
+    }
   }
 }
