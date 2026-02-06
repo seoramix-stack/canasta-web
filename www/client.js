@@ -315,7 +315,8 @@ window.doLogin = async () => {
         const data = await res.json();
         if (data.success) {
             saveSession(data.token, data.username);
-            initSocket(data.token);
+            await initializeSession();
+            UI.navTo('screen-home');
         } else { alert(data.message); }
     } catch (e) { alert("DEBUG: Login Failed! " + e.message); console.error(e); }
 };
@@ -336,7 +337,8 @@ window.doRegister = async () => {
         if (data.success) {
             // Auto-login after register
             saveSession(data.token, data.username);
-            initSocket(data.token);
+            await initializeSession();
+            UI.navTo('screen-home');
         } else {
             alert(data.message);
         }
