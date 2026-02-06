@@ -161,7 +161,7 @@ if (!MONGO_URI) {
 // --- 3. DATABASE MODELS ---
 let User;
 if (!DEV_MODE) {
-    User = require('./www/user');
+    User = require('./models/user');
 }
 
 // --- 4. ROUTE MOUNTING ---
