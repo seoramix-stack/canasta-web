@@ -13,7 +13,7 @@ module.exports = (User, DEV_MODE) => {
 
     // REGISTER ROUTE
     router.post('/register', async (req, res) => {
-        const { username, password } = req.body;
+        let { username, password } = req.body;
 
         if (DEV_MODE) {
             console.log('[AUTH DEBUG] DEV_MODE Register for:', username);
@@ -22,29 +22,29 @@ module.exports = (User, DEV_MODE) => {
         }
 
         if (!username || !password) return res.json({ success: false, message: "Missing fields" });
+        
+        username = username.toLowerCase().trim();
+        password = password.trim();
 
         try {
-            const existing = await User.findOne({ username: username.toLowerCase() });
+            const existing = await User.findOne({ username });
             if (existing) return res.json({ success: false, message: "Username taken" });
 
             const salt = await bcrypt.genSalt(10);
             const hashedPassword = await bcrypt.hash(password, salt);
 
-            // 1. Create User
+            // Create User and set token BEFORE saving to avoid double-hashing in hooks
             const newUser = new User({
-                username: username.toLowerCase(),
+                username,
                 password: hashedPassword
             });
-            await newUser.save();
 
-            // 2. Generate Token
             const token = jwt.sign(
                 { id: newUser._id, username: newUser.username },
                 JWT_SECRET,
                 { expiresIn: '7d' }
             );
 
-            // 3. SAVE TOKEN TO DB
             newUser.token = token;
             await newUser.save();
 
@@ -59,7 +59,7 @@ module.exports = (User, DEV_MODE) => {
 
     // LOGIN ROUTE
     router.post('/login', async (req, res) => {
-        const { username, password } = req.body;
+        let { username, password } = req.body;
 
         if (DEV_MODE) {
             console.log('[AUTH DEBUG] DEV_MODE Login for:', username);
@@ -67,12 +67,25 @@ module.exports = (User, DEV_MODE) => {
             return res.json({ success: true, token: token, username: username });
         }
 
+        if (!username || !password) return res.json({ success: false, message: "Missing fields" });
+
+        username = username.toLowerCase().trim();
+        password = password.trim();
+
         try {
-            const user = await User.findOne({ username: username.toLowerCase() });
-            if (!user) return res.json({ success: false, message: "User not found" });
+            console.log(`[AUTH] Login attempt for: ${username}`);
+            const user = await User.findOne({ username });
+            
+            if (!user) {
+                console.log(`[AUTH] User not found: ${username}`);
+                return res.json({ success: false, message: "User not found" });
+            }
 
             const isMatch = await bcrypt.compare(password, user.password);
-            if (!isMatch) return res.json({ success: false, message: "Invalid credentials" });
+            if (!isMatch) {
+                console.log(`[AUTH] Password mismatch for: ${username}`);
+                return res.json({ success: false, message: "Invalid credentials" });
+            }
 
             const token = jwt.sign(
                 { id: user._id, username: user.username },

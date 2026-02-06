@@ -79,6 +79,17 @@ app.use(cors({
 
 app.use(express.json());
 
+// Health check route - Moved up to ensure it's not shadowed by static files
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+        readyState: mongoose.connection.readyState,
+        devMode: DEV_MODE,
+        dbName: mongoose.connection.name || 'none'
+    });
+});
+
 // 2. CONFIGURE LIMITER
 // Allow max 20 requests per 15 minutes from the same IP
 const authLimiter = rateLimit({
@@ -157,17 +168,6 @@ if (!DEV_MODE) {
 const authRoutes = require('./routes/auth');
 // Mount the routes at '/api', passing in User and the DEV_MODE flag
 app.use('/api', authRoutes(User, DEV_MODE));
-
-// Health check route to verify DB connection status live
-app.get('/health', (req, res) => {
-    res.json({
-        status: 'ok',
-        database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-        readyState: mongoose.connection.readyState,
-        devMode: DEV_MODE,
-        dbName: mongoose.connection.name || 'none'
-    });
-});
 
 // --- GLOBAL STATE ---
 
