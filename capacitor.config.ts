@@ -6,7 +6,8 @@ const config: CapacitorConfig = {
     webDir: 'www',
     server: {
         url: 'https://canastamaster.club',
-        cleartext: false
+        cleartext: false,
+        allowNavigation: ['canastamaster.club']
     },
     android: {
         // Allow mixed content for development if needed
