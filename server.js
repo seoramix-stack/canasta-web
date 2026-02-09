@@ -10,7 +10,7 @@ const { Server } = require('socket.io');
 
 // Game Imports
 const { CanastaGame } = require('./www/game.js');
-const { CanastaBot } = require('./www/bot.js');
+const { CanastaBot } = require('./scripts/bot.js');
 const { calculateEloChange } = require('./www/elo.js');
 
 const app = express();
