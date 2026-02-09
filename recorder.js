@@ -27,6 +27,7 @@ function recordHumanTurn(game, seat, actionType, actionValue, playerName, extraD
         };
 
         fs.appendFileSync(LOG_FILE, JSON.stringify(logEntry) + '\n');
+        console.log(`[Recorder] Logged ${actionType} for ${playerName} to ${LOG_FILE}`);
     } catch (err) {
         console.error("Error recording turn:", err);
     }
