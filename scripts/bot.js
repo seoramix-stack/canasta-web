@@ -38,18 +38,20 @@ class CanastaBot {
     }
 
     // --- 3. SELECTION LOGIC ---
+    const defaultDna = this.getDefaultFallbackDna(this.type, this.ruleset);
+
     if (injectedDna) {
         // Use training DNA if provided directly (for the training scripts)
-        this.dna = injectedDna;
+        this.dna = { ...defaultDna, ...injectedDna };
     } else {
         const dnaKey = `${this.type}-${this.ruleset}`; // e.g., "2p-easy"
         
         if (masterDna && masterDna[dnaKey]) {
             // Use the professional DNA learned from 5,000 generations
-            this.dna = masterDna[dnaKey];
+            this.dna = { ...defaultDna, ...masterDna[dnaKey] };
         } else {
             // FALLBACK: Use your original hardcoded defaults if file is missing
-            this.dna = this.getDefaultFallbackDna(this.type, this.ruleset);
+            this.dna = defaultDna;
         }
     }
 }
@@ -328,6 +330,9 @@ evaluateSeatPileWorth(game, targetSeat) {
             if (!card.isWild && (visibleCounts[card.rank] || 0) >= 7 && !enemyMelds[card.rank]) {
                 score -= 5000; // Massive bonus to discard this
             }
+
+            // Safety: Prevent NaN from breaking the game/UI
+            if (isNaN(score)) score = 0;
 
             return { index, score, card };
         });
