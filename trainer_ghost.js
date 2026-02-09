@@ -21,14 +21,13 @@ console.log(`Loaded ${humanActions.length} recorded human moves.`);
 
 // 2. Helper to reconstruct a mock game state
 function buildMockGame(state) {
-    // We mock the game state to support all bot inspections
     const mockState = {
         config: { PLAYER_COUNT: 2, MIN_CANASTAS_OUT: 2 },
         players: [
+            // Reconstruct the bot's hand
             state.hand.map(rank => ({ rank: rank, isWild: rank === '2' || rank === 'Joker' })),
-            // MOCK ENEMY: We give them 8 cards by default so logic doesn't crash.
-            // (If your recorder saved 'enemyHandSize', use that here instead)
-            Array(8).fill({ rank: 'unknown' }) 
+            // Mock enemy hand (8 cards default if not recorded)
+            Array(state.playerHandSizes ? state.playerHandSizes[1] : 8).fill({ rank: 'unknown' }) 
         ],
         discardPile: state.discardPileSize > 0 && state.discardPileTop 
             ? Array(state.discardPileSize - 1).fill({rank: 'unknown'})
@@ -37,9 +36,9 @@ function buildMockGame(state) {
         team1Melds: JSON.parse(JSON.stringify(state.myMelds || {})),
         team2Melds: JSON.parse(JSON.stringify(state.enemyMelds || {})),
         cumulativeScores: { team1: state.myScore || 0, team2: state.enemyScore || 0 },
-        turnPhase: 'playing', // Default to playing phase
+        turnPhase: 'playing',
         
-        // Mock Methods required by Bot
+        // Mock Methods
         getOpeningReq: function(score) {
             if (score < 0) return 15;
             if (score < 1500) return 50;
@@ -47,13 +46,23 @@ function buildMockGame(state) {
             return 120;
         },
         
-        // Mock Action: Meld
+        // --- FIX IS HERE: Remove cards from hand on successful meld ---
         meldCards: function(seat, indices, rank) {
-            this.wasMeldCalled = true; // Flag for the trainer to check
+            this.wasMeldCalled = true; 
+            
+            // Sort indices descending (b-a) so we can splice from the end 
+            // without messing up the indexes of earlier cards.
+            indices.sort((a, b) => b - a);
+            
+            // Actually remove the cards from the mock hand
+            for (let idx of indices) {
+                if (this.players[seat][idx]) {
+                    this.players[seat].splice(idx, 1);
+                }
+            }
             return { success: true };
         },
 
-        // Mock Action: Discard
         discardFromHand: function(seat, index) {
             return { success: true };
         }
