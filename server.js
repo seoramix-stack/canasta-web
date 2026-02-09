@@ -12,7 +12,7 @@ const { Server } = require('socket.io');
 const { CanastaGame } = require('./www/game.js');
 const { CanastaBot } = require('./scripts/bot.js');
 const { calculateEloChange } = require('./www/elo.js');
-
+const { recordHumanTurn } = require('./recorder.js');
 const app = express();
 const server = http.createServer(app);
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
@@ -787,6 +787,9 @@ io.on('connection', async (socket) => {
         const gameId = socket.data.gameId;
         const game = games[gameId];
         if (game) {
+            if (gameBots[gameId] && data.seat === 0) {
+                recordHumanTurn(game, data.seat, 'pickup', 'pile');
+            }
             let res = game.pickupDiscardPile(data.seat);
             res.success ? broadcastAll(gameId, data.seat) : socket.emit('error_message', res.message);
         }
@@ -796,6 +799,24 @@ io.on('connection', async (socket) => {
         const gameId = socket.data.gameId;
         const game = games[gameId];
         if (game) {
+            if (gameBots[gameId] && data.seat === 0) {
+                const name = game.names ? game.names[data.seat] : "Unknown";
+                
+                // Convert indices to actual card objects so the bot knows WHAT was melded
+                // (The game logic does this internally, but we need to do it here to save it)
+                const hand = game.players[data.seat];
+                const cardsMelded = data.indices.map(i => hand[i]).filter(c => c !== undefined);
+
+                // We record the Rank being melded (e.g., "5") and the specific cards used
+                recordHumanTurn(
+                    game, 
+                    data.seat, 
+                    'meld', 
+                    data.targetRank || cardsMelded[0].rank, // Value = Rank
+                    name, 
+                    { cards: cardsMelded.map(c => c.rank) } // Details = ["5", "5", "5"]
+                );
+            }
             // --- 1. GO OUT CHECK (Partner Enforcement) ---
             const hand = game.players[data.seat];
 
@@ -840,6 +861,13 @@ io.on('connection', async (socket) => {
         const gameId = socket.data.gameId;
         const game = games[gameId];
         if (game) {
+            if (gameBots[gameId] && data.seat === 0) {
+                // We need to look up the card RANK before it is removed from hand
+                const cardToDiscard = game.players[data.seat][data.index];
+                if (cardToDiscard) {
+                    recordHumanTurn(game, data.seat, 'discard', cardToDiscard.rank);
+                }
+            }
             // 1. PRE-CHECK: Is player trying to go out after being denied?
             let hand = game.players[data.seat];
             let willGoOut = (hand.length === 1); // If 1 card and discarding it -> 0 left
