@@ -263,6 +263,19 @@ evaluateSeatPileWorth(game, targetSeat) {
         const myWorth = this.evaluateSeatPileWorth(game, this.seat);
         const enemyWorth = this.evaluateSeatPileWorth(game, nextPlayer);
 
+        // --- 0. PRE-CALCULATION: Dead Ranks ---
+        // Count how many of each rank are visible (Discard + Melds + My Hand)
+        const visibleCounts = {};
+        const countCard = (r) => { visibleCounts[r] = (visibleCounts[r] || 0) + 1; };
+        
+        [game.team1Melds, game.team2Melds].forEach(teamMelds => {
+            Object.values(teamMelds).forEach(meld => {
+                meld.forEach(c => { if (!c.isWild) countCard(c.rank); });
+            });
+        });
+        game.discardPile.forEach(c => { if (!c.isWild) countCard(c.rank); });
+        hand.forEach(c => { if (!c.isWild) countCard(c.rank); });
+
         let candidates = hand.map((card, index) => {
             let score = 0;
 
@@ -305,7 +318,16 @@ evaluateSeatPileWorth(game, targetSeat) {
             // 6. PAIR PRESERVATION
             let matches = hand.filter(c => c.rank === card.rank).length;
             if (matches >= 2) score += this.dna.BREAK_PAIR_PENALTY;
+            else if (matches === 1) score += this.dna.DISCARD_SINGLE_BONUS;
+
             if (["4", "5", "6", "7"].includes(card.rank)) score += this.dna.DISCARD_JUNK_BONUS;
+
+            // 7. DEAD RANK BONUS (Safe Discard)
+            // If 7+ cards of this rank are accounted for, AND enemy doesn't have a meld,
+            // then enemy cannot have a pair to pick up. Safe.
+            if (!card.isWild && (visibleCounts[card.rank] || 0) >= 7 && !enemyMelds[card.rank]) {
+                score -= 5000; // Massive bonus to discard this
+            }
 
             return { index, score, card };
         });
@@ -315,7 +337,7 @@ evaluateSeatPileWorth(game, targetSeat) {
         // Save thoughts for live debugging/teaching
         this.lastDecision = {
             top: candidates[0],
-            alternatives: candidates.slice(1, 4) // Keep top 3 alternatives
+            alternatives: candidates.slice(1)
         };
         return candidates[0].index;
     }
