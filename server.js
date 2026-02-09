@@ -787,8 +787,11 @@ io.on('connection', async (socket) => {
         const gameId = socket.data.gameId;
         const game = games[gameId];
         if (game) {
-            if (gameBots[gameId] && data.seat === 0) {
-                recordHumanTurn(game, data.seat, 'pickup', 'pile');
+            const seat = socket.data.seat;
+            if (gameBots[gameId] && seat === 0) {
+                const name = game.names ? game.names[seat] : "Unknown";
+                console.log(`[Recorder] Attempting to log pickup for ${name}`);
+                recordHumanTurn(game, seat, 'pickup', 'pile', name);
             }
             let res = game.pickupDiscardPile(data.seat);
             res.success ? broadcastAll(gameId, data.seat) : socket.emit('error_message', res.message);
@@ -799,20 +802,22 @@ io.on('connection', async (socket) => {
         const gameId = socket.data.gameId;
         const game = games[gameId];
         if (game) {
-            if (gameBots[gameId] && data.seat === 0) {
+            const seat = socket.data.seat;
+            if (gameBots[gameId] && seat === 0) {
                 const name = game.names ? game.names[data.seat] : "Unknown";
                 
                 // Convert indices to actual card objects so the bot knows WHAT was melded
                 // (The game logic does this internally, but we need to do it here to save it)
-                const hand = game.players[data.seat];
+                const hand = game.players[seat];
                 const cardsMelded = data.indices.map(i => hand[i]).filter(c => c !== undefined);
 
+                console.log(`[Recorder] Attempting to log meld for ${name}`);
                 // We record the Rank being melded (e.g., "5") and the specific cards used
                 recordHumanTurn(
-                    game, 
-                    data.seat, 
+                    game,
+                    seat,
                     'meld', 
-                    data.targetRank || cardsMelded[0].rank, // Value = Rank
+                    data.targetRank || (cardsMelded.length > 0 ? cardsMelded[0].rank : 'unknown'),
                     name, 
                     { cards: cardsMelded.map(c => c.rank) } // Details = ["5", "5", "5"]
                 );
@@ -861,11 +866,14 @@ io.on('connection', async (socket) => {
         const gameId = socket.data.gameId;
         const game = games[gameId];
         if (game) {
-            if (gameBots[gameId] && data.seat === 0) {
+            const seat = socket.data.seat;
+            if (gameBots[gameId] && seat === 0) {
                 // We need to look up the card RANK before it is removed from hand
-                const cardToDiscard = game.players[data.seat][data.index];
+                const cardToDiscard = game.players[seat][data.index];
                 if (cardToDiscard) {
-                    recordHumanTurn(game, data.seat, 'discard', cardToDiscard.rank);
+                    const name = game.names ? game.names[seat] : "Unknown";
+                    console.log(`[Recorder] Attempting to log discard for ${name}`);
+                    recordHumanTurn(game, seat, 'discard', cardToDiscard.rank, name);
                 }
             }
             // 1. PRE-CHECK: Is player trying to go out after being denied?
