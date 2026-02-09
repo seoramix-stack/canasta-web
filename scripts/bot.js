@@ -243,6 +243,10 @@ evaluateSeatPileWorth(game, targetSeat) {
         }
     }
 
+    updateDna(newDna) {
+        this.dna = { ...this.dna, ...newDna };
+    }
+
     // --- DECISION LOGIC ---
 
     pickDiscard(game) {
@@ -307,6 +311,12 @@ evaluateSeatPileWorth(game, targetSeat) {
         });
 
         candidates.sort((a, b) => a.score - b.score);
+        
+        // Save thoughts for live debugging/teaching
+        this.lastDecision = {
+            top: candidates[0],
+            alternatives: candidates.slice(1, 4) // Keep top 3 alternatives
+        };
         return candidates[0].index;
     }
 

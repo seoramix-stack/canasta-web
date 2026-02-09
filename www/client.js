@@ -6,6 +6,9 @@ import { state, saveSession, logout } from './state.js';
 import * as UI from './ui.js';
 import * as Anim from './animations.js';
 
+// Expose state for Live Bot Teaching (Console Access)
+window.state = state;
+
 // Enable immersive/fullscreen mode on native app
 if (isNative) {
     // Import and use StatusBar to hide system bars

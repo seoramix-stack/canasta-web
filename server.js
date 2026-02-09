@@ -537,6 +537,15 @@ io.on('connection', async (socket) => {
         }
     });
 
+    // --- LIVE TEACHING: Update Bot DNA on the fly ---
+    socket.on('admin_update_bot_dna', (data) => {
+        const gameId = socket.data.gameId;
+        if (gameBots[gameId] && gameBots[gameId][data.seat]) {
+            gameBots[gameId][data.seat].updateDna(data.dna);
+            console.log(`[Live Teach] Bot ${data.seat} DNA updated.`);
+        }
+    });
+
     socket.on('social_search', async (query) => {
         if (DEV_MODE) return;
         // Find users matching query (excluding self and blocked)
@@ -1212,6 +1221,14 @@ function checkBotTurn(gameId) {
                 }
             })
                 .then(() => {
+                    // Broadcast bot thoughts if available
+                    if (bot.lastDecision) {
+                        io.to(gameId).emit('bot_thoughts', {
+                            seat: bot.seat,
+                            decision: bot.lastDecision
+                        });
+                        bot.lastDecision = null; // Clear after sending
+                    }
                     game.processingTurnFor = null;
                     checkBotTurn(gameId); // Recursively check for next action
                 })
