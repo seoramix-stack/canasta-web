@@ -68,6 +68,15 @@ getDefaultFallbackDna(type, ruleset) {
                 { DISCARD_WILD_PENALTY: 1732, FEED_ENEMY_MELD: 3012, DISCARD_SINGLE_BONUS: -93, MELD_AGGRESSION: 0.7, PICKUP_THRESHOLD: 2, BREAK_PAIR_PENALTY: 200, DISCARD_JUNK_BONUS: 10, GO_OUT_THRESHOLD: 500, BAIT_AGGRESSION: 150, PICKUP_PATIENCE: 7, BLACK_3_BONUS: -2000 };
         }
     }
+getCardValue(card) {
+        if (!card) return 0;
+        const rank = card.rank;
+        if (rank === 'Joker') return 50;
+        if (rank === '2' || rank === 'A') return 20;
+        if (['K', 'Q', 'J', '10', '9', '8'].includes(rank)) return 10;
+        if (['7', '6', '5', '4', '3'].includes(rank)) return 5;
+        return 0;
+    }
 evaluateSeatPileWorth(game, targetSeat) {
         if (game.discardPile.length === 0) return 0;
 
@@ -252,21 +261,19 @@ evaluateSeatPileWorth(game, targetSeat) {
     // --- DECISION LOGIC ---
 
     pickDiscard(game) {
+        // --- 0. PRE-CALCULATION ---
         let hand = game.players[this.seat];
         let nextPlayer = (this.seat + 1) % game.config.PLAYER_COUNT;
         const enemyMelds = (nextPlayer % 2 === 0) ? game.team1Melds : game.team2Melds;
         const myTeamMelds = (this.seat % 2 === 0) ? game.team1Melds : game.team2Melds;
 
-        // --- NEW SAFETY GATE: Floating Prevention ---
-        const canastaCount = Object.values(myTeamMelds).filter(p => p.length >= 7).length;
-        const goingOutIsIllegal = canastaCount < game.config.MIN_CANASTAS_OUT;
-
-        // --- NEW DUAL-VALUE CALCULATION ---
         const myWorth = this.evaluateSeatPileWorth(game, this.seat);
         const enemyWorth = this.evaluateSeatPileWorth(game, nextPlayer);
 
-        // --- 0. PRE-CALCULATION: Dead Ranks ---
-        // Count how many of each rank are visible (Discard + Melds + My Hand)
+        // Calculate Discard Pile Danger (Sum of values)
+        const pileValue = game.discardPile.reduce((sum, c) => sum + this.getCardValue(c), 0);
+
+        // Count visible cards to find "Dead Ranks"
         const visibleCounts = {};
         const countCard = (r) => { visibleCounts[r] = (visibleCounts[r] || 0) + 1; };
         
@@ -278,18 +285,31 @@ evaluateSeatPileWorth(game, targetSeat) {
         game.discardPile.forEach(c => { if (!c.isWild) countCard(c.rank); });
         hand.forEach(c => { if (!c.isWild) countCard(c.rank); });
 
+        const canastaCount = Object.values(myTeamMelds).filter(p => p.length >= 7).length;
+        const goingOutIsIllegal = canastaCount < game.config.MIN_CANASTAS_OUT;
+
+        // --- MAIN EVALUATION LOOP ---
         let candidates = hand.map((card, index) => {
             let score = 0;
 
             // 1. FLOATING PENALTY: Never discard the last card if we can't go out
             if (hand.length === 1 && goingOutIsIllegal) {
-                return { index, score: 999999, card }; // Block this card entirely
+                return { index, score: 999999, card }; // Block this card
             }
 
             score += this.getCardValue(card) * 2;
 
             // 2. DYNAMIC WILD LOGIC (Defensive Freeze)
             if (card.isWild) {
+                // Base Penalty
+                score += this.dna.DISCARD_WILD_PENALTY;
+
+                // FIX: Check pileValue here, inside the loop
+                if (pileValue > (this.dna.FREEZE_DEFENSE_TRIGGER || 2000)) { 
+                    score -= (this.dna.DISCARD_WILD_PENALTY * 0.8); // 80% discount
+                }
+
+                // Adjust for threat level
                 let threatLevel = enemyWorth / 400;
                 score += (this.dna.DISCARD_WILD_PENALTY / Math.max(1, threatLevel));
             }
@@ -307,7 +327,7 @@ evaluateSeatPileWorth(game, targetSeat) {
                 score += (this.dna.FEED_ENEMY_MELD * 3) + enemyWorth;
             }
 
-            // 5. PHASE C: TRAP / BAIT LOGIC
+            // 5. TRAP / BAIT LOGIC
             let rankCount = hand.filter(c => c.rank === card.rank && !c.isWild).length;
             if (rankCount >= 3 && !enemyMelds[card.rank] && !card.isWild) {
                 if (!enemyHasPair) {
@@ -324,30 +344,20 @@ evaluateSeatPileWorth(game, targetSeat) {
 
             if (["4", "5", "6", "7"].includes(card.rank)) score += this.dna.DISCARD_JUNK_BONUS;
 
-            // 8. BLACK 3 PRIORITY (Blocker)
-            // Black 3s cannot be picked up, making them excellent defensive discards.
+            // 7. BLACK 3 PRIORITY
             if (card.rank === '3') score += (this.dna.BLACK_3_BONUS || -2000);
 
-            // 7. DEAD RANK BONUS (Safe Discard)
-            // If 7+ cards of this rank are accounted for, AND enemy doesn't have a meld,
-            // then enemy cannot have a pair to pick up. Safe.
+            // 8. DEAD RANK BONUS (Safe Discard)
             if (!card.isWild && (visibleCounts[card.rank] || 0) >= 7 && !enemyMelds[card.rank]) {
-                score -= 5000; // Massive bonus to discard this
+                score -= 5000; 
             }
-
-            // Safety: Prevent NaN from breaking the game/UI
-            if (isNaN(score)) score = 0;
 
             return { index, score, card };
         });
 
         candidates.sort((a, b) => a.score - b.score);
         
-        // Save thoughts for live debugging/teaching
-        this.lastDecision = {
-            top: candidates[0],
-            alternatives: candidates.slice(1)
-        };
+        this.lastDecision = { top: candidates[0], alternatives: candidates.slice(1) };
         return candidates[0].index;
     }
 
@@ -388,12 +398,37 @@ evaluateSeatPileWorth(game, targetSeat) {
     }
 
     tryMelding(game) {
+        // --- 1. CALCULATE GAME STATE FLAGS ---
+        // A. Check Enemy Hand Size (Hoarding Punishment)
+        let maxEnemyHand = 0;
+        const enemySeats = (this.seat % 2 === 0) ? [1, 3] : [0, 2];
+        enemySeats.forEach(seatIdx => {
+            if (game.players[seatIdx]) {
+                const size = game.players[seatIdx].length;
+                if (size > maxEnemyHand) maxEnemyHand = size;
+            }
+        });
+
+        // B. Define Rush/Panic Multipliers
+        const HOARDING_THRESHOLD = 12; 
+        let rushMultiplier = 1.0;
+        if (maxEnemyHand >= HOARDING_THRESHOLD) {
+            rushMultiplier = this.dna.PUNISH_HOARDING_MULTIPLIER || 1.5; 
+        }
+
+        let panicFactor = 1.0;
+        const enemiesCloseToOut = enemySeats.some(s => game.players[s] && game.players[s].length < 4);
+        if (enemiesCloseToOut) {
+            panicFactor = this.dna.ENDGAME_PANIC_MULTIPLIER || 1.5; 
+        }
+
+        // C. Standard Setup
         const myTeamKey = (this.seat % 2 === 0) ? 'team1' : 'team2';
         const myScore = game.cumulativeScores[myTeamKey];
         const myMelds = (this.seat % 2 === 0) ? game.team1Melds : game.team2Melds;
         const isOpening = (Object.keys(myMelds).length === 0);
 
-        // --- 1. OPENING REQUIREMENT CHECK (With Wilds) ---
+        // --- 2. OPENING CHECK ---
         if (isOpening) {
             const requiredPoints = game.getOpeningReq(myScore);
             let totalOpeningPoints = 0;
@@ -402,32 +437,23 @@ evaluateSeatPileWorth(game, targetSeat) {
             let naturalGroups = {};
             let wilds = [];
             hand.forEach(c => { 
-                if(!c.isWild) {
-                    naturalGroups[c.rank] = (naturalGroups[c.rank] || 0) + 1; 
-                } else {
-                    wilds.push(c);
-                }
+                if(!c.isWild) naturalGroups[c.rank] = (naturalGroups[c.rank] || 0) + 1; 
+                else wilds.push(c);
             });
             
-            // Calculate points from valid potential melds
             for (let r in naturalGroups) {
                 let count = naturalGroups[r];
-                // Case A: Natural set of 3+
                 if (count >= 3) {
                     totalOpeningPoints += count * this.getCardValue({rank: r});
-                } 
-                // Case B: Natural pair + 1 Wild (minimum 3 cards)
-                else if (count === 2 && wilds.length >= 1) {
+                } else if (count === 2 && wilds.length >= 1) {
                     totalOpeningPoints += (2 * this.getCardValue({rank: r})) + this.getCardValue(wilds[0]);
-                    wilds.shift(); // Use this wild card
+                    wilds.shift(); 
                 }
             }
-
-            // If we don't have 50+ points total, STOP.
             if (totalOpeningPoints < requiredPoints) return;
         }
 
-        // --- 2. MAIN MELDING LOOP ---
+        // --- 3. MAIN MELDING LOOP ---
         let madeMeld = true;
         while (madeMeld) {
             madeMeld = false;
@@ -449,12 +475,18 @@ evaluateSeatPileWorth(game, targetSeat) {
                     let cardsToPlay = groups[rank];
                     let currentHand = game.players[this.seat];
                     const canastaCount = Object.values(myMelds).filter(p => p.length >= 7).length;
-
+                    
+                    // Safety: Don't float if illegal
                     if (canastaCount < game.config.MIN_CANASTAS_OUT) {
-                if (currentHand.length - cardsToPlay.length < 3) {
-                    continue; 
-                }
-            }
+                        if (currentHand.length - cardsToPlay.length < 3) continue; 
+                    }
+
+                    // CHECK: Does this complete a Canasta?
+                    let currentPileLength = myMelds[rank].length;
+                    let isCloser = (currentPileLength < 7 && (currentPileLength + cardsToPlay.length) >= 7);
+                    
+                    // If it's a closer, we ignore patience/holding logic and DO IT.
+                    // Otherwise, we implicitly proceed.
 
                     let res = game.meldCards(this.seat, groups[rank], rank);
                     if (res.success) { madeMeld = true; break; }
@@ -462,54 +494,37 @@ evaluateSeatPileWorth(game, targetSeat) {
             }
             if (madeMeld) continue;
 
-            // Priority 2: Create new melds (3+ cards, allows mixing)
+            // Priority 2: Create new melds
             for (let rank in groups) {
                 let cardsToPlay = [...groups[rank]];
                 let currentHand = game.players[this.seat];
-                const teamMelds = (this.seat % 2 === 0) ? game.team1Melds : game.team2Melds;
-                const canastaCount = Object.values(teamMelds).filter(p => p.length >= 7).length;
+                const canastaCount = Object.values(myMelds).filter(p => p.length >= 7).length;
 
+                // Safety: Don't float if illegal
                 if (canastaCount < game.config.MIN_CANASTAS_OUT) {
-                if (currentHand.length - cardsToPlay.length < 3) {
-                    continue; 
-                }
-                }
-                if (cardsToPlay.length === 2 && wildIndices.length >= 1) {
-                    // Only meld the pair + wild if our hand is getting too big 
-                    // or if we have very low patience DNA.
-                    if (hand.length > (this.dna.PICKUP_PATIENCE || 6)) continue; 
-                    
-                    cardsToPlay.push(wildIndices[0]);
+                    if (currentHand.length - cardsToPlay.length < 3) continue; 
                 }
 
+                // Check Patience vs Rush
+                let effectivePatience = (this.dna.PICKUP_PATIENCE || 6) / rushMultiplier;
+                
+                // --- FIX: Corrected Logic Structure ---
                 if (cardsToPlay.length >= 3) {
-                    let res = game.meldCards(this.seat, cardsToPlay, rank);
-                    if (res.success) { madeMeld = true; break; }
+                    // Natural Meld
+                    if (hand.length > effectivePatience) {
+                        let res = game.meldCards(this.seat, cardsToPlay, rank);
+                        if (res.success) { madeMeld = true; break; }
+                    }
+                } else if (cardsToPlay.length === 2 && wildIndices.length >= 1) {
+                    // Mixed Meld (2 Naturals + 1 Wild)
+                    if (hand.length > effectivePatience) {
+                        cardsToPlay.push(wildIndices[0]);
+                        let res = game.meldCards(this.seat, cardsToPlay, rank);
+                        if (res.success) { madeMeld = true; break; }
+                    }
                 }
             }
         }
-    }
-    decideGoOutPermission(game) {
-        // 1. Identify my team (Bot is the partner of the player asking)
-        const teamMelds = (this.seat % 2 === 0) ? game.team1Melds : game.team2Melds;
-        
-        // 2. Count our Canastas
-        const canastaCount = Object.values(teamMelds).filter(p => p.length >= 7).length;
-
-        // 3. LOGIC: If we met the requirement, say YES.
-        // (You can add fancier logic here later, e.g., if bot has a Red 3 in hand, say NO)
-        if (canastaCount >= game.config.MIN_CANASTAS_OUT) {
-            return true; // "Yes, you can go out"
-        } else {
-            return false; // "No, we don't have enough Canastas"
-        }
-    }
-    
-    getCardValue(card) {
-        if (card.rank === "Joker") return 50;
-        if (card.rank === "2" || card.rank === "A") return 20;
-        if (["8","9","10","J","Q","K"].includes(card.rank)) return 10;
-        return 5; 
     }
 }
 
