@@ -1091,6 +1091,11 @@ function startTimerSystem() {
     if (state.timerInterval) clearInterval(state.timerInterval);
     afkSeconds = 0;
 
+    // NEW: Don't start timer if playing against bots (identified by name)
+    if (state.activeData && state.activeData.names && state.activeData.names.some(n => n && n.includes("Bot "))) {
+        return;
+    }
+
     state.timerInterval = setInterval(() => {
         if (!state.gameStarted || state.currentTurnSeat === -1) return;
 

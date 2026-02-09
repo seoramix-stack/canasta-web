@@ -947,6 +947,9 @@ io.on('connection', async (socket) => {
         const game = games[gameId];
         if (!game || game.matchIsOver) return;
 
+        // NEW: Ignore timeouts in bot games to allow teaching/debugging
+        if (gameBots[gameId]) return;
+
         // We trust the client's 60s trigger but add a small 2s buffer 
         // to account for network lag vs the server's lastActionTime.
         const now = Date.now();
@@ -1542,6 +1545,10 @@ async function handleForfeit(gameId, loserSeat) {
 setInterval(() => {
     Object.keys(games).forEach(gameId => {
         const game = games[gameId];
+        
+        // NEW: Disable bank timers for bot games
+        if (gameBots[gameId]) return;
+
         if (game && !game.matchIsOver && !game.isLobby && game.currentPlayer !== -1) {
             const activeSeat = game.currentPlayer;
             if (game.bankTimers[activeSeat] > 0) {
