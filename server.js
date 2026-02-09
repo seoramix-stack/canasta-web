@@ -1,5 +1,7 @@
 require('dotenv').config();
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
 const http = require('http');
 const mongoose = require('mongoose');
 const rateLimit = require('express-rate-limit');
@@ -90,6 +92,16 @@ app.get('/health', (req, res) => {
     });
 });
 
+// Route to download training data (since Render filesystem is hidden)
+app.get('/api/admin/download-training-data', (req, res) => {
+    const filePath = path.join(__dirname, 'human_training_data.jsonl');
+    if (fs.existsSync(filePath)) {
+        res.download(filePath);
+    } else {
+        res.status(404).json({ success: false, message: "File not found. Play a bot game first!" });
+    }
+});
+
 // 2. CONFIGURE LIMITER
 // Allow max 20 requests per 15 minutes from the same IP
 const authLimiter = rateLimit({
@@ -115,8 +127,6 @@ const io = new Server(server, {
     },
     transports: ['polling', 'websocket']
 });
-
-const path = require('path');
 
 // 1. Serve 'public' using __dirname (Standard)
 app.use(express.static(path.join(__dirname, 'www')));
