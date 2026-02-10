@@ -688,10 +688,92 @@ function renderOtherHand(elementId, backsArray, orientation) {
     }
 }
 
-// --- MISSING FUNCTION ADDED HERE ---
+function setupHandSwipe(container) {
+    let isPointerDown = false;
+    let isSwiping = false;
+    let startIndex = -1;
+    let lastToggledIndex = -1;
+    let startX = 0;
+    let startY = 0;
+
+    container.addEventListener('pointerdown', (e) => {
+        const card = e.target.closest('.hand-card-wrap');
+        if (!card) return;
+
+        isPointerDown = true;
+        isSwiping = false;
+        startIndex = parseInt(card.dataset.index);
+        lastToggledIndex = -1;
+        startX = e.clientX;
+        startY = e.clientY;
+        
+        try {
+            container.setPointerCapture(e.pointerId);
+        } catch (err) {
+            console.warn("Pointer capture failed", err);
+        }
+    });
+
+    container.addEventListener('pointermove', (e) => {
+        if (!isPointerDown) return;
+
+        if (!isSwiping) {
+            const diffX = Math.abs(e.clientX - startX);
+            const diffY = Math.abs(e.clientY - startY);
+            if (diffX > 10 || diffY > 10) {
+                isSwiping = true;
+                // Toggle start card immediately once swipe is detected
+                if (startIndex !== -1 && !isNaN(startIndex)) {
+                    if (window.toggleSelect) {
+                        window.toggleSelect(startIndex);
+                        lastToggledIndex = startIndex;
+                    }
+                }
+            }
+        }
+
+        if (isSwiping) {
+            const target = document.elementFromPoint(e.clientX, e.clientY);
+            const card = target ? target.closest('.hand-card-wrap') : null;
+            
+            if (card) {
+                const idx = parseInt(card.dataset.index);
+                if (idx !== lastToggledIndex && !isNaN(idx)) {
+                    if (window.toggleSelect) {
+                        window.toggleSelect(idx);
+                        lastToggledIndex = idx;
+                    }
+                }
+            }
+            e.preventDefault();
+        }
+    });
+
+    const endSwipe = (e) => {
+        if (!isPointerDown) return;
+        isPointerDown = false;
+        isSwiping = false;
+        startIndex = -1;
+        lastToggledIndex = -1;
+        try {
+            if (e.pointerId) container.releasePointerCapture(e.pointerId);
+        } catch (err) {}
+    };
+
+    container.addEventListener('pointerup', endSwipe);
+    container.addEventListener('pointercancel', endSwipe);
+    container.addEventListener('pointerleave', endSwipe);
+}
+
 function renderHand(hand) {
     const div = document.getElementById('my-hand');
     if (!div) return;
+    
+    if (!div.dataset.swipeInitialized) {
+        setupHandSwipe(div);
+        div.dataset.swipeInitialized = "true";
+    }
+
     div.innerHTML = "";
     if (!hand || hand.length === 0) return;
     const stagedIndices = new Set();
@@ -771,6 +853,8 @@ function renderHand(hand) {
         grp.forEach((item, cIdx) => {
             const wrapper = document.createElement("div");
             wrapper.className = "hand-card-wrap";
+            wrapper.dataset.index = item.index;
+            wrapper.style.touchAction = "none";
             if (cIdx > 0) wrapper.style.marginTop = `${negMargin}px`;
 
             if (state.selectedIndices.includes(item.index)) {

@@ -117,8 +117,17 @@ function calculateMeldTarget(container, rank) {
     const cRect = searchContainer.getBoundingClientRect();
     let startX, startY;
 
+    // Get existing groups early to help calculate startX
+    const existingGroups = Array.from(searchContainer.children).filter(el => el.classList.contains('meld-group'));
+
     if (isDesktop) {
-        startX = cRect.left + 160; 
+        if (existingGroups.length === 0) {
+            // If empty, the first meld will be centered in the container
+            startX = cRect.left + (cRect.width / 2) - (groupWidth / 2);
+        } else {
+            startX = cRect.left + 160;
+        }
+
         if (cRect.height > groupHeight) {
             startY = cRect.top + (cRect.height - groupHeight) / 2;
         } else {
@@ -160,7 +169,6 @@ function calculateMeldTarget(container, rank) {
     }
 
     // --- 3. STRATEGY B: NEW PILE (CALCULATE SLOT) ---
-    const existingGroups = Array.from(searchContainer.children).filter(el => el.classList.contains('meld-group'));
     const newRankIdx = rankPriority.indexOf(rank);
     let pivotElement = null;
 

@@ -295,7 +295,7 @@ class CanastaGame {
         // Validations
         if (rank === "3") {
             if (cards.some(c => c.isWild)) return { success: false, message: "Cannot use Wilds with Black 3s." };
-            if (hand.length - cards.length > 0) return { success: false, message: "Black 3s allowed only when going out." }; 
+            if (hand.length - cards.length > 1) return { success: false, message: "Black 3s allowed only when going out." }; 
         }
 
         if (!existingMeld && cards.length < 3) return { success: false, message: "New melds need 3+ cards." };
