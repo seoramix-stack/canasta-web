@@ -735,13 +735,20 @@ io.on('connection', async (socket) => {
         if (gameBots[gameId] && gameBots[gameId][partnerSeat]) {
             // Bot Logic
             const bot = gameBots[gameId][partnerSeat];
-            const decision = bot.decideGoOutPermission(game); // TRUE or FALSE
+            
+            try {
+                const decision = bot.decideGoOutPermission(game); // TRUE or FALSE
 
-            // Auto-reply
-            game.goOutPermission = decision ? 'granted' : 'denied';
+                // Auto-reply
+                game.goOutPermission = decision ? 'granted' : 'denied';
 
-            // Broadcast result immediately
-            io.to(gameId).emit('ask_result', { seat: partnerSeat, decision: decision });
+                // Broadcast result immediately
+                io.to(gameId).emit('ask_result', { seat: partnerSeat, decision: decision });
+            } catch (e) {
+                console.error("[BOT ERROR] decideGoOutPermission failed:", e);
+                game.goOutPermission = 'denied'; // Fallback to deny
+                io.to(gameId).emit('ask_result', { seat: partnerSeat, decision: false });
+            }
         } else {
             // Human Logic: Find partner's socket
             io.sockets.sockets.forEach((s) => {

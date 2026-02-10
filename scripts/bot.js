@@ -526,6 +526,17 @@ evaluateSeatPileWorth(game, targetSeat) {
             }
         }
     }
+
+    decideGoOutPermission(game) {
+        // 1. Identify my team (Bot is the partner of the player asking)
+        const teamMelds = (this.seat % 2 === 0) ? game.team1Melds : game.team2Melds;
+        
+        // 2. Count our Canastas
+        const canastaCount = Object.values(teamMelds).filter(p => p.length >= 7).length;
+
+        // 3. LOGIC: If we met the requirement, say YES.
+        return (canastaCount >= game.config.MIN_CANASTAS_OUT);
+    }
 }
 
 module.exports = { CanastaBot };
