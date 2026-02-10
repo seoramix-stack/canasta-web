@@ -220,7 +220,6 @@ h2 {
 }
 
 /* style.css - BUTTONS SECTION */
-/* style.css */
 
 .menu-list {
     display: grid;
@@ -381,7 +380,8 @@ h2 {
     justify-content: center;
     align-items: flex-end;
     position: relative;
-    overflow: hidden;
+    overflow: visible;
+    padding-bottom: 20px;
 }
 
 #table-zone {
@@ -935,7 +935,7 @@ h2 {
         grid-area: top-info !important;
         background: transparent !important;
         border: none !important;
-        transform: translateY(55px);
+        transform: translateY(75px);
         z-index: 20;
     }
 
@@ -1175,6 +1175,7 @@ h2 {
         grid-area: partner;
         align-items: flex-end;
         overflow: visible;
+        padding-bottom: 0;
     }
 
     #my-zone {
