@@ -381,8 +381,12 @@ function renderTable(elementId, meldsObj, red3sArray) {
         container.style.display = "grid";
         container.style.gridTemplateColumns = "50px 1fr"; // Fixed Left Col, Flex Right Col
         container.style.gap = "1px";
-        container.style.paddingLeft = "34px";
-        container.style.paddingRight = "34px";
+        // The horizontal padding is only for the bottom meld area ('my-melds')
+        // to avoid the player's HUD. The top area ('enemy-melds') should not have it.
+        if (elementId === 'my-melds') {
+            container.style.paddingLeft = "34px";
+            container.style.paddingRight = "34px";
+        }
         container.style.overflowX = "hidden";
         container.style.alignItems = "start";
 

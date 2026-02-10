@@ -138,8 +138,10 @@ function calculateMeldTarget(container, rank) {
         startX = cRect.left;
         startY = cRect.top;
         if (startX === 0 && startY === 0) {
+             // Fallback for when grid hasn't rendered, use parent container
              const parentRect = container.getBoundingClientRect();
-             startX = parentRect.left + 34 + 50 + 1; 
+             const leftPadding = (container.id === 'my-melds') ? 34 : 0;
+             startX = parentRect.left + leftPadding + 50 + 1; 
              startY = parentRect.top;
         }
     }
