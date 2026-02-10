@@ -751,6 +751,14 @@ function setupHandSwipe(container) {
 
     const endSwipe = (e) => {
         if (!isPointerDown) return;
+
+        // Handle single tap if no swipe occurred (only on clean lift)
+        if (e.type === 'pointerup' && !isSwiping && startIndex !== -1 && !isNaN(startIndex)) {
+            if (window.toggleSelect) {
+                window.toggleSelect(startIndex);
+            }
+        }
+
         isPointerDown = false;
         isSwiping = false;
         startIndex = -1;
@@ -855,6 +863,7 @@ function renderHand(hand) {
             wrapper.className = "hand-card-wrap";
             wrapper.dataset.index = item.index;
             wrapper.style.touchAction = "none";
+            wrapper.style.userSelect = "none";
             if (cIdx > 0) wrapper.style.marginTop = `${negMargin}px`;
 
             if (state.selectedIndices.includes(item.index)) {
@@ -862,7 +871,7 @@ function renderHand(hand) {
             }
             const img = document.createElement("img");
             img.src = getCardImage(item.card);
-            addTapListener(wrapper, () => window.toggleSelect(item.index));
+            img.draggable = false;
             wrapper.appendChild(img);
             groupDiv.appendChild(wrapper);
         });
