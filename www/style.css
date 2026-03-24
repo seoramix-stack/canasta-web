@@ -936,6 +936,8 @@ h2 {
         background: transparent !important;
         border: none !important;
         transform: none;
+        transform: none !important;
+        align-self: start !important;
         z-index: 20;
     }
 
@@ -946,6 +948,7 @@ h2 {
     /* Reclaim space from timer row */
     #game-grid {
         grid-template-rows: 35px 0px 1fr 30px 110px !important;
+        grid-template-rows: 25px 0px 1fr 30px 110px !important;
         grid-template-columns: 5px 1fr 5px !important;
     }
 
@@ -958,6 +961,7 @@ h2 {
         height: 140px !important;
         min-height: 140px !important;
         max-height: 140px !important;
+        margin-top: 5px !important;
     }
 
     #enemy-melds .meld-group {
