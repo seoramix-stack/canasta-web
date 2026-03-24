@@ -253,149 +253,193 @@ evaluateSeatPileWorth(game, targetSeat) {
             this.memory.playersLastHandSize[i] = game.players[i].length;
         }
     }
+randomizeUnknownCards(simGame) {
+    // 1. Collect all cards that SHOULD be hidden
+    let hiddenCards = [...simGame.deck];
+    for (let i = 0; i < simGame.config.PLAYER_COUNT; i++) {
+        if (i !== this.seat) {
+            hiddenCards.push(...simGame.players[i]);
+            simGame.players[i] = []; 
+        }
+    }
+
+    // 2. Shuffle the unknown cards
+    for (let i = hiddenCards.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [hiddenCards[i], hiddenCards[j]] = [hiddenCards[j], hiddenCards[i]];
+    }
+
+    // 3. Redistribute them based on recorded hand sizes
+    for (let i = 0; i < simGame.config.PLAYER_COUNT; i++) {
+        if (i !== this.seat) {
+            const originalSize = this.memory.playersLastHandSize[i] || 11;
+            simGame.players[i] = hiddenCards.splice(0, originalSize);
+        }
+    }
+    simGame.deck = hiddenCards; 
+}
+
+runFastSimulation(simGame) {
+    const MAX_TURNS = 100; // Prevent infinite loops
+    let turns = 0;
+
+    while (simGame.turnPhase !== "game_over" && turns < MAX_TURNS) {
+        const activeSeat = simGame.currentPlayer;
+        
+        // Use a very simple version of your existing logic
+        // If it's the bot's turn, it tests its move.
+        // If it's an 'imaginary' opponent, they play randomly or use simple rules.
+        
+        if (simGame.turnPhase === "draw") {
+            simGame.drawFromDeck(activeSeat);
+        } else if (simGame.turnPhase === "playing") {
+            // Simple: Meld everything possible, then discard a random card
+            this.fastMeldAll(simGame, activeSeat);
+            simGame.discardFromHand(activeSeat, 0); 
+        }
+        turns++;
+    }
+    
+    // Return who won based on finalScores
+    const scores = simGame.calculateScores();
+    return (scores.team1.total > scores.team2.total) ? 'team1' : 'team2';
+}
+
+fastMeldAll(simGame, seat) {
+    let hand = simGame.players[seat];
+    let groups = {};
+
+    // 1. Group cards by rank (ignoring Wilds for now to keep it simple/fast)
+    hand.forEach((c) => {
+        if (!c.isWild) {
+            if (!groups[c.rank]) groups[c.rank] = [];
+            groups[c.rank].push(c);
+        }
+    });
+
+    const myMelds = (seat % 2 === 0) ? simGame.team1Melds : simGame.team2Melds;
+    
+    for (let rank in groups) {
+        // We must re-find the indices every time because simGame.meldCards 
+        // splices the hand, changing where every other card is located.
+        const getFreshIndices = (targetRank) => {
+            return simGame.players[seat]
+                .map((card, index) => (card.rank === targetRank && !card.isWild ? index : -1))
+                .filter(idx => idx !== -1);
+        };
+
+        if (myMelds[rank]) {
+            // Add any matching cards to existing meld
+            let indices = getFreshIndices(rank);
+            if (indices.length > 0) simGame.meldCards(seat, indices, rank);
+        } else if (groups[rank].length >= 3) {
+            // Start a new natural meld
+            let indices = getFreshIndices(rank);
+            if (indices.length >= 3) simGame.meldCards(seat, indices, rank);
+        }
+    }
+}
 
     updateDna(newDna) {
         this.dna = { ...this.dna, ...newDna };
     }
 
+    
     // --- DECISION LOGIC ---
 
+    // Replace the contents of pickDiscard in bot.js
     pickDiscard(game) {
-        // --- 0. PRE-CALCULATION ---
-        let hand = game.players[this.seat];
-        let nextPlayer = (this.seat + 1) % game.config.PLAYER_COUNT;
-        const enemyMelds = (nextPlayer % 2 === 0) ? game.team1Melds : game.team2Melds;
-        const myTeamMelds = (this.seat % 2 === 0) ? game.team1Melds : game.team2Melds;
+    let hand = game.players[this.seat];
+    let candidates = [];
 
-        const myWorth = this.evaluateSeatPileWorth(game, this.seat);
-        const enemyWorth = this.evaluateSeatPileWorth(game, nextPlayer);
+    // 1. Identify all legal discards
+    for (let i = 0; i < hand.length; i++) {
+        let wins = 0;
+        const SIMULATIONS = 40; // Total simulations per card
 
-        // Calculate Discard Pile Danger (Sum of values)
-        const pileValue = game.discardPile.reduce((sum, c) => sum + this.getCardValue(c), 0);
+        for (let s = 0; s < SIMULATIONS; s++) {
+            // A. Create the "Hallucination"
+            const simGame = game.clone();
+            
+            // B. Determinization: Since we don't know the deck/enemy hands, 
+            // we shuffle all unknown cards and redistribute them.
+            this.randomizeUnknownCards(simGame);
 
-        // Count visible cards to find "Dead Ranks"
-        const visibleCounts = {};
-        const countCard = (r) => { visibleCounts[r] = (visibleCounts[r] || 0) + 1; };
-        
-        [game.team1Melds, game.team2Melds].forEach(teamMelds => {
-            Object.values(teamMelds).forEach(meld => {
-                meld.forEach(c => { if (!c.isWild) countCard(c.rank); });
-            });
+            // C. Test the move
+            const moveResult = simGame.discardFromHand(this.seat, i);
+            if (!moveResult.success) continue; // Skip illegal moves (like floating without Canastas)
+
+            // D. Run a "Fast Play" until the end of the round
+            const winner = this.runFastSimulation(simGame);
+            
+            // E. Record if our team won
+            const myTeam = (this.seat % 2 === 0) ? 'team1' : 'team2';
+            if (winner === myTeam) wins++;
+        }
+
+        candidates.push({ 
+            index: i, 
+            winRate: wins / SIMULATIONS, 
+            card: hand[i] 
         });
-        game.discardPile.forEach(c => { if (!c.isWild) countCard(c.rank); });
-        hand.forEach(c => { if (!c.isWild) countCard(c.rank); });
+    }
 
-        const canastaCount = Object.values(myTeamMelds).filter(p => p.length >= 7).length;
-        const goingOutIsIllegal = canastaCount < game.config.MIN_CANASTAS_OUT;
-
-        // --- MAIN EVALUATION LOOP ---
-        let candidates = hand.map((card, index) => {
-            let score = 0;
-
-            // 1. FLOATING PENALTY: Never discard the last card if we can't go out
-            if (hand.length === 1 && goingOutIsIllegal) {
-                return { index, score: 999999, card }; // Block this card
-            }
-
-            score += this.getCardValue(card) * 2;
-
-            // 2. DYNAMIC WILD LOGIC (Defensive Freeze)
-            if (card.isWild) {
-                // Base Penalty
-                score += this.dna.DISCARD_WILD_PENALTY;
-
-                // FIX: Check pileValue here, inside the loop
-                if (pileValue > (this.dna.FREEZE_DEFENSE_TRIGGER || 2000)) { 
-                    score -= (this.dna.DISCARD_WILD_PENALTY * 0.8); // 80% discount
-                }
-
-                // Adjust for threat level
-                let threatLevel = enemyWorth / 400;
-                score += (this.dna.DISCARD_WILD_PENALTY / Math.max(1, threatLevel));
-            }
-
-            // 3. DYNAMIC FEEDING LOGIC
-            if (enemyMelds[card.rank]) {
-                let juicyMultiplier = 1 + (enemyWorth / 200);
-                score += (this.dna.FEED_ENEMY_MELD * juicyMultiplier);
-            }
-
-            // 4. MEMORY-BASED THREAT
-            const knownHand = this.memory.knownHands[nextPlayer] || [];
-            const enemyHasPair = knownHand.filter(c => c.rank === card.rank).length >= 2;
-            if (enemyHasPair) {
-                score += (this.dna.FEED_ENEMY_MELD * 3) + enemyWorth;
-            }
-
-            // 5. TRAP / BAIT LOGIC
-            let rankCount = hand.filter(c => c.rank === card.rank && !c.isWild).length;
-            if (rankCount >= 3 && !enemyMelds[card.rank] && !card.isWild) {
-                if (!enemyHasPair) {
-                    let baitBonus = this.dna.BAIT_AGGRESSION;
-                    if (rankCount === 4) baitBonus *= 1.2;
-                    score -= baitBonus;
-                }
-            }
-
-            // 6. PAIR PRESERVATION
-            let matches = hand.filter(c => c.rank === card.rank).length;
-            if (matches >= 2) score += this.dna.BREAK_PAIR_PENALTY;
-            else if (matches === 1) score += this.dna.DISCARD_SINGLE_BONUS;
-
-            if (["4", "5", "6", "7"].includes(card.rank)) score += this.dna.DISCARD_JUNK_BONUS;
-
-            // 7. BLACK 3 PRIORITY
-            if (card.rank === '3') score += (this.dna.BLACK_3_BONUS || -2000);
-
-            // 8. DEAD RANK BONUS (Safe Discard)
-            if (!card.isWild && (visibleCounts[card.rank] || 0) >= 7 && !enemyMelds[card.rank]) {
-                score -= 5000; 
-            }
-
-            return { index, score, card };
-        });
-
-        candidates.sort((a, b) => a.score - b.score);
-        
-        this.lastDecision = { top: candidates[0], alternatives: candidates.slice(1) };
-        return candidates[0].index;
+    // 2. Sort by highest win rate instead of lowest "penalty score"
+    candidates.sort((a, b) => b.winRate - a.winRate);
+    
+    console.log(`Bot ${this.seat} chose ${candidates[0].card.rank} with predicted win rate: ${candidates[0].winRate}`);
+    return candidates[0].index;
     }
 
     decideDraw(game) {
-        let pile = game.discardPile;
-        let topCard = pile.length > 0 ? pile[pile.length - 1] : null;
-        if (!topCard) { game.drawFromDeck(this.seat); return; }
+    const pile = game.discardPile;
+    const topCard = pile.length > 0 ? pile[pile.length - 1] : null;
 
-        let hand = game.players[this.seat];
-        let myTeamMelds = (this.seat % 2 === 0) ? game.team1Melds : game.team2Melds;
-        let canastas = Object.values(myTeamMelds).filter(p => p.length >= 7).length;
+    // If no pile, we must draw from deck
+    if (!topCard) { 
+        game.drawFromDeck(this.seat); 
+        return; 
+    }
 
-        // Legal check: Can we pick it up?
-        let naturalMatches = hand.filter(c => c.rank === topCard.rank && !c.isWild).length;
-        let canPickup = (naturalMatches >= 2); 
+    // Check if pickup is even legal according to game rules
+    const hand = game.players[this.seat];
+    const naturalMatches = hand.filter(c => c.rank === topCard.rank && !c.isWild).length;
+    const canPickup = (naturalMatches >= 2); 
 
-        if (canPickup) {
-            // STABILITY FIX: Predict hand size after Red 3s are moved to table
-            if (canastas < game.config.MIN_CANASTAS_OUT) {
-                let red3sInPile = pile.filter(c => c.isRed3).length;
-                // Predicted = Current + Pile - 2 (used for meld) - Red3s (auto-played)
-                let predictedSize = hand.length + pile.length - 2 - red3sInPile;
+    if (!canPickup) {
+        game.drawFromDeck(this.seat);
+        return;
+    }
 
-                if (predictedSize <= 3) {
-                    // Force a deck draw to avoid the 1-card trap
-                    game.drawFromDeck(this.seat);
-                    return;
-                }
-            }
+    // --- SIMULATION STRATEGY ---
+    const SIMS = 30;
+    let deckWins = 0;
+    let pileWins = 0;
+    const myTeam = (this.seat % 2 === 0) ? 'team1' : 'team2';
 
-            let myWorth = this.evaluateSeatPileWorth(game, this.seat);
-            if (myWorth > 350 || naturalMatches >= this.dna.PICKUP_THRESHOLD) {
-                let res = game.pickupDiscardPile(this.seat);
-                if (res.success) return; 
-            }
+    for (let s = 0; s < SIMS; s++) {
+        // Test Deck Draw
+        const deckSim = game.clone();
+        this.randomizeUnknownCards(deckSim);
+        deckSim.drawFromDeck(this.seat);
+        if (this.runFastSimulation(deckSim) === myTeam) deckWins++;
+
+        // Test Pile Pickup
+        const pileSim = game.clone();
+        this.randomizeUnknownCards(pileSim);
+        const res = pileSim.pickupDiscardPile(this.seat);
+        if (res.success) {
+            if (this.runFastSimulation(pileSim) === myTeam) pileWins++;
         }
+    }
+
+    if (pileWins > deckWins) {
+        console.log(`Bot ${this.seat} simulating Pickup: ${pileWins} wins vs Deck: ${deckWins} wins.`);
+        game.pickupDiscardPile(this.seat);
+    } else {
         game.drawFromDeck(this.seat);
     }
+}
 
     tryMelding(game) {
         // --- 1. CALCULATE GAME STATE FLAGS ---

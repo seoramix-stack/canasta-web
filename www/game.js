@@ -12,6 +12,27 @@ const RANK_ORDER = {
 };
 
 class CanastaGame {
+    clone() {
+    // 1. Create a new instance with the same config
+    const copy = new CanastaGame(this.config);
+    
+    // 2. Deep copy all primitive and object states
+    copy.deck = JSON.parse(JSON.stringify(this.deck));
+    copy.discardPile = JSON.parse(JSON.stringify(this.discardPile));
+    copy.players = JSON.parse(JSON.stringify(this.players));
+    copy.team1Melds = JSON.parse(JSON.stringify(this.team1Melds));
+    copy.team2Melds = JSON.parse(JSON.stringify(this.team2Melds));
+    copy.team1Red3s = JSON.parse(JSON.stringify(this.team1Red3s));
+    copy.team2Red3s = JSON.parse(JSON.stringify(this.team2Red3s));
+    
+    copy.currentPlayer = this.currentPlayer;
+    copy.turnPhase = this.turnPhase;
+    copy.cumulativeScores = { ...this.cumulativeScores };
+    
+    // Disable logs for the clone to keep the console clean during sims
+    copy.silentMode = true; 
+    return copy;
+    }
     constructor(customConfig = {}) {
         this.config = {
             WIN_SCORE: 5000,
