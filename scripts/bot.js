@@ -106,40 +106,23 @@ evaluateSeatPileWorth(game, targetSeat) {
     }
 
     // --- MAIN GAME LOOP ---
-    async executeTurn(game, callback) {
-    try {
-        this.updateMemory(game); 
+    async executeTurn(game) {
+    this.updateMemory(game);
+
+    if (game.turnPhase === "draw") {
+        await this.decideDraw(game); // Now uses simulation
+    }
+
+    if (game.turnPhase === "playing") {
+        // --- NEW: Simulation-Driven Melding ---
+        const shouldMeld = this.simulateMeldDecision(game);
         
-        // 1. Pull the dynamic speed (Default to 500ms if not set)
-        const baseSpeed = game.botDelayBase || 500; 
-        const wait = (ms) => this.turboMode ? Promise.resolve() : new Promise(r => setTimeout(r, ms));
-
-        // Phase 1: Draw
-        await wait(baseSpeed); 
-        this.decideDraw(game);
-        if (callback) callback(this.seat);
-
-        // Phase 2: Partner Check (Slightly faster pause)
-        await wait(baseSpeed * 0.5);
-        this.handlePartnerCommunication(game);
-
-        // Phase 3: Meld (Wait a full baseSpeed unit)
-        await wait(baseSpeed);
-        this.tryMelding(game);
-        if (callback) callback(this.seat);
-
-        // Phase 4: Discard (Wait a full baseSpeed unit)
-        const hand = game.players[this.seat];
-        if (hand.length > 0 && game.turnPhase === 'playing') {
-            await wait(baseSpeed); 
-            let discardIndex = this.pickDiscard(game);
-            game.discardFromHand(this.seat, discardIndex);
+        if (shouldMeld) {
+            await this.tryMelding(game); 
         }
 
-        this.saveStateSnapshot(game);
-        if (callback) callback(this.seat);
-    } catch (error) {
-        console.error(`[BOT ERROR]`, error);
+        const discardIdx = await this.pickDiscard(game); // Now uses simulation
+        game.discardFromHand(this.seat, discardIdx);
     }
 }
 
@@ -277,6 +260,30 @@ randomizeUnknownCards(simGame) {
         }
     }
     simGame.deck = hiddenCards; 
+}
+
+simulateMeldDecision(game) {
+    const SIMS = 20;
+    let holdWins = 0;
+    let meldWins = 0;
+    const myTeam = (this.seat % 2 === 0) ? 'team1' : 'team2';
+
+    for (let s = 0; s < SIMS; s++) {
+        // Scenario A: Hold cards (Skip melding this turn)
+        const holdSim = game.clone();
+        this.randomizeUnknownCards(holdSim);
+        // We skip fastMeldAll and go straight to a random discard simulation
+        if (this.runFastSimulation(holdSim) === myTeam) holdWins++;
+
+        // Scenario B: Meld cards
+        const meldSim = game.clone();
+        this.randomizeUnknownCards(meldSim);
+        this.fastMeldAll(meldSim, this.seat);
+        if (this.runFastSimulation(meldSim) === myTeam) meldWins++;
+    }
+
+    console.log(`Meld Decision -> Meld: ${meldWins} vs Hold: ${holdWins}`);
+    return meldWins >= holdWins;
 }
 
 runFastSimulation(simGame) {
@@ -442,134 +449,50 @@ fastMeldAll(simGame, seat) {
 }
 
     tryMelding(game) {
-        // --- 1. CALCULATE GAME STATE FLAGS ---
-        // A. Check Enemy Hand Size (Hoarding Punishment)
-        let maxEnemyHand = 0;
-        const enemySeats = (this.seat % 2 === 0) ? [1, 3] : [0, 2];
-        enemySeats.forEach(seatIdx => {
-            if (game.players[seatIdx]) {
-                const size = game.players[seatIdx].length;
-                if (size > maxEnemyHand) maxEnemyHand = size;
+    let madeMeld = true;
+    const myMelds = (this.seat % 2 === 0) ? game.team1Melds : game.team2Melds;
+
+    while (madeMeld) {
+        madeMeld = false;
+        let hand = game.players[this.seat];
+        let groups = {};
+        let wildIndices = [];
+
+        hand.forEach((c, i) => {
+            if (c.isWild) wildIndices.push(i);
+            else {
+                if (!groups[c.rank]) groups[c.rank] = [];
+                groups[c.rank].push(i);
             }
         });
 
-        // B. Define Rush/Panic Multipliers
-        const HOARDING_THRESHOLD = 12; 
-        let rushMultiplier = 1.0;
-        if (maxEnemyHand >= HOARDING_THRESHOLD) {
-            rushMultiplier = this.dna.PUNISH_HOARDING_MULTIPLIER || 1.5; 
-        }
-
-        let panicFactor = 1.0;
-        const enemiesCloseToOut = enemySeats.some(s => game.players[s] && game.players[s].length < 4);
-        if (enemiesCloseToOut) {
-            panicFactor = this.dna.ENDGAME_PANIC_MULTIPLIER || 1.5; 
-        }
-
-        // C. Standard Setup
-        const myTeamKey = (this.seat % 2 === 0) ? 'team1' : 'team2';
-        const myScore = game.cumulativeScores[myTeamKey];
-        const myMelds = (this.seat % 2 === 0) ? game.team1Melds : game.team2Melds;
-        const isOpening = (Object.keys(myMelds).length === 0);
-
-        // --- 2. OPENING CHECK ---
-        if (isOpening) {
-            const requiredPoints = game.getOpeningReq(myScore);
-            let totalOpeningPoints = 0;
-            let hand = [...game.players[this.seat]];
-            
-            let naturalGroups = {};
-            let wilds = [];
-            hand.forEach(c => { 
-                if(!c.isWild) naturalGroups[c.rank] = (naturalGroups[c.rank] || 0) + 1; 
-                else wilds.push(c);
-            });
-            
-            for (let r in naturalGroups) {
-                let count = naturalGroups[r];
-                if (count >= 3) {
-                    totalOpeningPoints += count * this.getCardValue({rank: r});
-                } else if (count === 2 && wilds.length >= 1) {
-                    totalOpeningPoints += (2 * this.getCardValue({rank: r})) + this.getCardValue(wilds[0]);
-                    wilds.shift(); 
-                }
-            }
-            if (totalOpeningPoints < requiredPoints) return;
-        }
-
-        // --- 3. MAIN MELDING LOOP ---
-        let madeMeld = true;
-        while (madeMeld) {
-            madeMeld = false;
-            let hand = game.players[this.seat]; 
-            let groups = {};
-            let wildIndices = [];
-
-            hand.forEach((c, i) => {
-                if (c.isWild) wildIndices.push(i);
-                else {
-                    if (!groups[c.rank]) groups[c.rank] = [];
-                    groups[c.rank].push(i);
-                }
-            });
-
-            // Priority 1: Add to existing melds
-            for (let rank in myMelds) {
-                if (groups[rank] && groups[rank].length > 0) {
-                    let cardsToPlay = groups[rank];
-                    let currentHand = game.players[this.seat];
-                    const canastaCount = Object.values(myMelds).filter(p => p.length >= 7).length;
-                    
-                    // Safety: Don't float if illegal
-                    if (canastaCount < game.config.MIN_CANASTAS_OUT) {
-                        if (currentHand.length - cardsToPlay.length < 3) continue; 
-                    }
-
-                    // CHECK: Does this complete a Canasta?
-                    let currentPileLength = myMelds[rank].length;
-                    let isCloser = (currentPileLength < 7 && (currentPileLength + cardsToPlay.length) >= 7);
-                    
-                    // If it's a closer, we ignore patience/holding logic and DO IT.
-                    // Otherwise, we implicitly proceed.
-
-                    let res = game.meldCards(this.seat, groups[rank], rank);
-                    if (res.success) { madeMeld = true; break; }
-                }
-            }
-            if (madeMeld) continue;
-
-            // Priority 2: Create new melds
-            for (let rank in groups) {
-                let cardsToPlay = [...groups[rank]];
-                let currentHand = game.players[this.seat];
+        // Simplified Priority 1: Always add to existing melds
+        for (let rank in myMelds) {
+            if (groups[rank] && groups[rank].length > 0) {
+                // Safety: Ensure we don't float illegally (leave at least 2 cards if no canastas)
                 const canastaCount = Object.values(myMelds).filter(p => p.length >= 7).length;
+                if (canastaCount < game.config.MIN_CANASTAS_OUT && hand.length - groups[rank].length < 2) continue;
 
-                // Safety: Don't float if illegal
-                if (canastaCount < game.config.MIN_CANASTAS_OUT) {
-                    if (currentHand.length - cardsToPlay.length < 3) continue; 
-                }
+                let res = game.meldCards(this.seat, groups[rank], rank);
+                if (res.success) { madeMeld = true; break; }
+            }
+        }
+        if (madeMeld) continue;
 
-                // Check Patience vs Rush
-                let effectivePatience = (this.dna.PICKUP_PATIENCE || 6) / rushMultiplier;
-                
-                // --- FIX: Corrected Logic Structure ---
-                if (cardsToPlay.length >= 3) {
-                    // Natural Meld
-                    if (hand.length > effectivePatience) {
-                        let res = game.meldCards(this.seat, cardsToPlay, rank);
-                        if (res.success) { madeMeld = true; break; }
-                    }
-                } else if (cardsToPlay.length === 2 && wildIndices.length >= 1) {
-                    // Mixed Meld (2 Naturals + 1 Wild)
-                    if (hand.length > effectivePatience) {
-                        cardsToPlay.push(wildIndices[0]);
-                        let res = game.meldCards(this.seat, cardsToPlay, rank);
-                        if (res.success) { madeMeld = true; break; }
-                    }
-                }
+        // Simplified Priority 2: Create new melds
+        for (let rank in groups) {
+            let cardsToPlay = [...groups[rank]];
+            const canastaCount = Object.values(myMelds).filter(p => p.length >= 7).length;
+            
+            if (canastaCount < game.config.MIN_CANASTAS_OUT && hand.length - cardsToPlay.length < 2) continue;
+
+            if (cardsToPlay.length >= 3) {
+                let res = game.meldCards(this.seat, cardsToPlay, rank);
+                if (res.success) { madeMeld = true; break; }
             }
         }
     }
+}
 
     decideGoOutPermission(game) {
         // 1. Identify my team (Bot is the partner of the player asking)
