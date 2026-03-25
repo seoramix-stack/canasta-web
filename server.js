@@ -1254,45 +1254,26 @@ function broadcastAll(gameId, activeSeat) {
     checkBotTurn(gameId);
 }
 
-function checkBotTurn(gameId) {
+async function checkBotTurn(gameId) {
     const game = games[gameId];
-    if (!game || !gameBots[gameId] || game.turnPhase === 'game_over') return;
+    if (!game || game.turnPhase === 'game_over') return;
 
-    let curr = game.currentPlayer;
-    let bot = gameBots[gameId][curr];
+    const bot = gameBots[gameId]?.[game.currentPlayer];
+    if (bot) {
+        console.log(`[BOT] Starting turn for Seat ${game.currentPlayer}`);
+        
+        // 1. We must AWAIT the bot's turn so simulations finish
+        // before the server tells the clients to update their screens.
+        await bot.executeTurn(game);
 
-    if (bot && game.processingTurnFor !== curr) {
-        game.processingTurnFor = curr;
+        // 2. Broadcast the results of the turn to all players
+        broadcastAll(gameId);
 
-        // Always grab the freshest speed from the game object
-        const baseSpeed = game.botDelayBase || 350;
-        const delay = (game.turnPhase === 'draw') ? baseSpeed : Math.floor(baseSpeed / 2);
-
-        setTimeout(() => {
-            bot.executeTurn(game, (updatedSeat) => {
-                if (game.turnPhase === 'game_over') {
-                    handleRoundEnd(gameId, io);
-                } else {
-                    broadcastAll(gameId, updatedSeat);
-                }
-            })
-                .then(() => {
-                    // Broadcast bot thoughts if available
-                    if (bot.lastDecision) {
-                        io.to(gameId).emit('bot_thoughts', {
-                            seat: bot.seat,
-                            decision: bot.lastDecision
-                        });
-                        bot.lastDecision = null; // Clear after sending
-                    }
-                    game.processingTurnFor = null;
-                    checkBotTurn(gameId); // Recursively check for next action
-                })
-                .catch(err => {
-                    console.error(`[BOT ERROR]`, err);
-                    game.processingTurnFor = null;
-                });
-        }, delay);
+        // 3. If the next player is also a bot, trigger this again
+        if (gameBots[gameId]?.[game.currentPlayer] && game.turnPhase !== 'game_over') {
+            const delay = game.botDelayBase || 1500;
+            setTimeout(() => checkBotTurn(gameId), delay);
+        }
     }
 }
 
