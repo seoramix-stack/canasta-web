@@ -313,9 +313,16 @@ runFastSimulation(simGame) {
 }
 
 fastMeldAll(simGame, seat) {
+    const myMelds = (seat % 2 === 0) ? simGame.team1Melds : simGame.team2Melds;
+    
+    // --- NEW: Simulation Opening Check ---
+    if (Object.keys(myMelds).length === 0) {
+        const opened = this.attemptOpening(simGame, seat);
+        if (!opened) return; 
+    }
+
     let hand = simGame.players[seat];
     let groups = {};
-
     // 1. Group cards by rank (ignoring Wilds for now to keep it simple/fast)
     hand.forEach((c) => {
         if (!c.isWild) {
@@ -323,8 +330,6 @@ fastMeldAll(simGame, seat) {
             groups[c.rank].push(c);
         }
     });
-
-    const myMelds = (seat % 2 === 0) ? simGame.team1Melds : simGame.team2Melds;
     
     for (let rank in groups) {
         // We must re-find the indices every time because simGame.meldCards 
@@ -447,10 +452,40 @@ fastMeldAll(simGame, seat) {
         game.drawFromDeck(this.seat);
     }
 }
+    attemptOpening(game, seat) {
+    let hand = game.players[seat];
+    let groups = {};
+    hand.forEach((c, i) => {
+        if (!c.isWild) {
+            if (!groups[c.rank]) groups[c.rank] = [];
+            groups[c.rank].push(i);
+        }
+    });
+    let potentialMelds = [];
+    let totalPoints = 0;
+    for (let rank in groups) {
+        if (groups[rank].length >= 3) {
+            potentialMelds.push({ rank: rank, indices: groups[rank] });
+            totalPoints += groups[rank].reduce((sum, idx) => sum + this.getCardValue(hand[idx]), 0);
+        }
+    }
+    let teamScore = (seat % 2 === 0) ? game.cumulativeScores.team1 : game.cumulativeScores.team2;
+    let req = game.getOpeningReq(teamScore);
+    if (totalPoints >= req && potentialMelds.length > 0) {
+        return game.processOpening(seat, potentialMelds, false).success;
+    }
+    return false;
+}
 
     tryMelding(game) {
-    let madeMeld = true;
     const myMelds = (this.seat % 2 === 0) ? game.team1Melds : game.team2Melds;
+    
+    if (Object.keys(myMelds).length === 0) {
+        const opened = this.attemptOpening(game, this.seat);
+        if (!opened) return; // Stop if we can't open yet
+    }
+
+    let madeMeld = true;
 
     while (madeMeld) {
         madeMeld = false;

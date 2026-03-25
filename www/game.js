@@ -281,7 +281,7 @@ class CanastaGame {
         if (this.players[playerIndex].length === 0) {
             this.turnPhase = "game_over";
             this.finalScores = this.calculateScores(playerIndex);
-            console.log(`ROUND OVER: Player ${playerIndex} floated via Pickup.`);
+            if (!this.silentMode) console.log(`ROUND OVER: Player ${playerIndex} floated via Pickup.`);
             return { success: true, message: "GAME_OVER", method: method };
         }
 
@@ -370,7 +370,7 @@ class CanastaGame {
         if (this.players[playerIndex].length === 0) {
             this.turnPhase = "game_over";
             this.finalScores = this.calculateScores(playerIndex); 
-            console.log(`ROUND OVER: Player ${playerIndex} went out (Floating).`);
+            if (!this.silentMode) console.log(`ROUND OVER: Player ${playerIndex} went out (Floating).`);
             return { success: true, message: "GAME_OVER" };
         }
         return { success: true };
@@ -396,7 +396,7 @@ class CanastaGame {
             
             this.turnPhase = "game_over"; 
             this.finalScores = this.calculateScores(playerIndex); 
-            console.log(`ROUND OVER: Player ${playerIndex} went out.`);
+            if (!this.silentMode) console.log(`ROUND OVER: Player ${playerIndex} went out.`);
             return { success: true, message: "GAME_OVER" };
         }
 
@@ -559,7 +559,7 @@ class CanastaGame {
         if (this.players[seat].length === 0) {
             this.turnPhase = "game_over";
             this.finalScores = this.calculateScores(seat, true); 
-            console.log(`ROUND OVER: Player ${seat} went out Concealed!`);
+            if (!this.silentMode) console.log(`ROUND OVER: Player ${seat} went out Concealed!`);
             return { success: true, message: "GAME_OVER" };
         }
 
