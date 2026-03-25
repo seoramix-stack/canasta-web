@@ -470,24 +470,25 @@ fastMeldAll(simGame, seat) {
     let potentialMelds = [];
     let currentPoints = 0;
 
-    // 1. Find all natural sets of 3+
+    // 1. Find natural sets of 3+ (Exclude 3s for opening)
     for (let rank in groups) {
-        if (groups[rank].length >= 3) {
+        if (rank !== "3" && groups[rank].length >= 3) {
             potentialMelds.push({ rank: rank, indices: [...groups[rank]] });
-            currentPoints += groups[rank].length * (RANK_VALUES[rank] || 10);
+            // Use this.getCardValue(hand[index]) to avoid ReferenceError
+            currentPoints += groups[rank].reduce((sum, idx) => sum + this.getCardValue(hand[idx]), 0);
         }
     }
 
     let teamScore = (seat % 2 === 0) ? game.cumulativeScores.team1 : game.cumulativeScores.team2;
     let req = game.getOpeningReq(teamScore);
 
-    // 2. If short on points, use Wild Cards to finish sets of 2
+    // 2. Use Wild Cards to reach requirement if needed
     if (currentPoints < req) {
         for (let rank in groups) {
-            if (groups[rank].length === 2 && wildCards.length > 0) {
+            if (rank !== "3" && groups[rank].length === 2 && wildCards.length > 0) {
                 let wildIdx = wildCards.pop();
                 potentialMelds.push({ rank: rank, indices: [...groups[rank], wildIdx] });
-                currentPoints += (2 * (RANK_VALUES[rank] || 10)) + (RANK_VALUES[hand[wildIdx].rank]);
+                currentPoints += (2 * this.getCardValue(hand[groups[rank][0]])) + this.getCardValue(hand[wildIdx]);
                 if (currentPoints >= req) break;
             }
         }
