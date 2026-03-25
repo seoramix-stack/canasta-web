@@ -111,6 +111,7 @@ evaluateSeatPileWorth(game, targetSeat) {
 
     if (game.turnPhase === "draw") {
         await this.decideDraw(game); // Now uses simulation
+        return;
     }
 
     if (game.turnPhase === "playing") {
@@ -323,6 +324,7 @@ fastMeldAll(simGame, seat) {
 
     let hand = simGame.players[seat];
     let groups = {};
+
     // 1. Group cards by rank (ignoring Wilds for now to keep it simple/fast)
     hand.forEach((c) => {
         if (!c.isWild) {
@@ -455,23 +457,43 @@ fastMeldAll(simGame, seat) {
     attemptOpening(game, seat) {
     let hand = game.players[seat];
     let groups = {};
+    let wildCards = [];
+
     hand.forEach((c, i) => {
-        if (!c.isWild) {
+        if (c.isWild) wildCards.push(i);
+        else {
             if (!groups[c.rank]) groups[c.rank] = [];
             groups[c.rank].push(i);
         }
     });
+
     let potentialMelds = [];
-    let totalPoints = 0;
+    let currentPoints = 0;
+
+    // 1. Find all natural sets of 3+
     for (let rank in groups) {
         if (groups[rank].length >= 3) {
-            potentialMelds.push({ rank: rank, indices: groups[rank] });
-            totalPoints += groups[rank].reduce((sum, idx) => sum + this.getCardValue(hand[idx]), 0);
+            potentialMelds.push({ rank: rank, indices: [...groups[rank]] });
+            currentPoints += groups[rank].length * (RANK_VALUES[rank] || 10);
         }
     }
+
     let teamScore = (seat % 2 === 0) ? game.cumulativeScores.team1 : game.cumulativeScores.team2;
     let req = game.getOpeningReq(teamScore);
-    if (totalPoints >= req && potentialMelds.length > 0) {
+
+    // 2. If short on points, use Wild Cards to finish sets of 2
+    if (currentPoints < req) {
+        for (let rank in groups) {
+            if (groups[rank].length === 2 && wildCards.length > 0) {
+                let wildIdx = wildCards.pop();
+                potentialMelds.push({ rank: rank, indices: [...groups[rank], wildIdx] });
+                currentPoints += (2 * (RANK_VALUES[rank] || 10)) + (RANK_VALUES[hand[wildIdx].rank]);
+                if (currentPoints >= req) break;
+            }
+        }
+    }
+
+    if (currentPoints >= req && potentialMelds.length > 0) {
         return game.processOpening(seat, potentialMelds, false).success;
     }
     return false;
