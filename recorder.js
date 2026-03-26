@@ -2,7 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const LOG_FILE = path.join(process.cwd(), 'human_training_data.jsonl');
+const LOG_FILE = path.resolve(__dirname, 'human_training_data.jsonl');
 
 function getCardValue(rank) {
     if (rank === 'Joker') return 50;
@@ -53,7 +53,7 @@ function recordHumanTurn(game, seat, actionType, actionValue, playerName, extraD
         if (actionType === 'game_over') {
             logEntry.finalStats = game.calculateScores();
         }
-
+        console.log("EVOLUTION_DATA:" + JSON.stringify(logEntry));
         fs.appendFileSync(LOG_FILE, JSON.stringify(logEntry) + '\n');
     } catch (err) {
         console.error("Error recording turn:", err);
