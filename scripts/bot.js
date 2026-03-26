@@ -106,26 +106,65 @@ evaluateSeatPileWorth(game, targetSeat) {
     }
 
     // --- MAIN GAME LOOP ---
-    async executeTurn(game) {
-    this.updateMemory(game);
 
-    if (game.turnPhase === "draw") {
-        await this.decideDraw(game); // Now uses simulation
-        return;
-    }
-
-    if (game.turnPhase === "playing") {
-        // --- NEW: Simulation-Driven Melding ---
-        const shouldMeld = this.simulateMeldDecision(game);
+    async decideDraw(game) {
+        const canPickUp = game.canPickupDiscardPile(this.seat);
         
-        if (shouldMeld) {
-            await this.tryMelding(game); 
+        // If the pile is locked or we can't pick it up, just draw from deck
+        if (!canPickUp) {
+            game.drawFromDeck(this.seat);
+            return;
         }
 
-        const discardIdx = await this.pickDiscard(game); // Now uses simulation
-        game.discardFromHand(this.seat, discardIdx);
+        // Simulation-driven decision
+        const SIMS = 15;
+        let deckWins = 0;
+        let pileWins = 0;
+        const myTeam = (this.seat % 2 === 0) ? 'team1' : 'team2';
+
+        for (let s = 0; s < SIMS; s++) {
+            // Scenario A: Draw from Deck
+            const deckSim = game.clone();
+            this.randomizeUnknownCards(deckSim);
+            deckSim.drawFromDeck(this.seat);
+            if (this.runFastSimulation(deckSim) === myTeam) deckWins++;
+
+            // Scenario B: Take Pile
+            const pileSim = game.clone();
+            this.randomizeUnknownCards(pileSim);
+            pileSim.pickupDiscardPile(this.seat);
+            if (this.runFastSimulation(pileSim) === myTeam) pileWins++;
+        }
+
+        // Pick the pile if simulations show it's better or equal (given pile value)
+        if (pileWins >= deckWins) {
+            game.pickupDiscardPile(this.seat);
+        } else {
+            game.drawFromDeck(this.seat);
+        }
     }
-}
+    
+    async executeTurn(game) {
+        this.updateMemory(game);
+
+        if (game.turnPhase === "draw") {
+            await this.decideDraw(game); 
+            // Phase usually changes to 'playing' automatically after draw
+        } 
+        
+        if (game.turnPhase === "playing") {
+            const shouldMeld = this.simulateMeldDecision(game);
+            if (shouldMeld) {
+                await this.tryMelding(game); 
+            }
+
+            const discardIdx = await this.pickDiscard(game);
+            game.discardFromHand(this.seat, discardIdx);
+        }
+
+        // CRITICAL: Update memory for the next turn
+        this.saveStateSnapshot(game);
+    }
 
     // This is the helper that handles 2P vs 4P logic
     handlePartnerCommunication(game) {
