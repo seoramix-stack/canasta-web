@@ -2,7 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const LOG_FILE = path.join(__dirname, 'human_training_data.jsonl');
+const LOG_FILE = path.join(process.cwd(), 'human_training_data.jsonl');
 
 function getCardValue(rank) {
     if (rank === 'Joker') return 50;
