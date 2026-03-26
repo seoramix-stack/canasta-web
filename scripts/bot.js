@@ -288,27 +288,32 @@ simulateMeldDecision(game) {
 }
 
 runFastSimulation(simGame) {
-    const MAX_TURNS = 100; // Prevent infinite loops
+    const MAX_TURNS = 60; 
     let turns = 0;
 
     while (simGame.turnPhase !== "game_over" && turns < MAX_TURNS) {
         const activeSeat = simGame.currentPlayer;
         
-        // Use a very simple version of your existing logic
-        // If it's the bot's turn, it tests its move.
-        // If it's an 'imaginary' opponent, they play randomly or use simple rules.
-        
         if (simGame.turnPhase === "draw") {
             simGame.drawFromDeck(activeSeat);
         } else if (simGame.turnPhase === "playing") {
-            // Simple: Meld everything possible, then discard a random card
             this.fastMeldAll(simGame, activeSeat);
-            simGame.discardFromHand(activeSeat, 0); 
+            
+            // Smarter Discard for simulation: 
+            // Try to discard the lowest value non-wild card first
+            let hand = simGame.players[activeSeat];
+            let bestDiscardIdx = 0;
+            for(let i=0; i<hand.length; i++) {
+                if (!hand[i].isWild) {
+                    bestDiscardIdx = i;
+                    break;
+                }
+            }
+            simGame.discardFromHand(activeSeat, bestDiscardIdx); 
         }
         turns++;
     }
     
-    // Return who won based on finalScores
     const scores = simGame.calculateScores();
     return (scores.team1.total > scores.team2.total) ? 'team1' : 'team2';
 }
@@ -361,98 +366,77 @@ fastMeldAll(simGame, seat) {
     
     // --- DECISION LOGIC ---
 
-    // Replace the contents of pickDiscard in bot.js
     pickDiscard(game) {
     let hand = game.players[this.seat];
     let candidates = [];
+    const teamMelds = (this.seat % 2 === 0) ? game.team1Melds : game.team2Melds;
+    const enemyMelds = (this.seat % 2 === 0) ? game.team2Melds : game.team1Melds;
 
-    // 1. Identify all legal discards
     for (let i = 0; i < hand.length; i++) {
+        const card = hand[i];
         let wins = 0;
-        const SIMULATIONS = 40; // Total simulations per card
+        const SIMULATIONS = 30; 
 
+        // --- A. CALCULATE HEURISTIC PENALTY (DNA) ---
+        let penalty = 0;
+
+        // Penalty for discarding Wilds
+        if (card.isWild) {
+            // Only discard wild if the pile is huge (worth freezing)
+            if (game.discardPile.length < 5) {
+                penalty += this.dna.DISCARD_WILD_PENALTY;
+            } else {
+                penalty += (this.dna.DISCARD_WILD_PENALTY / 2); // Lesser penalty if freezing a big pile
+            }
+        }
+
+        // Penalty for feeding enemy melds
+        if (enemyMelds[card.rank]) {
+            penalty += this.dna.FEED_ENEMY_MELD;
+        }
+
+        // Penalty for breaking pairs in hand
+        const rankCount = hand.filter(c => c.rank === card.rank).length;
+        if (rankCount >= 2 && !card.isWild) {
+            penalty += this.dna.BREAK_PAIR_PENALTY;
+        }
+
+        // --- B. RUN SIMULATIONS ---
         for (let s = 0; s < SIMULATIONS; s++) {
-            // A. Create the "Hallucination"
             const simGame = game.clone();
-            
-            // B. Determinization: Since we don't know the deck/enemy hands, 
-            // we shuffle all unknown cards and redistribute them.
             this.randomizeUnknownCards(simGame);
 
-            // C. Test the move
             const moveResult = simGame.discardFromHand(this.seat, i);
-            if (!moveResult.success) continue; // Skip illegal moves (like floating without Canastas)
+            if (!moveResult.success) {
+                wins = -999; // Illegal move
+                break;
+            }
 
-            // D. Run a "Fast Play" until the end of the round
             const winner = this.runFastSimulation(simGame);
-            
-            // E. Record if our team won
             const myTeam = (this.seat % 2 === 0) ? 'team1' : 'team2';
             if (winner === myTeam) wins++;
         }
 
+        // --- C. COMBINE WIN RATE + DNA ---
+        const winRate = wins / SIMULATIONS;
+        const finalScore = (winRate * 1000) - penalty;
+
         candidates.push({ 
             index: i, 
-            winRate: wins / SIMULATIONS, 
-            card: hand[i] 
+            score: finalScore, 
+            winRate: winRate,
+            card: card 
         });
     }
 
-    // 2. Sort by highest win rate instead of lowest "penalty score"
-    candidates.sort((a, b) => b.winRate - a.winRate);
+    // Sort by the new hybrid score
+    candidates.sort((a, b) => b.score - a.score);
     
-    console.log(`Bot ${this.seat} chose ${candidates[0].card.rank} with predicted win rate: ${candidates[0].winRate}`);
-    return candidates[0].index;
+    const choice = candidates[0];
+    if (!this.silentMode) {
+        console.log(`Bot ${this.seat} discarding ${choice.card.rank}. WinRate: ${choice.winRate.toFixed(2)}, Final Score: ${choice.score.toFixed(0)}`);
     }
-
-    decideDraw(game) {
-    const pile = game.discardPile;
-    const topCard = pile.length > 0 ? pile[pile.length - 1] : null;
-
-    // If no pile, we must draw from deck
-    if (!topCard) { 
-        game.drawFromDeck(this.seat); 
-        return; 
-    }
-
-    // Check if pickup is even legal according to game rules
-    const hand = game.players[this.seat];
-    const naturalMatches = hand.filter(c => c.rank === topCard.rank && !c.isWild).length;
-    const canPickup = (naturalMatches >= 2); 
-
-    if (!canPickup) {
-        game.drawFromDeck(this.seat);
-        return;
-    }
-
-    // --- SIMULATION STRATEGY ---
-    const SIMS = 30;
-    let deckWins = 0;
-    let pileWins = 0;
-    const myTeam = (this.seat % 2 === 0) ? 'team1' : 'team2';
-
-    for (let s = 0; s < SIMS; s++) {
-        // Test Deck Draw
-        const deckSim = game.clone();
-        this.randomizeUnknownCards(deckSim);
-        deckSim.drawFromDeck(this.seat);
-        if (this.runFastSimulation(deckSim) === myTeam) deckWins++;
-
-        // Test Pile Pickup
-        const pileSim = game.clone();
-        this.randomizeUnknownCards(pileSim);
-        const res = pileSim.pickupDiscardPile(this.seat);
-        if (res.success) {
-            if (this.runFastSimulation(pileSim) === myTeam) pileWins++;
-        }
-    }
-
-    if (pileWins > deckWins) {
-        console.log(`Bot ${this.seat} simulating Pickup: ${pileWins} wins vs Deck: ${deckWins} wins.`);
-        game.pickupDiscardPile(this.seat);
-    } else {
-        game.drawFromDeck(this.seat);
-    }
+    return choice.index;
 }
     attemptOpening(game, seat) {
     let hand = game.players[seat];
