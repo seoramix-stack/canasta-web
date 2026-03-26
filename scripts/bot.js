@@ -2,13 +2,6 @@
 const fs = require('fs');
 const path = require('path');
 
-// Safe loading of production DNA
-let PRODUCTION_DNA = null;
-const dnaPath = path.join(__dirname, 'production-dna.json');
-if (fs.existsSync(dnaPath)) {
-    PRODUCTION_DNA = JSON.parse(fs.readFileSync(dnaPath, 'utf8'));
-}
-
 class CanastaBot {
     constructor(seat, difficulty, type = '4p', ruleset = 'standard', injectedDna = null) {
     this.seat = seat;
@@ -54,6 +47,7 @@ class CanastaBot {
             this.dna = defaultDna;
         }
     }
+    console.log(`✅ Bot Initialized: Mode [${this.type}-${this.ruleset}] using DNA:`, this.dna);
 }
 
 getDefaultFallbackDna(type, ruleset) {
