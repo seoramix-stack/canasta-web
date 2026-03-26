@@ -205,6 +205,37 @@ class CanastaGame {
         return { success: true };
     }
 
+    canPickupDiscardPile(playerIndex) {
+        if (this.discardPile.length === 0) return false;
+
+        const topCard = this.discardPile[this.discardPile.length - 1];
+        const hand = this.players[playerIndex];
+        const teamMelds = (playerIndex % 2 === 0) ? this.team1Melds : this.team2Melds;
+        const rank = topCard.rank;
+
+        if (topCard.isWild || rank === "3") return false;
+
+        const hasOpened = (Object.keys(teamMelds).length > 0);
+        const containsWild = this.discardPile.some(c => c.isWild);
+        const isFrozen = !hasOpened || containsWild;
+
+        let naturalMatches = 0;
+        let wildMatches = 0;
+        hand.forEach(c => {
+            if (c.rank === rank && !c.isWild) naturalMatches++;
+            else if (c.isWild) wildMatches++;
+        });
+
+        if (isFrozen) {
+            return naturalMatches >= 2;
+        } else {
+            if (teamMelds[rank]) return true;
+            if (naturalMatches >= 2) return true;
+            if (naturalMatches >= 1 && wildMatches >= 1) return true;
+        }
+        return false;
+    }
+    
     pickupDiscardPile(playerIndex) {
         if (playerIndex !== this.currentPlayer || this.turnPhase !== "draw") return { success: false, message: "Only at start of turn." };
         if (this.discardPile.length === 0) return { success: false, message: "Pile is empty." };
