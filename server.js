@@ -9,7 +9,6 @@ const cors = require('cors');
 const Stripe = require('stripe');
 const jwt = require('jsonwebtoken');
 const { Server } = require('socket.io');
-
 // Game Imports
 const { CanastaGame } = require('./www/game.js');
 const { CanastaBot } = require('./scripts/bot.js');
@@ -17,10 +16,15 @@ const { calculateEloChange } = require('./www/elo.js');
 const { recordHumanTurn } = require('./recorder.js');
 const app = express();
 const server = http.createServer(app);
-const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+const stripe = Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_dev_placeholder');
 
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
+// DEV MODE can now be forced with .env
+const FORCE_DEV_MODE = process.env.DEV_MODE === 'true';
+
+// In dev, allow a fallback JWT secret so local testing works
+const JWT_SECRET = process.env.JWT_SECRET || 'local-dev-secret';
+
+if (!process.env.JWT_SECRET && !FORCE_DEV_MODE && process.env.MONGO_URI) {
     console.error("FATAL ERROR: JWT_SECRET is not defined.");
     process.exit(1);
 }
@@ -117,11 +121,17 @@ const disconnectTimers = {};
 const io = new Server(server, {
     cors: {
         origin: [
-            'https://canastamaster.club',
-            'capacitor://localhost',
-            'http://localhost',
-            'http://localhost:8080'
-        ],
+    'https://canastamaster.club',
+    'capacitor://localhost',
+    'http://localhost',
+    'http://localhost:8080',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:4173',
+    'http://127.0.0.1:4173'
+],
         methods: ["GET", "POST"],
         credentials: true
     },
@@ -136,13 +146,14 @@ app.use(express.static(path.join(process.cwd(), 'www')));
 
 // --- 2. MONGODB & DEV MODE CONFIGURATION ---
 const MONGO_URI = process.env.MONGO_URI;
-let DEV_MODE = false; // Flag to track if we are testing locally
+let DEV_MODE = FORCE_DEV_MODE; // explicit override from .env
 
-if (!MONGO_URI) {
-    console.log("⚠️  [SYSTEM] MONGO_URI missing. Starting in DEV MODE.");
-    console.log("👉  [SYSTEM] Login bypassed: Use ANY username/password.");
-    console.log("👉  [SYSTEM] Stats will not be saved.");
+if (DEV_MODE || !MONGO_URI) {
     DEV_MODE = true;
+    console.log("⚠️  [SYSTEM] Starting in DEV MODE.");
+    console.log("👉  [SYSTEM] Login bypassed.");
+    console.log("👉  [SYSTEM] Stats will not be saved.");
+    console.log("👉  [SYSTEM] Local bot games can auto-start.");
 } else {
     console.log("[DB] Attempting to connect to MongoDB...");
     mongoose.connect(MONGO_URI, {
@@ -178,12 +189,92 @@ if (!DEV_MODE) {
 const authRoutes = require('./routes/auth');
 // Mount the routes at '/api', passing in User and the DEV_MODE flag
 app.use('/api', authRoutes(User, DEV_MODE));
+// --- DEV QUICK LOGIN / LOCAL TEST BOOTSTRAP ---
+app.get('/api/dev-bootstrap', (req, res) => {
+    if (!DEV_MODE) {
+        return res.status(404).json({ success: false, message: 'DEV_MODE is off' });
+    }
 
+    const username = normalizeDevUsername(req.query.username);
+    const token = createDevToken(username);
+
+    playerSessions[token] = {
+        username,
+        botSpeed: 500
+    };
+
+    res.json({
+        success: true,
+        token,
+        username,
+        stats: { rating: 1250, wins: 0, losses: 0 },
+        isPremium: true
+    });
+});
+
+app.get('/dev-login', (req, res) => {
+    if (!DEV_MODE) {
+        return res.status(404).send('DEV_MODE is off');
+    }
+
+    const username = normalizeDevUsername(req.query.username);
+    const difficulty = req.query.difficulty || 'medium';
+    const playerCount = parseInt(req.query.playerCount, 10) || 2;
+    const ruleset = req.query.ruleset || 'standard';
+
+    res.send(`
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Canasta Dev Login</title>
+</head>
+<body style="font-family: Arial, sans-serif; padding: 24px;">
+    <h2>Logging into local DEV mode...</h2>
+    <p>User: <strong>${username}</strong></p>
+    <script>
+        (async () => {
+            const resp = await fetch('/api/dev-bootstrap?username=${encodeURIComponent(username)}');
+            const data = await resp.json();
+
+            if (!data.success) {
+                document.body.innerHTML += '<p style="color:red;">Dev bootstrap failed.</p>';
+                return;
+            }
+
+            localStorage.setItem('token', data.token);
+            localStorage.setItem('username', data.username);
+
+            // Optional dev flags for your frontend if you want to read them later
+            localStorage.setItem('devAutoStart', 'true');
+            localStorage.setItem('devDifficulty', '${difficulty}');
+            localStorage.setItem('devPlayerCount', '${playerCount}');
+            localStorage.setItem('devRuleset', '${ruleset}');
+
+            window.location.href = '/';
+        })();
+    </script>
+</body>
+</html>
+    `);
+});
 // --- GLOBAL STATE ---
 
 const games = {};
 const gameBots = {};
 const playerSessions = {};
+function createDevToken(username = 'DevPlayer') {
+    return jwt.sign(
+        { username, id: 'dev_id' },
+        JWT_SECRET,
+        { expiresIn: '7d' }
+    );
+}
+
+function normalizeDevUsername(value) {
+    const cleaned = String(value || 'DevPlayer').trim();
+    return cleaned || 'DevPlayer';
+}
 const matchmakingService = require('./www/matchmaking.js')(
     games,
     gameBots,
@@ -328,10 +419,47 @@ io.on('connection', async (socket) => {
         }
     }
     // 2. FALLBACK FOR HANDSHAKE USERNAME (If no token or dev mode)
-    const handshakeUser = socket.handshake.auth.username;
-    if (token && playerSessions[token] && !playerSessions[token].username && handshakeUser) {
-        playerSessions[token].username = handshakeUser;
+    // 2. FALLBACK FOR HANDSHAKE USERNAME (If no token or dev mode)
+const handshakeUser = socket.handshake.auth.username;
+if (token && playerSessions[token] && !playerSessions[token].username && handshakeUser) {
+    playerSessions[token].username = handshakeUser;
+}
+
+// 3. DEV MODE AUTO-SESSION + AUTO-START
+if (DEV_MODE && !socket.data.gameId) {
+    const devUsername = normalizeDevUsername(
+        handshakeUser ||
+        socket.handshake.query?.username ||
+        'DevPlayer'
+    );
+
+    // If frontend did not pass a token, create an in-memory dev session
+    if (!token) {
+        socket.handshake.auth.username = devUsername;
     }
+
+    const autoStartDisabled =
+        socket.handshake.auth &&
+        socket.handshake.auth.autoStartDevGame === false;
+
+    if (!autoStartDisabled) {
+        const difficulty = socket.handshake.auth?.difficulty || 'medium';
+        const playerCount = parseInt(socket.handshake.auth?.playerCount, 10) || 2;
+        const ruleset = socket.handshake.auth?.ruleset || 'standard';
+
+        // Small delay so socket is fully ready before game creation
+        setTimeout(async () => {
+            if (!socket.data.gameId) {
+                console.log(`[DEV] Auto-starting local bot game for ${devUsername}`);
+                try {
+                    await startBotGame(socket, difficulty, playerCount, ruleset);
+                } catch (err) {
+                    console.error('[DEV] Auto-start failed:', err);
+                }
+            }
+        }, 250);
+    }
+}
 
     socket.on('disconnect', () => {
         console.log(`[Disconnect] ${socket.id}`);
@@ -471,6 +599,7 @@ io.on('connection', async (socket) => {
         games[gameId].host = socket.id;
         games[gameId].readySeats = new Set();
         games[gameId].matchIsOver = false; // Flag to track completion for cleanup
+        games[gameId].turnCounter = 1;
 
         games[gameId].names = Array(pCount).fill(null);
         games[gameId].names[0] = socket.handshake.auth.username || "Host";
@@ -664,6 +793,7 @@ io.on('connection', async (socket) => {
             game.roundStarter = 0;      // Reset starter to seat 0
             game.currentPlayer = 0;     // Set current turn to seat 0
             game.processingTurnFor = null;
+            game.turnCounter = 1;
             game.rematchVotes.clear();
             game.nextRoundReady = new Set();
 
@@ -700,13 +830,14 @@ io.on('connection', async (socket) => {
 
         console.log(`[Ready] Seat ${data.seat} Ready. Total: ${game.readySeats.size}/4`);
 
-        if (game.readySeats.size === game.config.PLAYER_COUNT && game.currentPlayer === -1) {
+                if (game.readySeats.size === game.config.PLAYER_COUNT && game.currentPlayer === -1) {
             console.log(`[Start] All players ready!`);
 
             if (game.roundStarter === undefined) game.roundStarter = 0;
             game.currentPlayer = game.roundStarter;
             game.turnPhase = 'draw';
             game.processingTurnFor = null;
+            game.turnCounter = 1;
 
             // 1. Force everyone to the game screen (Client listens for 'deal_hand' to switch screens)
             io.sockets.sockets.forEach((s) => {
@@ -917,7 +1048,17 @@ io.on('connection', async (socket) => {
             let res = game.discardFromHand(data.seat, data.index);
 
             // Reset permission state if turn ends
-            if (res.success) game.goOutPermission = null;
+            if (res.success) {
+                game.goOutPermission = null;
+
+                if (typeof game.turnCounter !== 'number') {
+                    game.turnCounter = 1;
+                } else {
+                    game.turnCounter += 1;
+                }
+
+                console.log(`[TURN COUNTER] Game ${gameId} advanced to turn ${game.turnCounter}`);
+            }
 
             if (res.success && res.message === "GAME_OVER") {
                 handleRoundEnd(gameId, io);
@@ -1121,7 +1262,7 @@ async function startBotGame(humanSocket, difficulty, playerCount = 4, ruleset = 
 
     games[gameId].resetMatch();
 
-    const userName = humanSocket.handshake.auth.username || "Player";
+    const userName = normalizeDevUsername(humanSocket.handshake.auth.username || "Player");
     gameBots[gameId] = {};
 
     if (playerCount === 2) {
@@ -1152,6 +1293,7 @@ async function startBotGame(humanSocket, difficulty, playerCount = 4, ruleset = 
 
     games[gameId].currentPlayer = 0;
     games[gameId].roundStarter = 0;
+    games[gameId].turnCounter = 1; // first turn of the round
     sendUpdate(gameId, humanSocket.id, 0);
 }
 
@@ -1302,11 +1444,47 @@ async function handleRoundEnd(gameId, io) {
     // 3. Reset votes for the next round
     game.nextRoundReady = new Set();
 
-    // 4. Commit scores and check if match is over
-    const result = game.resolveMatchStatus();
+// 4. Commit scores and check if match is over
+const result = game.resolveMatchStatus();
 
-    // 5. CASE A: MATCH OVER (5000+ points)
-    if (result.isMatchOver) {
+// ===== LEARNING TRIGGER =====
+const botSeats = Object.keys(gameBots[gameId] || {});
+
+for (const botSeatStr of botSeats) {
+    const botSeat = parseInt(botSeatStr);
+    const bot = gameBots[gameId][botSeat];
+
+    if (bot && typeof bot.learnFromRound === 'function') {
+        try {
+            const botTeam = botSeat % 2 === 0 ? 'team1' : 'team2';
+            const oppTeam = botTeam === 'team1' ? 'team2' : 'team1';
+
+            const botScore = game.finalScores[botTeam].total;
+            const oppScore = game.finalScores[oppTeam].total;
+            const didWin = botScore > oppScore;
+
+            console.log(`[LEARNING] Bot seat ${botSeat}: Bot=${botScore}, Opp=${oppScore}, Win=${didWin}`);
+
+            bot.learnFromRound({
+                botScore: botScore,
+                oppScore: oppScore,
+                scoreDiff: botScore - oppScore,
+                didWin: didWin,
+                gameId: gameId,
+                finalScores: game.finalScores,
+                type: bot.type,
+                ruleset: bot.ruleset,
+                difficulty: bot.difficulty
+            });
+        } catch (err) {
+            console.error(`[LEARNING ERROR] Bot ${botSeat}:`, err);
+        }
+    }
+}
+// ===== END LEARNING TRIGGER =====
+
+// 5. CASE A: MATCH OVER (5000+ points)
+if (result.isMatchOver) {
         console.log(`[MATCH END] Game ${gameId} won by ${result.winner}`);
         game.matchIsOver = true;
 

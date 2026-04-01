@@ -9,7 +9,9 @@ class CanastaBot {
     this.type = type;       // '2p' or '4p'
     this.ruleset = ruleset; // 'standard' or 'easy'
     this.turboMode = false;
-
+    // --- LEARNING / DEBUG TRACKING ---
+    this.turnHistory = [];
+    this.turnCounter = 0;
     // --- 1. MEMORY SYSTEM INITIALIZATION ---
     this.memory = {
         initialized: false,
@@ -102,63 +104,102 @@ evaluateSeatPileWorth(game, targetSeat) {
     // --- MAIN GAME LOOP ---
 
     async decideDraw(game) {
-        const canPickUp = game.canPickupDiscardPile(this.seat);
-        
-        // If the pile is locked or we can't pick it up, just draw from deck
-        if (!canPickUp) {
-            game.drawFromDeck(this.seat);
-            return;
+    const canPickUp = game.canPickupDiscardPile(this.seat);
+    
+    // If the pile is locked or we can't pick it up, just draw from deck
+    if (!canPickUp) {
+        if (this.turnHistory && this.turnHistory.length > 0) {
+            this.turnHistory[this.turnHistory.length - 1].decision_draw = 'deck_only_option';
         }
 
-        // Simulation-driven decision
-        const SIMS = 15;
-        let deckWins = 0;
-        let pileWins = 0;
-        const myTeam = (this.seat % 2 === 0) ? 'team1' : 'team2';
-
-        for (let s = 0; s < SIMS; s++) {
-            // Scenario A: Draw from Deck
-            const deckSim = game.clone();
-            this.randomizeUnknownCards(deckSim);
-            deckSim.drawFromDeck(this.seat);
-            if (this.runFastSimulation(deckSim) === myTeam) deckWins++;
-
-            // Scenario B: Take Pile
-            const pileSim = game.clone();
-            this.randomizeUnknownCards(pileSim);
-            pileSim.pickupDiscardPile(this.seat);
-            if (this.runFastSimulation(pileSim) === myTeam) pileWins++;
-        }
-
-        // Pick the pile if simulations show it's better or equal (given pile value)
-        if (pileWins >= deckWins) {
-            game.pickupDiscardPile(this.seat);
-        } else {
-            game.drawFromDeck(this.seat);
-        }
+        game.drawFromDeck(this.seat);
+        return;
     }
+
+    // Simulation-driven decision
+    const SIMS = 15;
+    let deckWins = 0;
+    let pileWins = 0;
+    const myTeam = (this.seat % 2 === 0) ? 'team1' : 'team2';
+
+    for (let s = 0; s < SIMS; s++) {
+        // Scenario A: Draw from Deck
+        const deckSim = game.clone();
+        this.randomizeUnknownCards(deckSim);
+        deckSim.drawFromDeck(this.seat);
+        if (this.runFastSimulation(deckSim) === myTeam) deckWins++;
+
+        // Scenario B: Take Pile
+        const pileSim = game.clone();
+        this.randomizeUnknownCards(pileSim);
+        pileSim.pickupDiscardPile(this.seat);
+        if (this.runFastSimulation(pileSim) === myTeam) pileWins++;
+    }
+
+    // Pick the pile if simulations show it's better or equal
+        if (pileWins >= deckWins) {
+        if (this.turnHistory && this.turnHistory.length > 0) {
+            this.turnHistory[this.turnHistory.length - 1].decision_draw = 'pickup';
+            this.turnHistory[this.turnHistory.length - 1].decision_draw_confidence = pileWins / SIMS;
+        }
+
+        console.log(`[BOT DRAW] Seat ${this.seat} chose PICKUP | pileWins=${pileWins} deckWins=${deckWins} confidence=${(pileWins / SIMS).toFixed(2)}`);
+        game.pickupDiscardPile(this.seat);
+    } else {
+        if (this.turnHistory && this.turnHistory.length > 0) {
+            this.turnHistory[this.turnHistory.length - 1].decision_draw = 'deck';
+            this.turnHistory[this.turnHistory.length - 1].decision_draw_confidence = deckWins / SIMS;
+        }
+
+        console.log(`[BOT DRAW] Seat ${this.seat} chose DECK | deckWins=${deckWins} pileWins=${pileWins} confidence=${(deckWins / SIMS).toFixed(2)}`);
+        game.drawFromDeck(this.seat);
+    }
+}
     
     async executeTurn(game) {
-        this.updateMemory(game);
+    this.updateMemory(game);
 
-        if (game.turnPhase === "draw") {
-            await this.decideDraw(game); 
-            // Phase usually changes to 'playing' automatically after draw
-        } 
-        
-        if (game.turnPhase === "playing") {
-            const shouldMeld = this.simulateMeldDecision(game);
-            if (shouldMeld) {
-                await this.tryMelding(game); 
-            }
+        // ===== LEARNING: START TURN TRACKING =====
+    if (!this.turnHistory) this.turnHistory = [];
+    if (typeof this.turnCounter !== 'number') this.turnCounter = 0;
 
-            const discardIdx = await this.pickDiscard(game);
-            game.discardFromHand(this.seat, discardIdx);
+    this.turnCounter += 1;
+
+    const turnData = {
+        turn: this.turnCounter,
+        turnNumber: this.turnCounter,
+        seat: this.seat,
+        handSize: game.players[this.seat].length,
+        topDiscard: game.discardPile.length > 0
+            ? game.discardPile[game.discardPile.length - 1].rank
+            : null,
+        discardPileSize: game.discardPile.length,
+        isFrozen: !!game.isFrozen,
+        actions: []
+    };
+
+    this.turnHistory.push(turnData);
+
+    console.log(`[BOT TURN START] Seat ${this.seat} Turn ${this.turnCounter} HandSize ${turnData.handSize} TopDiscard ${turnData.topDiscard || 'none'}`);
+    // ===== END LEARNING =====
+
+    if (game.turnPhase === "draw") {
+        await this.decideDraw(game);
+    }
+
+    if (game.turnPhase === "playing") {
+        const shouldMeld = this.simulateMeldDecision(game);
+        if (shouldMeld) {
+            await this.tryMelding(game);
         }
 
-        // CRITICAL: Update memory for the next turn
-        this.saveStateSnapshot(game);
+        const discardIdx = await this.pickDiscard(game);
+        game.discardFromHand(this.seat, discardIdx);
     }
+
+    // CRITICAL: Update memory for the next turn
+    this.saveStateSnapshot(game);
+}
 
     // This is the helper that handles 2P vs 4P logic
     handlePartnerCommunication(game) {
@@ -433,6 +474,18 @@ fastMeldAll(simGame, seat) {
         if (rankCount >= 2 && !card.isWild) {
             penalty += this.dna.BREAK_PAIR_PENALTY;
         }
+                // Penalty for discarding valuable cards
+        if (card.rank === 'A') penalty += 400;
+        if (card.rank === 'K') penalty += 250;
+        if (card.rank === 'Q') penalty += 180;
+        if (card.rank === 'J') penalty += 150;
+        if (card.rank === '10') penalty += 120;
+        if (card.rank === '9') penalty += 100;
+
+        // Extra penalty for discarding a card the enemy already melded
+        if (enemyMelds[card.rank]) {
+            penalty += 400;
+        }
 
         // --- B. RUN SIMULATIONS ---
         for (let s = 0; s < SIMULATIONS; s++) {
@@ -463,13 +516,45 @@ fastMeldAll(simGame, seat) {
     }
 
     // Sort by the new hybrid score
-    candidates.sort((a, b) => b.score - a.score);
-    
-    const choice = candidates[0];
-    if (!this.silentMode) {
-        console.log(`Bot ${this.seat} discarding ${choice.card.rank}. WinRate: ${choice.winRate.toFixed(2)}, Final Score: ${choice.score.toFixed(0)}`);
-    }
-    return choice.index;
+candidates.sort((a, b) => b.score - a.score);
+
+const choice = candidates[0];
+
+if (this.turnHistory && this.turnHistory.length > 0) {
+    const currentTurn = this.turnHistory[this.turnHistory.length - 1];
+
+    currentTurn.decision_discard = {
+        cardRank: choice.card.rank,
+        index: choice.index,
+        score: choice.score,
+        alternatives: candidates.slice(1, 3).map(c => ({
+            rank: c.card.rank,
+            score: c.score
+        }))
+    };
+}
+
+if (!this.silentMode) {
+    console.log(`[BOT DISCARD] Seat ${this.seat} Turn ${this.turnCounter} chose ${choice.card.rank} | WinRate=${choice.winRate.toFixed(2)} | FinalScore=${choice.score.toFixed(0)}`);
+
+    console.log('[BOT DISCARD DETAIL]', {
+        seat: this.seat,
+        turnNumber: this.turnCounter,
+        chosen: {
+            rank: choice.card.rank,
+            index: choice.index,
+            score: choice.score,
+            winRate: choice.winRate
+        },
+        alternatives: candidates.slice(1, 3).map(c => ({
+            rank: c.card.rank,
+            score: c.score,
+            winRate: c.winRate
+        }))
+    });
+}
+
+return choice.index;
 }
     attemptOpening(game, seat) {
     let hand = game.players[seat];
@@ -578,6 +663,107 @@ fastMeldAll(simGame, seat) {
 
         // 3. LOGIC: If we met the requirement, say YES.
         return (canastaCount >= game.config.MIN_CANASTAS_OUT);
+    }
+            learnFromRound(roundResult) {
+        const { botScore, oppScore, scoreDiff, didWin } = roundResult;
+
+        console.log('================ BOT LEARNING START ================');
+        console.log(`[BOT LEARNING] Seat ${this.seat}`);
+        console.log(`[BOT LEARNING] botScore=${botScore} oppScore=${oppScore} scoreDiff=${scoreDiff} didWin=${didWin}`);
+        console.log(`[BOT LEARNING] turns recorded=${this.turnHistory ? this.turnHistory.length : 0}`);
+
+        if (!this.turnHistory || this.turnHistory.length === 0) {
+            console.log('[BOT LEARNING] No turn history found. Nothing to learn from.');
+            console.log('================ BOT LEARNING END =================');
+            return;
+        }
+
+        const recentTurns = this.turnHistory.slice(-5);
+
+        console.log('[BOT LEARNING] Recent turns used for learning:', recentTurns.map(t => ({
+            turnNumber: t.turnNumber,
+            handSize: t.handSize,
+            draw: t.decision_draw,
+            discard: t.decision_discard ? t.decision_discard.cardRank : null
+        })));
+
+        if (!didWin && scoreDiff < 0) {
+            console.log('[BOT LEARNING] Result = LOSS. Adjusting discard strategy.');
+            for (const turn of recentTurns) {
+                if (turn.decision_discard) {
+                    this.adjustDiscardStrategy(turn, scoreDiff);
+                }
+            }
+        } else if (didWin) {
+            console.log('[BOT LEARNING] Result = WIN. Reinforcing successful DNA.');
+            this.reinforceDNAFromWin(scoreDiff);
+        }
+
+        this.saveDNA();
+        this.turnHistory = [];
+        this.turnCounter = 0;
+
+        console.log('================ BOT LEARNING END =================');
+    }
+
+    adjustDiscardStrategy(turn, scoreDiff) {
+        const lossFactor = Math.min(0.1, Math.abs(scoreDiff) / 1000);
+
+        if (this.dna.FEED_ENEMY_MELD) {
+            this.dna.FEED_ENEMY_MELD *= (1 + lossFactor);
+        }
+
+        if (this.dna.DISCARD_WILD_PENALTY) {
+            this.dna.DISCARD_WILD_PENALTY *= (1 + lossFactor);
+        }
+
+        if (this.dna.BAIT_AGGRESSION) {
+            this.dna.BAIT_AGGRESSION *= (1 - lossFactor * 0.5);
+        }
+
+        console.log('[DNA ADJUSTMENT]', {
+            turnNumber: turn.turnNumber,
+            discardedCard: turn.decision_discard ? turn.decision_discard.cardRank : null,
+            FEED_ENEMY_MELD: this.dna.FEED_ENEMY_MELD,
+            DISCARD_WILD_PENALTY: this.dna.DISCARD_WILD_PENALTY,
+            BAIT_AGGRESSION: this.dna.BAIT_AGGRESSION
+        });
+    }
+
+    reinforceDNAFromWin(scoreDiff) {
+        const winFactor = Math.min(0.02, Math.abs(scoreDiff) / 1000);
+
+        if (this.dna.MELD_AGGRESSION) {
+            this.dna.MELD_AGGRESSION *= (1 + winFactor);
+        }
+
+        console.log('[DNA REINFORCEMENT]', {
+            MELD_AGGRESSION: this.dna.MELD_AGGRESSION
+        });
+    }
+
+    saveDNA() {
+        try {
+            const dnaPath = path.join(__dirname, 'production-dna.json');
+            const dnaKey = `${this.type}-${this.ruleset}`;
+
+            let allDNA = {};
+            if (fs.existsSync(dnaPath)) {
+                allDNA = JSON.parse(fs.readFileSync(dnaPath, 'utf8'));
+            }
+
+            allDNA[dnaKey] = this.dna;
+            
+            console.log('[DNA SAVE PREVIEW]', {
+            dnaKey,
+            dna: allDNA[dnaKey]
+            });
+            fs.writeFileSync(dnaPath, JSON.stringify(allDNA, null, 2));
+
+            console.log(`[DNA SAVED] Updated ${dnaKey} in production-dna.json`);
+        } catch (err) {
+            console.error('[DNA SAVE ERROR]', err);
+        }
     }
 }
 

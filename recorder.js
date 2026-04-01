@@ -19,7 +19,7 @@ function recordHumanTurn(game, seat, actionType, actionValue, playerName, extraD
         const team2Score = game.cumulativeScores.team2;
         
         const stateSnapshot = {
-            turnNumber: game.turnCounter || 0,
+            turnNumber: typeof game.turnCounter === 'number' ? game.turnCounter : 0,
             handSize: game.players[seat].length,
             allHandSizes: game.players.map(p => p.length),
             pileSize: game.discardPile.length,
