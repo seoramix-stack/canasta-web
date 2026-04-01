@@ -53,17 +53,87 @@ class CanastaBot {
 }
 
 getDefaultFallbackDna(type, ruleset) {
-        // Added PICKUP_PATIENCE to defaults
-        if (type === '2p') {
-            return ruleset === 'easy' ?
-                { DISCARD_WILD_PENALTY: 500, FEED_ENEMY_MELD: 1000, DISCARD_SINGLE_BONUS: 50, MELD_AGGRESSION: 1.0, PICKUP_THRESHOLD: 1, BREAK_PAIR_PENALTY: 50, DISCARD_JUNK_BONUS: 20, GO_OUT_THRESHOLD: 0, BAIT_AGGRESSION: 50, PICKUP_PATIENCE: 4, BLACK_3_BONUS: -1000 } :
-                { DISCARD_WILD_PENALTY: 1732, FEED_ENEMY_MELD: 2071, DISCARD_SINGLE_BONUS: -93, MELD_AGGRESSION: 0.8, PICKUP_THRESHOLD: 2, BREAK_PAIR_PENALTY: 200, DISCARD_JUNK_BONUS: 10, GO_OUT_THRESHOLD: 0, BAIT_AGGRESSION: 150, PICKUP_PATIENCE: 6, BLACK_3_BONUS: -2000 };
-        } else {
-            return ruleset === 'easy' ?
-                { DISCARD_WILD_PENALTY: 500, FEED_ENEMY_MELD: 1000, DISCARD_SINGLE_BONUS: 50, MELD_AGGRESSION: 1.0, PICKUP_THRESHOLD: 1, BREAK_PAIR_PENALTY: 50, DISCARD_JUNK_BONUS: 20, GO_OUT_THRESHOLD: 1000, BAIT_AGGRESSION: 50, PICKUP_PATIENCE: 4, BLACK_3_BONUS: -1000 } :
-                { DISCARD_WILD_PENALTY: 1732, FEED_ENEMY_MELD: 3012, DISCARD_SINGLE_BONUS: -93, MELD_AGGRESSION: 0.7, PICKUP_THRESHOLD: 2, BREAK_PAIR_PENALTY: 200, DISCARD_JUNK_BONUS: 10, GO_OUT_THRESHOLD: 500, BAIT_AGGRESSION: 150, PICKUP_PATIENCE: 7, BLACK_3_BONUS: -2000 };
-        }
+    if (type === '2p') {
+        return ruleset === 'easy'
+            ? {
+                DISCARD_WILD_PENALTY: 500,
+                FEED_ENEMY_MELD: 1000,
+                DISCARD_SINGLE_BONUS: 50,
+                MELD_AGGRESSION: 1.0,
+                PICKUP_THRESHOLD: 1,
+                BREAK_PAIR_PENALTY: 50,
+                DISCARD_JUNK_BONUS: 20,
+                GO_OUT_THRESHOLD: 0,
+                BAIT_AGGRESSION: 50,
+                PICKUP_PATIENCE: 4,
+                BLACK_3_BONUS: -1000,
+
+                EARLY_PILE_TAKE_THRESHOLD: 140,
+                PAIR_BUILDING_BONUS: 220,
+                DANGER_ZONE_MELD_BOOST: 650,
+                CANASTA_CLOSURE_PRIORITY: 900,
+                SAFE_SINGLE_DISCARD_BONUS: 80
+            }
+            : {
+                DISCARD_WILD_PENALTY: 2500,
+                FEED_ENEMY_MELD: 4000,
+                DISCARD_SINGLE_BONUS: -93,
+                MELD_AGGRESSION: 0.8,
+                PICKUP_THRESHOLD: 2,
+                BREAK_PAIR_PENALTY: 240,
+                DISCARD_JUNK_BONUS: 10,
+                GO_OUT_THRESHOLD: 0,
+                BAIT_AGGRESSION: 120,
+                PICKUP_PATIENCE: 6,
+                BLACK_3_BONUS: -2000,
+
+                EARLY_PILE_TAKE_THRESHOLD: 180,
+                PAIR_BUILDING_BONUS: 260,
+                DANGER_ZONE_MELD_BOOST: 850,
+                CANASTA_CLOSURE_PRIORITY: 1200,
+                SAFE_SINGLE_DISCARD_BONUS: 120
+            };
+    } else {
+        return ruleset === 'easy'
+            ? {
+                DISCARD_WILD_PENALTY: 500,
+                FEED_ENEMY_MELD: 1000,
+                DISCARD_SINGLE_BONUS: 50,
+                MELD_AGGRESSION: 1.0,
+                PICKUP_THRESHOLD: 1,
+                BREAK_PAIR_PENALTY: 50,
+                DISCARD_JUNK_BONUS: 20,
+                GO_OUT_THRESHOLD: 1000,
+                BAIT_AGGRESSION: 50,
+                PICKUP_PATIENCE: 4,
+                BLACK_3_BONUS: -1000,
+
+                EARLY_PILE_TAKE_THRESHOLD: 140,
+                PAIR_BUILDING_BONUS: 220,
+                DANGER_ZONE_MELD_BOOST: 650,
+                CANASTA_CLOSURE_PRIORITY: 900,
+                SAFE_SINGLE_DISCARD_BONUS: 80
+            }
+            : {
+                DISCARD_WILD_PENALTY: 1732,
+                FEED_ENEMY_MELD: 3012,
+                DISCARD_SINGLE_BONUS: -150,
+                MELD_AGGRESSION: 0.7,
+                PICKUP_THRESHOLD: 2,
+                PICKUP_PATIENCE: 7,
+                BREAK_PAIR_PENALTY: 200,
+                BAIT_AGGRESSION: 150,
+                BLACK_3_BONUS: -2000,
+                GO_OUT_THRESHOLD: 500,
+
+                EARLY_PILE_TAKE_THRESHOLD: 180,
+                PAIR_BUILDING_BONUS: 240,
+                DANGER_ZONE_MELD_BOOST: 750,
+                CANASTA_CLOSURE_PRIORITY: 1000,
+                SAFE_SINGLE_DISCARD_BONUS: 100
+            };
     }
+}
 getCardValue(card) {
         if (!card) return 0;
         const rank = card.rank;
@@ -102,56 +172,313 @@ evaluateSeatPileWorth(game, targetSeat) {
     }
 
     // --- MAIN GAME LOOP ---
+    getMyTeamMelds(game) {
+    return (this.seat % 2 === 0) ? game.team1Melds : game.team2Melds;
+}
 
+getEnemyTeamMelds(game) {
+    return (this.seat % 2 === 0) ? game.team2Melds : game.team1Melds;
+}
+
+countCanastas(melds) {
+    return Object.values(melds).filter(m => m.length >= 7).length;
+}
+
+getOpponentLowestHandSize(game) {
+    let minSize = 999;
+    for (let i = 0; i < game.players.length; i++) {
+        if ((i % 2) !== (this.seat % 2)) {
+            minSize = Math.min(minSize, game.players[i].length);
+        }
+    }
+    return minSize === 999 ? 99 : minSize;
+}
+
+didOpponentMeld(game) {
+    const enemyMelds = this.getEnemyTeamMelds(game);
+    return Object.keys(enemyMelds).length > 0;
+}
+
+didWeMeld(game) {
+    const myMelds = this.getMyTeamMelds(game);
+    return Object.keys(myMelds).length > 0;
+}
+
+justPickedUpThisTurn() {
+    if (!this.turnHistory || this.turnHistory.length === 0) return false;
+    const currentTurn = this.turnHistory[this.turnHistory.length - 1];
+    return currentTurn.decision_draw === 'pickup';
+}
+
+getStrategicPhase(game) {
+    const drawLeft = game.deck.length;
+    const myMelds = this.getMyTeamMelds(game);
+    const enemyMelds = this.getEnemyTeamMelds(game);
+
+    const enemyCanastas = this.countCanastas(enemyMelds);
+    const oppLowHand = this.getOpponentLowestHandSize(game) <= 4;
+    const oppHasMelded = Object.keys(enemyMelds).length > 0;
+    const weHaveMelded = Object.keys(myMelds).length > 0;
+
+    // Final emergency: save points / close canastas / go out if possible
+    if (drawLeft < 10) return 'save_points';
+
+    // Aggressive race only when opponent is already in strong finishing posture
+    if (drawLeft <= 35 && enemyCanastas >= 2) return 'danger';
+
+    // Early pile-control phase
+    if (drawLeft > 40 && oppHasMelded && !weHaveMelded) return 'pile_control';
+
+    // Early hidden phase
+    if (drawLeft > 40) return 'hidden';
+
+    // If opponent may finish soon because hand is low, become more active
+    if (oppLowHand && enemyCanastas >= 1) return 'danger';
+
+    return 'controlled_open';
+}
+
+attemptMinimalOpening(game, seat) {
+    const hand = game.players[seat];
+    const phase = this.getStrategicPhase(game);
+
+    const groups = {};
+    const wildCards = [];
+
+    hand.forEach((c, i) => {
+        if (c.isWild) wildCards.push(i);
+        else {
+            if (!groups[c.rank]) groups[c.rank] = [];
+            groups[c.rank].push(i);
+        }
+    });
+
+    const teamScore = (seat % 2 === 0) ? game.cumulativeScores.team1 : game.cumulativeScores.team2;
+    const req = game.getOpeningReq(teamScore);
+
+    let options = [];
+
+    for (let rank in groups) {
+        if (rank === "3") continue;
+
+        // Best option: pure natural opening
+        if (groups[rank].length >= 3) {
+            const indices = groups[rank].slice(0, 3);
+            const points = indices.reduce((sum, idx) => sum + this.getCardValue(hand[idx]), 0);
+            options.push({
+                rank,
+                indices,
+                points,
+                usesWild: false
+            });
+        }
+
+        // Only allow pair + wild opening if NOT in late emergency save mode
+        if (groups[rank].length === 2 && wildCards.length > 0 && phase !== 'save_points') {
+            const wildIdx = wildCards[0];
+            const indices = [...groups[rank], wildIdx];
+            const points = indices.reduce((sum, idx) => sum + this.getCardValue(hand[idx]), 0);
+            options.push({
+                rank,
+                indices,
+                points,
+                usesWild: true
+            });
+        }
+    }
+
+    options.sort((a, b) => {
+        if (a.usesWild !== b.usesWild) return a.usesWild ? 1 : -1;
+        return a.points - b.points;
+    });
+
+    let chosen = [];
+    let totalPoints = 0;
+    const used = new Set();
+
+    for (const option of options) {
+        const overlaps = option.indices.some(idx => used.has(idx));
+        if (overlaps) continue;
+
+        chosen.push({ rank: option.rank, indices: option.indices });
+        option.indices.forEach(idx => used.add(idx));
+        totalPoints += option.points;
+
+        if (totalPoints >= req) break;
+    }
+
+    if (totalPoints >= req && chosen.length > 0) {
+        return game.processOpening(seat, chosen, false).success;
+    }
+
+    return false;
+}
+
+meldExistingCardsConservatively(game) {
+    const myMelds = this.getMyTeamMelds(game);
+    const hand = game.players[this.seat];
+
+    const getFreshIndices = (targetRank) => {
+        return game.players[this.seat]
+            .map((card, index) => (card.rank === targetRank && !card.isWild ? index : -1))
+            .filter(idx => idx !== -1);
+    };
+
+    // First priority: close near-canastas
+    for (let rank in myMelds) {
+        const meldSize = myMelds[rank].length;
+        const matching = getFreshIndices(rank);
+
+        if (matching.length === 0) continue;
+
+        if (meldSize >= 5) {
+            const needed = 7 - meldSize;
+            if (needed > 0 && matching.length >= needed) {
+                const res = game.meldCards(this.seat, matching.slice(0, needed), rank);
+                if (res.success) return true;
+            }
+        }
+    }
+
+    // Second priority: add only one card to existing melds, but keep pairs in hand
+    for (let rank in myMelds) {
+        const matching = getFreshIndices(rank);
+        if (matching.length >= 2) {
+            const res = game.meldCards(this.seat, [matching[0]], rank);
+            if (res.success) return true;
+        }
+    }
+
+    return false;
+}
+
+meldAggressively(game) {
+    const myMelds = this.getMyTeamMelds(game);
+
+    let madeMeld = true;
+    let safetyCounter = 0;
+    while (madeMeld && safetyCounter < 50) {
+    safetyCounter++;
+        madeMeld = false;
+        let hand = game.players[this.seat];
+        let groups = {};
+
+        hand.forEach((c, i) => {
+            if (!c.isWild) {
+                if (!groups[c.rank]) groups[c.rank] = [];
+                groups[c.rank].push(i);
+            }
+        });
+
+        for (let rank in myMelds) {
+            if (groups[rank] && groups[rank].length > 0) {
+                const canastaCount = this.countCanastas(myMelds);
+                if (canastaCount < game.config.MIN_CANASTAS_OUT && hand.length - groups[rank].length < 2) continue;
+
+                let res = game.meldCards(this.seat, groups[rank], rank);
+                if (res.success) {
+                    madeMeld = true;
+                    break;
+                }
+            }
+        }
+        if (madeMeld) continue;
+
+        for (let rank in groups) {
+            let cardsToPlay = [...groups[rank]];
+            const canastaCount = this.countCanastas(myMelds);
+
+            if (canastaCount < game.config.MIN_CANASTAS_OUT && hand.length - cardsToPlay.length < 2) continue;
+
+            if (cardsToPlay.length >= 3) {
+                let res = game.meldCards(this.seat, cardsToPlay, rank);
+                if (res.success) {
+                    madeMeld = true;
+                    break;
+                }
+            }
+        }
+    }
+    if (safetyCounter >= 50) {
+    console.error(`[BOT SAFETY] Seat ${this.seat} tryMelding stopped after 50 iterations.`);
+}
+}
     async decideDraw(game) {
     const canPickUp = game.canPickupDiscardPile(this.seat);
-    
-    // If the pile is locked or we can't pick it up, just draw from deck
+    const phase = this.getStrategicPhase(game);
+
     if (!canPickUp) {
         if (this.turnHistory && this.turnHistory.length > 0) {
             this.turnHistory[this.turnHistory.length - 1].decision_draw = 'deck_only_option';
         }
-
         game.drawFromDeck(this.seat);
         return;
     }
 
-    // Simulation-driven decision
+    const pileWorth = this.evaluateSeatPileWorth(game, this.seat);
+
+    // Hard strategy rules first
+    if (phase === 'hidden') {
+        // Early game: don't reveal yourself unless the pile is really worth it
+        if (pileWorth < this.dna.EARLY_PILE_TAKE_THRESHOLD) {
+            if (this.turnHistory && this.turnHistory.length > 0) {
+                this.turnHistory[this.turnHistory.length - 1].decision_draw = 'deck_hidden_phase';
+            }
+            game.drawFromDeck(this.seat);
+            return;
+        }
+    }
+
+    if (phase === 'pile_control') {
+        // If opponent already started melding early, be more willing to take a valuable pile
+        if (pileWorth >= this.dna.EARLY_PILE_TAKE_THRESHOLD) {
+            if (this.turnHistory && this.turnHistory.length > 0) {
+                this.turnHistory[this.turnHistory.length - 1].decision_draw = 'pickup_pile_control';
+            }
+            game.pickupDiscardPile(this.seat);
+            return;
+        }
+    }
+
+    // Simulation fallback
     const SIMS = 15;
     let deckWins = 0;
     let pileWins = 0;
     const myTeam = (this.seat % 2 === 0) ? 'team1' : 'team2';
 
     for (let s = 0; s < SIMS; s++) {
-        // Scenario A: Draw from Deck
         const deckSim = game.clone();
         this.randomizeUnknownCards(deckSim);
         deckSim.drawFromDeck(this.seat);
         if (this.runFastSimulation(deckSim) === myTeam) deckWins++;
 
-        // Scenario B: Take Pile
         const pileSim = game.clone();
         this.randomizeUnknownCards(pileSim);
         pileSim.pickupDiscardPile(this.seat);
         if (this.runFastSimulation(pileSim) === myTeam) pileWins++;
     }
 
-    // Pick the pile if simulations show it's better or equal
-        if (pileWins >= deckWins) {
+    let takePile = false;
+
+    if (phase === 'danger' || phase === 'save_points') {
+        takePile = (pileWins >= deckWins - 1);
+    } else {
+        takePile = (pileWins >= deckWins);
+    }
+
+    if (takePile) {
         if (this.turnHistory && this.turnHistory.length > 0) {
             this.turnHistory[this.turnHistory.length - 1].decision_draw = 'pickup';
             this.turnHistory[this.turnHistory.length - 1].decision_draw_confidence = pileWins / SIMS;
         }
-
-        console.log(`[BOT DRAW] Seat ${this.seat} chose PICKUP | pileWins=${pileWins} deckWins=${deckWins} confidence=${(pileWins / SIMS).toFixed(2)}`);
+        console.log(`[BOT DRAW] Seat ${this.seat} chose PICKUP | phase=${phase} pileWins=${pileWins} deckWins=${deckWins}`);
         game.pickupDiscardPile(this.seat);
     } else {
         if (this.turnHistory && this.turnHistory.length > 0) {
             this.turnHistory[this.turnHistory.length - 1].decision_draw = 'deck';
             this.turnHistory[this.turnHistory.length - 1].decision_draw_confidence = deckWins / SIMS;
         }
-
-        console.log(`[BOT DRAW] Seat ${this.seat} chose DECK | deckWins=${deckWins} pileWins=${pileWins} confidence=${(deckWins / SIMS).toFixed(2)}`);
+        console.log(`[BOT DRAW] Seat ${this.seat} chose DECK | phase=${phase} deckWins=${deckWins} pileWins=${pileWins}`);
         game.drawFromDeck(this.seat);
     }
 }
@@ -188,14 +515,31 @@ evaluateSeatPileWorth(game, targetSeat) {
     }
 
     if (game.turnPhase === "playing") {
-        const shouldMeld = this.simulateMeldDecision(game);
-        if (shouldMeld) {
-            await this.tryMelding(game);
+    const shouldMeld = this.simulateMeldDecision(game);
+
+    if (shouldMeld) {
+        await this.tryMelding(game);
+
+        // SAFETY: if melding ended the round or changed phase, stop here
+        if (game.turnPhase !== "playing") {
+            this.saveStateSnapshot(game);
+            return;
         }
 
-        const discardIdx = await this.pickDiscard(game);
+        // SAFETY: if bot has no cards left after melding, stop here
+        if (!game.players[this.seat] || game.players[this.seat].length === 0) {
+            this.saveStateSnapshot(game);
+            return;
+        }
+    }
+
+    const discardIdx = await this.pickDiscard(game);
+
+    // SAFETY: only discard if a valid index was returned
+    if (typeof discardIdx === "number" && discardIdx >= 0) {
         game.discardFromHand(this.seat, discardIdx);
     }
+}
 
     // CRITICAL: Update memory for the next turn
     this.saveStateSnapshot(game);
@@ -338,27 +682,32 @@ randomizeUnknownCards(simGame) {
 }
 
 simulateMeldDecision(game) {
-    const SIMS = 20;
-    let holdWins = 0;
-    let meldWins = 0;
-    const myTeam = (this.seat % 2 === 0) ? 'team1' : 'team2';
+    const phase = this.getStrategicPhase(game);
+    const myMelds = this.getMyTeamMelds(game);
+    const alreadyOpened = Object.keys(myMelds).length > 0;
+    const pickedUpThisTurn = this.justPickedUpThisTurn();
 
-    for (let s = 0; s < SIMS; s++) {
-        // Scenario A: Hold cards (Skip melding this turn)
-        const holdSim = game.clone();
-        this.randomizeUnknownCards(holdSim);
-        // We skip fastMeldAll and go straight to a random discard simulation
-        if (this.runFastSimulation(holdSim) === myTeam) holdWins++;
-
-        // Scenario B: Meld cards
-        const meldSim = game.clone();
-        this.randomizeUnknownCards(meldSim);
-        this.fastMeldAll(meldSim, this.seat);
-        if (this.runFastSimulation(meldSim) === myTeam) meldWins++;
+    if (phase === 'hidden') {
+        // Early game: do not expose cards unless the pile was picked up
+        return pickedUpThisTurn;
     }
 
-    console.log(`Meld Decision -> Meld: ${meldWins} vs Hold: ${holdWins}`);
-    return meldWins >= holdWins;
+    if (phase === 'pile_control') {
+        // Keep hand hidden while building for future pile control
+        return pickedUpThisTurn;
+    }
+
+    if (phase === 'controlled_open') {
+        // Mid game: if already open or we just took pile, allow controlled melding
+        return alreadyOpened || pickedUpThisTurn;
+    }
+
+    if (phase === 'danger' || phase === 'save_points') {
+        // Late game: stop hiding, race to canastas and finish
+        return true;
+    }
+
+    return false;
 }
 
 runFastSimulation(simGame) {
@@ -442,39 +791,62 @@ fastMeldAll(simGame, seat) {
 
     pickDiscard(game) {
     let hand = game.players[this.seat];
+    if (!hand || hand.length === 0) {
+    console.error(`[BOT SAFETY] Seat ${this.seat} pickDiscard called with empty hand.`);
+    return -1;
+}
     let candidates = [];
-    const teamMelds = (this.seat % 2 === 0) ? game.team1Melds : game.team2Melds;
-    const enemyMelds = (this.seat % 2 === 0) ? game.team2Melds : game.team1Melds;
+    const teamMelds = this.getMyTeamMelds(game);
+    const enemyMelds = this.getEnemyTeamMelds(game);
+    const phase = this.getStrategicPhase(game);
 
     for (let i = 0; i < hand.length; i++) {
         const card = hand[i];
         let wins = 0;
-        const SIMULATIONS = 30; 
-
-        // --- A. CALCULATE HEURISTIC PENALTY (DNA) ---
+        const SIMULATIONS = 30;
         let penalty = 0;
 
-        // Penalty for discarding Wilds
+        const rankCount = hand.filter(c => c.rank === card.rank).length;
+        const ownMeldSize = teamMelds[card.rank] ? teamMelds[card.rank].length : 0;
+        const enemyHasRank = !!enemyMelds[card.rank];
+
+        // Wild discard penalty
         if (card.isWild) {
-            // Only discard wild if the pile is huge (worth freezing)
             if (game.discardPile.length < 5) {
                 penalty += this.dna.DISCARD_WILD_PENALTY;
             } else {
-                penalty += (this.dna.DISCARD_WILD_PENALTY / 2); // Lesser penalty if freezing a big pile
+                penalty += (this.dna.DISCARD_WILD_PENALTY / 2);
             }
         }
 
-        // Penalty for feeding enemy melds
-        if (enemyMelds[card.rank]) {
+        // Feeding enemy meld
+        if (enemyHasRank) {
             penalty += this.dna.FEED_ENEMY_MELD;
+            penalty += 400;
         }
 
-        // Penalty for breaking pairs in hand
-        const rankCount = hand.filter(c => c.rank === card.rank).length;
+        // Keep pairs for future pile pickup
         if (rankCount >= 2 && !card.isWild) {
             penalty += this.dna.BREAK_PAIR_PENALTY;
+            if (phase === 'hidden' || phase === 'pile_control') {
+                penalty += this.dna.PAIR_BUILDING_BONUS;
+            }
         }
-                // Penalty for discarding valuable cards
+
+        // Protect own meld growth
+        if (ownMeldSize > 0) {
+            penalty += 150;
+
+            if (phase === 'danger' || phase === 'save_points') {
+                penalty += this.dna.DANGER_ZONE_MELD_BOOST;
+            }
+
+            if (ownMeldSize >= 5) {
+                penalty += this.dna.CANASTA_CLOSURE_PRIORITY;
+            }
+        }
+
+        // Card value penalties
         if (card.rank === 'A') penalty += 400;
         if (card.rank === 'K') penalty += 250;
         if (card.rank === 'Q') penalty += 180;
@@ -482,19 +854,19 @@ fastMeldAll(simGame, seat) {
         if (card.rank === '10') penalty += 120;
         if (card.rank === '9') penalty += 100;
 
-        // Extra penalty for discarding a card the enemy already melded
-        if (enemyMelds[card.rank]) {
-            penalty += 400;
+        // Safe singletons are better early if opponent has not shown them
+        if ((phase === 'hidden' || phase === 'pile_control') && rankCount === 1 && !enemyHasRank && !card.isWild) {
+            penalty -= this.dna.SAFE_SINGLE_DISCARD_BONUS;
         }
 
-        // --- B. RUN SIMULATIONS ---
+        // Run simulations
         for (let s = 0; s < SIMULATIONS; s++) {
             const simGame = game.clone();
             this.randomizeUnknownCards(simGame);
 
             const moveResult = simGame.discardFromHand(this.seat, i);
             if (!moveResult.success) {
-                wins = -999; // Illegal move
+                wins = -999;
                 break;
             }
 
@@ -503,58 +875,45 @@ fastMeldAll(simGame, seat) {
             if (winner === myTeam) wins++;
         }
 
-        // --- C. COMBINE WIN RATE + DNA ---
         const winRate = wins / SIMULATIONS;
         const finalScore = (winRate * 1000) - penalty;
 
-        candidates.push({ 
-            index: i, 
-            score: finalScore, 
+        candidates.push({
+            index: i,
+            score: finalScore,
             winRate: winRate,
-            card: card 
+            card: card
         });
     }
 
-    // Sort by the new hybrid score
-candidates.sort((a, b) => b.score - a.score);
+    candidates.sort((a, b) => b.score - a.score);
+    const choice = candidates[0];
 
-const choice = candidates[0];
-
-if (this.turnHistory && this.turnHistory.length > 0) {
-    const currentTurn = this.turnHistory[this.turnHistory.length - 1];
-
-    currentTurn.decision_discard = {
-        cardRank: choice.card.rank,
-        index: choice.index,
-        score: choice.score,
-        alternatives: candidates.slice(1, 3).map(c => ({
-            rank: c.card.rank,
-            score: c.score
-        }))
-    };
+if (!choice) {
+    console.error(`[BOT SAFETY] Seat ${this.seat} pickDiscard found no valid candidates.`);
+    return -1;
 }
 
-if (!this.silentMode) {
-    console.log(`[BOT DISCARD] Seat ${this.seat} Turn ${this.turnCounter} chose ${choice.card.rank} | WinRate=${choice.winRate.toFixed(2)} | FinalScore=${choice.score.toFixed(0)}`);
+    if (this.turnHistory && this.turnHistory.length > 0) {
+        const currentTurn = this.turnHistory[this.turnHistory.length - 1];
 
-    console.log('[BOT DISCARD DETAIL]', {
-        seat: this.seat,
-        turnNumber: this.turnCounter,
-        chosen: {
-            rank: choice.card.rank,
+        currentTurn.decision_discard = {
+            cardRank: choice.card.rank,
             index: choice.index,
             score: choice.score,
-            winRate: choice.winRate
-        },
-        alternatives: candidates.slice(1, 3).map(c => ({
-            rank: c.card.rank,
-            score: c.score,
-            winRate: c.winRate
-        }))
-    });
-}
+            phase,
+            alternatives: candidates.slice(1, 3).map(c => ({
+                rank: c.card.rank,
+                score: c.score
+            }))
+        };
+    }
 
-return choice.index;
+    if (!this.silentMode) {
+        console.log(`[BOT DISCARD] Seat ${this.seat} Turn ${this.turnCounter} phase=${phase} chose ${choice.card.rank} | WinRate=${choice.winRate.toFixed(2)} | FinalScore=${choice.score.toFixed(0)}`);
+    }
+
+    return choice.index;
 }
     attemptOpening(game, seat) {
     let hand = game.players[seat];
@@ -601,56 +960,62 @@ return choice.index;
     }
     return false;
 }
-
-    tryMelding(game) {
-    const myMelds = (this.seat % 2 === 0) ? game.team1Melds : game.team2Melds;
     
-    if (Object.keys(myMelds).length === 0) {
-        const opened = this.attemptOpening(game, this.seat);
-        if (!opened) return; // Stop if we can't open yet
+    tryMelding(game) {
+    const phase = this.getStrategicPhase(game);
+    const myMelds = this.getMyTeamMelds(game);
+    const alreadyOpened = Object.keys(myMelds).length > 0;
+    const pickedUpThisTurn = this.justPickedUpThisTurn();
+
+    // NOT OPENED YET
+    if (!alreadyOpened) {
+        if (phase === 'hidden' || phase === 'pile_control') {
+            // Early game: only open if we picked up the pile this turn
+            if (!pickedUpThisTurn) return;
+
+            const opened = this.attemptMinimalOpening(game, this.seat);
+            if (!opened) return;
+
+            this.meldExistingCardsConservatively(game);
+            return;
+        }
+
+        if (phase === 'controlled_open') {
+            const opened = this.attemptMinimalOpening(game, this.seat);
+            if (!opened) return;
+
+            this.meldExistingCardsConservatively(game);
+            return;
+        }
+
+        if (phase === 'danger') {
+            // Opponent has 2 canastas and deck <= 35: become aggressive
+            const opened = this.attemptMinimalOpening(game, this.seat);
+            if (!opened) return;
+
+            this.meldAggressively(game);
+            return;
+        }
+
+        if (phase === 'save_points') {
+            // Deck < 10: avoid wasting wilds on weak opening pairs
+            const opened = this.attemptMinimalOpening(game, this.seat);
+            if (!opened) return;
+
+            this.meldAggressively(game);
+            return;
+        }
     }
 
-    let madeMeld = true;
+    // ALREADY OPENED
+    if (phase === 'hidden' || phase === 'pile_control' || phase === 'controlled_open') {
+        this.meldExistingCardsConservatively(game);
+        return;
+    }
 
-    while (madeMeld) {
-        madeMeld = false;
-        let hand = game.players[this.seat];
-        let groups = {};
-        let wildIndices = [];
-
-        hand.forEach((c, i) => {
-            if (c.isWild) wildIndices.push(i);
-            else {
-                if (!groups[c.rank]) groups[c.rank] = [];
-                groups[c.rank].push(i);
-            }
-        });
-
-        // Simplified Priority 1: Always add to existing melds
-        for (let rank in myMelds) {
-            if (groups[rank] && groups[rank].length > 0) {
-                // Safety: Ensure we don't float illegally (leave at least 2 cards if no canastas)
-                const canastaCount = Object.values(myMelds).filter(p => p.length >= 7).length;
-                if (canastaCount < game.config.MIN_CANASTAS_OUT && hand.length - groups[rank].length < 2) continue;
-
-                let res = game.meldCards(this.seat, groups[rank], rank);
-                if (res.success) { madeMeld = true; break; }
-            }
-        }
-        if (madeMeld) continue;
-
-        // Simplified Priority 2: Create new melds
-        for (let rank in groups) {
-            let cardsToPlay = [...groups[rank]];
-            const canastaCount = Object.values(myMelds).filter(p => p.length >= 7).length;
-            
-            if (canastaCount < game.config.MIN_CANASTAS_OUT && hand.length - cardsToPlay.length < 2) continue;
-
-            if (cardsToPlay.length >= 3) {
-                let res = game.meldCards(this.seat, cardsToPlay, rank);
-                if (res.success) { madeMeld = true; break; }
-            }
-        }
+    if (phase === 'danger' || phase === 'save_points') {
+        this.meldAggressively(game);
+        return;
     }
 }
 
@@ -707,40 +1072,50 @@ return choice.index;
     }
 
     adjustDiscardStrategy(turn, scoreDiff) {
-        const lossFactor = Math.min(0.1, Math.abs(scoreDiff) / 1000);
+    const lossFactor = Math.min(40, Math.abs(scoreDiff) / 25);
 
-        if (this.dna.FEED_ENEMY_MELD) {
-            this.dna.FEED_ENEMY_MELD *= (1 + lossFactor);
-        }
+    if (!turn.decision_discard) return;
 
-        if (this.dna.DISCARD_WILD_PENALTY) {
-            this.dna.DISCARD_WILD_PENALTY *= (1 + lossFactor);
-        }
+    const phase = turn.decision_discard.phase || 'unknown';
 
-        if (this.dna.BAIT_AGGRESSION) {
-            this.dna.BAIT_AGGRESSION *= (1 - lossFactor * 0.5);
-        }
-
-        console.log('[DNA ADJUSTMENT]', {
-            turnNumber: turn.turnNumber,
-            discardedCard: turn.decision_discard ? turn.decision_discard.cardRank : null,
-            FEED_ENEMY_MELD: this.dna.FEED_ENEMY_MELD,
-            DISCARD_WILD_PENALTY: this.dna.DISCARD_WILD_PENALTY,
-            BAIT_AGGRESSION: this.dna.BAIT_AGGRESSION
-        });
+    if (phase === 'hidden' || phase === 'pile_control') {
+        this.dna.PAIR_BUILDING_BONUS = Math.min(500, (this.dna.PAIR_BUILDING_BONUS || 220) + 5);
+        this.dna.FEED_ENEMY_MELD = Math.min(7000, (this.dna.FEED_ENEMY_MELD || 4000) + lossFactor);
     }
+
+    if (phase === 'danger' || phase === 'save_points') {
+        this.dna.DANGER_ZONE_MELD_BOOST = Math.min(1600, (this.dna.DANGER_ZONE_MELD_BOOST || 850) + 10);
+        this.dna.CANASTA_CLOSURE_PRIORITY = Math.min(2200, (this.dna.CANASTA_CLOSURE_PRIORITY || 1200) + 15);
+    }
+
+    this.dna.DISCARD_WILD_PENALTY = Math.min(6000, (this.dna.DISCARD_WILD_PENALTY || 2500) + 10);
+    this.dna.BAIT_AGGRESSION = Math.max(40, (this.dna.BAIT_AGGRESSION || 120) - 1);
+
+    console.log('[DNA ADJUSTMENT]', {
+        turnNumber: turn.turnNumber,
+        discardedCard: turn.decision_discard.cardRank,
+        phase,
+        FEED_ENEMY_MELD: this.dna.FEED_ENEMY_MELD,
+        DISCARD_WILD_PENALTY: this.dna.DISCARD_WILD_PENALTY,
+        PAIR_BUILDING_BONUS: this.dna.PAIR_BUILDING_BONUS,
+        DANGER_ZONE_MELD_BOOST: this.dna.DANGER_ZONE_MELD_BOOST,
+        CANASTA_CLOSURE_PRIORITY: this.dna.CANASTA_CLOSURE_PRIORITY
+    });
+}
 
     reinforceDNAFromWin(scoreDiff) {
-        const winFactor = Math.min(0.02, Math.abs(scoreDiff) / 1000);
+    const winFactor = Math.min(20, Math.abs(scoreDiff) / 50);
 
-        if (this.dna.MELD_AGGRESSION) {
-            this.dna.MELD_AGGRESSION *= (1 + winFactor);
-        }
+    this.dna.MELD_AGGRESSION = Math.min(1.5, (this.dna.MELD_AGGRESSION || 0.8) + 0.01);
+    this.dna.CANASTA_CLOSURE_PRIORITY = Math.min(2200, (this.dna.CANASTA_CLOSURE_PRIORITY || 1200) + winFactor);
+    this.dna.DANGER_ZONE_MELD_BOOST = Math.min(1600, (this.dna.DANGER_ZONE_MELD_BOOST || 850) + 5);
 
-        console.log('[DNA REINFORCEMENT]', {
-            MELD_AGGRESSION: this.dna.MELD_AGGRESSION
-        });
-    }
+    console.log('[DNA REINFORCEMENT]', {
+        MELD_AGGRESSION: this.dna.MELD_AGGRESSION,
+        CANASTA_CLOSURE_PRIORITY: this.dna.CANASTA_CLOSURE_PRIORITY,
+        DANGER_ZONE_MELD_BOOST: this.dna.DANGER_ZONE_MELD_BOOST
+    });
+}
 
     saveDNA() {
         try {
