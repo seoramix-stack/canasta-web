@@ -218,8 +218,6 @@
 
         <div class="menu-list">
             <button class="menu-btn primary" onclick="navTo('screen-online')"><span></span> PLAY ONLINE</button>
-            <button class="menu-btn" onclick="navTo('screen-bot')"><span></span> TRAIN VS BOTS</button>
-
             <button class="menu-btn secondary" onclick="openFriendsScreen()"><span></span> FRIENDS</button>
             <button class="menu-btn secondary" onclick="openProfile()"><span></span> MY PROFILE</button>
             <button class="menu-btn" onclick="navTo('screen-how-to')"><span></span>RULES</button>
@@ -331,30 +329,41 @@
 
         <button class="menu-btn secondary" onclick="connectToGame('casual')" style="display:none;">⚡ QUICK
             MATCH</button>
-        <button class="menu-btn secondary" onclick="navTo('screen-private-menu')">🔒 PRIVATE ROOM</button>
+        <button class="menu-btn secondary" onclick="openFriendlyGamesLobby()">🤝 FRIENDLY GAMES</button>
 
         <br>
         <button class="menu-btn text-only" onclick="navTo('screen-home')">BACK</button>
     </div>
 
-    <div id="screen-private-menu" class="app-screen">
-        <h2>PRIVATE ROOM</h2>
-        <p>Play with friends</p>
+    <div id="screen-friendly-games" class="app-screen">
+    <h2>FRIENDLY GAMES</h2>
+    <p class="friendly-games-intro">Join a waiting room or create a new one</p>
 
-        <button class="menu-btn primary" onclick="navTo('screen-create-room')">CREATE ROOM</button>
-        <button class="menu-btn secondary" onclick="navTo('screen-join-room')">JOIN ROOM</button>
-        <br>
-        <button class="menu-btn text-only" onclick="navTo('screen-online')">BACK</button>
+    <div class="friendly-games-actions">
+        <button class="menu-btn primary" onclick="navTo('screen-create-room')">CREATE NEW ROOM</button>
+        <button class="menu-btn secondary" onclick="refreshFriendlyGamesList()">REFRESH</button>
     </div>
 
-    <div id="screen-create-room" class="app-screen">
-        <h2>CREATE ROOM</h2>
-        <p>Name your room</p>
+    <div id="friendly-games-summary" class="info-text friendly-games-summary">
+        Loading rooms...
+    </div>
 
-        <div class="form-group">
-            <input type="text" id="create-room-name" class="form-input" placeholder="Room Name (e.g. 'table1')"
-                maxlength="12">
-        </div>
+    <section class="friendly-games-section">
+        <h3 class="friendly-games-section-title waiting">WAITING FOR PLAYERS</h3>
+        <div id="friendly-games-waiting-list"></div>
+    </section>
+
+    <section class="friendly-games-section">
+        <h3 class="friendly-games-section-title playing">GAMES IN PROGRESS</h3>
+        <div id="friendly-games-playing-list"></div>
+    </section>
+
+    <button class="menu-btn text-only" onclick="navTo('screen-online')">BACK</button>
+</div>
+
+    <div id="screen-create-room" class="app-screen">
+    <h2>CREATE FRIENDLY ROOM</h2>
+    <p>Your table name will be assigned automatically</p>
 
         <div style="margin: 15px 0;">
             <div style="color: #bdc3c7; font-size: 14px; margin-bottom: 5px;">MAX PLAYERS</div>
@@ -378,17 +387,17 @@
         </div>
         <br>
         <button class="menu-btn success" onclick="doCreateRoom()">CREATE & JOIN</button>
-        <button class="menu-btn text-only" onclick="navTo('screen-private-menu')">CANCEL</button>
+        <button class="menu-btn text-only" onclick="openFriendlyGamesLobby()">CANCEL</button>
     </div>
 
     <div id="screen-join-room" class="app-screen">
-        <h2>JOIN ROOM</h2>
-        <div class="form-group">
-            <input type="text" id="join-id" class="form-input" placeholder="Room ID (e.g. game_xyz)">
-        </div>
-        <button class="menu-btn primary" onclick="doJoinPrivate()">ENTER ROOM</button>
-        <button class="menu-btn text-only" onclick="navTo('screen-private-menu')">CANCEL</button>
+    <h2>JOIN FRIENDLY ROOM</h2>
+    <div class="form-group">
+        <input type="text" id="join-id" class="form-input" placeholder="Internal room ID (e.g. friendly_1)">
     </div>
+    <button class="menu-btn primary" onclick="doJoinPrivate()">ENTER ROOM</button>
+    <button class="menu-btn text-only" onclick="openFriendlyGamesLobby()">CANCEL</button>
+</div>
 
     <div id="screen-friends" class="app-screen">
         <div class="screen-header">
@@ -498,8 +507,6 @@
                 style="margin-bottom: 20px; width: 280px; margin: 0 auto 20px auto; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; display:none;">
             </div>
 
-            <button id="btn-victory-start" class="menu-btn primary" onclick="connectToGame('bot')">START NEW
-                MATCH</button>
             <button class="menu-btn secondary" onclick="navTo('screen-home')">BACK TO MENU</button>
         </div>
     </div>
@@ -879,7 +886,7 @@
                 MENU</button>
         </div>
     </div>
-<script src="https://canastamaster.club/socket.io/socket.io.js"></script>
+<script src="/socket.io/socket.io.js"></script>
 <script type="module" src="client.js"></script>
 </body>
 

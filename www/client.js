@@ -1,14 +1,14 @@
 // client.js
 const isNative = !!window.Capacitor;
 // DEV/PROD: Explicitly pointing to production server as requested
-const API_BASE = 'https://canastamaster.club';
+const API_BASE = window.location.origin;
 import { state, saveSession, logout } from './state.js';
 import * as UI from './ui.js';
 import * as Anim from './animations.js';
 
 // Expose state for Live Bot Teaching (Console Access)
 window.state = state;
-
+window.currentFriendlyGames = [];
 // Enable immersive/fullscreen mode on native app
 if (isNative) {
     // Import and use StatusBar to hide system bars
@@ -737,6 +737,14 @@ function initSocket(token) {
         // This triggers the UI update whenever someone joins or switches seats
         UI.renderLobbySeats(data, state.mySeat);
     });
+        state.socket.on('friendly_games_list', (rooms) => {
+        window.currentFriendlyGames = rooms || [];
+
+        const screen = document.getElementById('screen-friendly-games');
+        if (screen && screen.classList.contains('active-screen')) {
+            UI.renderFriendlyGamesList(window.currentFriendlyGames);
+        }
+    });
     state.socket.on('seat_changed', (data) => {
         state.mySeat = data.newSeat;
         // We don't need to call render here because 'lobby_update' usually follows immediately
@@ -816,6 +824,7 @@ function initSocket(token) {
 
     state.socket.on('deal_hand', (data) => {
         state.mySeat = data.seat;
+        setGameTimerVisibility(!data.isFriendly);
         UI.navTo('screen-game');
         document.getElementById('status').style.display = 'none';
         if (data.bankTimers) {
@@ -848,6 +857,7 @@ function initSocket(token) {
     });
 
     state.socket.on('update_game', (data) => {
+        setGameTimerVisibility(!data.isFriendly);
         if (data.bankTimers) {
             state.seatTimers = data.bankTimers;
             updateTimerDOM();
@@ -1042,15 +1052,14 @@ function initSocket(token) {
     state.socket.on('error_message', (msg) => alert(msg));
 
     state.socket.on('private_created', (data) => {
-        state.mySeat = data.seat;
-        UI.navTo('screen-lobby');
-        document.getElementById('lobby-room-id').innerText = data.gameId;
-        document.getElementById('lobby-host-controls').style.display = 'block';
-        document.getElementById('lobby-wait-msg').style.display = 'none';
+    state.mySeat = data.seat;
+    UI.navTo('screen-lobby');
+    document.getElementById('lobby-room-id').innerText = data.roomName || data.gameId;
+    document.getElementById('lobby-host-controls').style.display = 'block';
+    document.getElementById('lobby-wait-msg').style.display = 'none';
 
-        // Auto-fill join inputs for easy sharing testing
-        document.getElementById('join-id').value = data.gameId;
-    });
+    document.getElementById('join-id').value = data.gameId;
+});
 
     state.socket.on('rematch_update', (data) => {
         const btn = document.getElementById('btn-victory-start');
@@ -1060,12 +1069,12 @@ function initSocket(token) {
     });
 
     state.socket.on('joined_private_success', (data) => {
-        state.mySeat = data.seat;
-        UI.navTo('screen-lobby');
-        document.getElementById('lobby-room-id').innerText = data.gameId;
-        document.getElementById('lobby-host-controls').style.display = 'none';
-        document.getElementById('lobby-wait-msg').style.display = 'block';
-    });
+    state.mySeat = data.seat;
+    UI.navTo('screen-lobby');
+    document.getElementById('lobby-room-id').innerText = data.roomName || data.gameId;
+    document.getElementById('lobby-host-controls').style.display = 'none';
+    document.getElementById('lobby-wait-msg').style.display = 'block';
+});
 
     state.socket.on('social_list_data', (data) => {
         if (state.friendMode === 'search') return; // Don't overwrite search results
@@ -1090,8 +1099,14 @@ function initSocket(token) {
 function startTimerSystem() {
     if (state.timerInterval) clearInterval(state.timerInterval);
     afkSeconds = 0;
+    timeoutSent = false;
 
-    // NEW: Don't start timer if playing against bots (identified by name)
+    if (state.activeData?.isFriendly) {
+        UI.hideInactivityWarning();
+        return;
+    }
+
+    // Don't start timer if playing against bots
     if (state.activeData && state.activeData.names && state.activeData.names.some(n => n && n.includes("Bot "))) {
         return;
     }
@@ -1114,6 +1129,7 @@ function startTimerSystem() {
 }
 
 function updateTimerDOM() {
+    if (state.activeData?.isFriendly) return;
     // Helper to format 720 -> "12:00"
     const fmt = (s) => {
         const m = Math.floor(s / 60);
@@ -1142,18 +1158,19 @@ function updateTimerDOM() {
         if (el) el.innerText = fmt(state.seatTimers[i]);
     }
 }
+function setGameTimerVisibility(show) {
+    const timerIds = ['timer-me', 'timer-left', 'timer-partner', 'timer-right'];
 
+    timerIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.style.visibility = show ? 'visible' : 'hidden';
+    });
+}
 // --- PRIVATE ROOM LOGIC ---
 
 window.doCreateRoom = () => {
-    const roomName = document.getElementById('create-room-name').value;
-
-    // Validation: Only Room Name required
-    if (!roomName) return alert("Please enter a Room Name");
-
     state.socket.emit('request_create_private', {
-        gameId: roomName,
-        // No PIN sent
         playerCount: state.currentPlayerCount || 4,
         ruleset: state.currentRuleset || 'standard'
     });
@@ -1163,9 +1180,39 @@ window.doJoinPrivate = () => {
     const gameId = document.getElementById('join-id').value;
 
     // Validation: Only Game ID required
-    if (!gameId) return alert("Please enter the Room Name");
+    if (!gameId) return alert("Please enter the room ID");
 
     state.socket.emit('request_join_private', { gameId });
+};
+
+// --- FRIENDLY GAMES LOBBY ---
+
+window.openFriendlyGamesLobby = () => {
+    UI.navTo('screen-friendly-games');
+    window.refreshFriendlyGamesList();
+};
+
+window.refreshFriendlyGamesList = async () => {
+    try {
+        const res = await fetch(`${API_BASE}/api/friendly-games`);
+        const data = await res.json();
+
+        if (!data.success) {
+            alert(data.message || 'Could not load friendly games.');
+            return;
+        }
+
+        window.currentFriendlyGames = data.rooms || [];
+        UI.renderFriendlyGamesList(window.currentFriendlyGames);
+    } catch (err) {
+        console.error('Friendly Games fetch error:', err);
+        alert('Could not load friendly games.');
+    }
+};
+
+window.joinFriendlyGame = (roomId) => {
+    if (!roomId) return;
+    state.socket.emit('request_join_private', { gameId: roomId });
 };
 
 // --- FRIENDS LOGIC ---

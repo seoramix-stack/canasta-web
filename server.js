@@ -263,6 +263,7 @@ app.get('/dev-login', (req, res) => {
 const games = {};
 const gameBots = {};
 const playerSessions = {};
+const activeFriendlyPlayers = {};
 function createDevToken(username = 'DevPlayer') {
     return jwt.sign(
         { username, id: 'dev_id' },
@@ -348,6 +349,18 @@ app.get('/api/leaderboard', async (req, res) => {
 });
 
 // --- SOCKET CONNECTION ---
+app.get('/api/friendly-games', (req, res) => {
+    try {
+        res.json({
+            success: true,
+            rooms: getFriendlyGamesList()
+        });
+    } catch (err) {
+        console.error('[API] Friendly Games Error:', err);
+        res.status(500).json({ success: false, message: 'Could not load friendly games.' });
+    }
+});
+
 io.on('connection', async (socket) => {
     // console.log('User connected:', socket.id);
     const token = socket.handshake.auth.token;
@@ -366,59 +379,76 @@ io.on('connection', async (socket) => {
             playerSessions[token].username = validUser;
 
             // --- UNIFIED RECONNECTION LOGIC ---
-            const session = playerSessions[token];
-            if (session && session.gameId) {
+const session = playerSessions[token];
+if (session && session.gameId) {
+    const game = games[session.gameId];
 
-                // A. Cancel Forfeit Timer (If they returned quickly)
-                const timerKey = `${session.gameId}_${session.seat}`;
-                if (disconnectTimers[timerKey]) {
-                    console.log(`[Reconnect] Player ${session.seat} returned! Forfeit cancelled.`);
-                    clearTimeout(disconnectTimers[timerKey]);
-                    delete disconnectTimers[timerKey];
-                    if (games[session.gameId] && games[session.gameId].disconnectedPlayers) {
-                        delete games[session.gameId].disconnectedPlayers[session.seat];
-                    }
-                }
+    if (game) {
+        // 1. Cancel active-game disconnect timer
+        const activeTimerKey = `${session.gameId}_${session.seat}`;
+        if (disconnectTimers[activeTimerKey]) {
+            console.log(`[Reconnect] Player ${session.seat} returned! Forfeit cancelled.`);
+            clearTimeout(disconnectTimers[activeTimerKey]);
+            delete disconnectTimers[activeTimerKey];
 
-                // B. Restore Socket to Game
-                if (games[session.gameId]) {
-                    socket.data.gameId = session.gameId;
-                    socket.data.seat = session.seat;
-                    await socket.join(session.gameId);
-                    console.log(`[Reconnect] Player restored to Game ${session.gameId}`);
-                    // Immediate update so they see the board
-                    sendUpdate(session.gameId, socket.id, session.seat);
-                } else {
-                    console.log(`[Cleanup] Removing stale session for game ${session.gameId}`);
-                    delete playerSessions[token];
-                }
+            if (game.disconnectedPlayers) {
+                delete game.disconnectedPlayers[session.seat];
             }
+        }
+
+        // 2. Cancel future lobby timer too (safe even if it doesn't exist yet)
+        const lobbyTimerKey = `lobby_${session.gameId}_${session.seat}`;
+        if (disconnectTimers[lobbyTimerKey]) {
+            clearTimeout(disconnectTimers[lobbyTimerKey]);
+            delete disconnectTimers[lobbyTimerKey];
+        }
+
+        // 3. Restore socket state
+        socket.data.gameId = session.gameId;
+        socket.data.seat = session.seat;
+        await socket.join(session.gameId);
+
+        // 4. IMPORTANT: update active friendly player ownership
+        if (session.username) {
+            activeFriendlyPlayers[session.username] = {
+                gameId: session.gameId,
+                seat: session.seat,
+                socketId: socket.id,
+                joinedAt: Date.now()
+            };
+        }
+
+        console.log(`[Reconnect] Player restored to Game ${session.gameId}`);
+
+        // 5. If reconnecting to a friendly lobby, send them back to the lobby screen
+        if (game.isPrivate && game.isLobby) {
+            socket.emit('joined_private_success', {
+                gameId: session.gameId,
+                roomName: game.roomName || `Table ${session.gameId.split('_')[1] || session.gameId}`,
+                seat: session.seat
+            });
+
+            broadcastLobby(session.gameId);
+            emitFriendlyGamesList();
+        } else {
+            // 6. Otherwise restore active game board
+            sendUpdate(session.gameId, socket.id, session.seat);
+        }
+
+    } else {
+        console.log(`[Cleanup] Removing stale session for game ${session.gameId}`);
+        if (session.username) {
+            delete activeFriendlyPlayers[session.username];
+        }
+        delete playerSessions[token];
+    }
+}
 
         } catch (err) {
             console.log(`[AUTH FAIL] Invalid Token for socket ${socket.id}`);
         }
     }
 
-    const session = playerSessions[token];
-    if (session) {
-        if (games[session.gameId]) {
-            // ... existing reconnect logic ...
-
-            // CANCEL THE TIMER if they return!
-            const timerKey = `${session.gameId}_${session.seat}`;
-            if (disconnectTimers[timerKey]) {
-                console.log(`[Reconnect] Player ${session.seat} returned! Forfeit cancelled.`);
-                clearTimeout(disconnectTimers[timerKey]);
-                delete disconnectTimers[timerKey];
-
-                // Unmark disconnect status
-                if (games[session.gameId].disconnectedPlayers) {
-                    delete games[session.gameId].disconnectedPlayers[session.seat];
-                }
-            }
-        }
-    }
-    // 2. FALLBACK FOR HANDSHAKE USERNAME (If no token or dev mode)
     // 2. FALLBACK FOR HANDSHAKE USERNAME (If no token or dev mode)
 const handshakeUser = socket.handshake.auth.username;
 if (token && playerSessions[token] && !playerSessions[token].username && handshakeUser) {
@@ -438,53 +468,98 @@ if (DEV_MODE && !socket.data.gameId) {
         socket.handshake.auth.username = devUsername;
     }
 
-    const autoStartDisabled =
-        socket.handshake.auth &&
-        socket.handshake.auth.autoStartDevGame === false;
-
-    if (!autoStartDisabled) {
-        const difficulty = socket.handshake.auth?.difficulty || 'medium';
-        const playerCount = parseInt(socket.handshake.auth?.playerCount, 10) || 2;
-        const ruleset = socket.handshake.auth?.ruleset || 'standard';
-
-        // Small delay so socket is fully ready before game creation
-        setTimeout(async () => {
-            if (!socket.data.gameId) {
-                console.log(`[DEV] Auto-starting local bot game for ${devUsername}`);
-                try {
-                    await startBotGame(socket, difficulty, playerCount, ruleset);
-                } catch (err) {
-                    console.error('[DEV] Auto-start failed:', err);
-                }
-            }
-        }, 250);
-    }
 }
-
     socket.on('disconnect', () => {
-        console.log(`[Disconnect] ${socket.id}`);
-        matchmakingService.removeSocketFromQueue(socket.id);
+    console.log(`[Disconnect] ${socket.id}`);
+    matchmakingService.removeSocketFromQueue(socket.id);
 
-        const gameId = socket.data.gameId;
-        const seat = socket.data.seat;
+    const gameId = socket.data.gameId;
+    const seat = socket.data.seat;
+    const username =
+        socket.handshake.auth.username ||
+        (token && playerSessions[token]?.username) ||
+        validUser ||
+        null;
 
-        // 1. Check if user was in an active game
-        if (gameId && games[gameId] && !games[gameId].matchIsOver) {
-            console.log(`[Game ${gameId}] Player ${seat} disconnected. Starting 60s timer.`);
+    if (!gameId || !games[gameId]) return;
 
-            // 2. Mark in game state (optional, for UI status)
-            games[gameId].disconnectedPlayers[seat] = true;
+    const game = games[gameId];
 
-            // 3. Start 60-Second Forfeit Timer
-            // We store it by username or seat, using a unique key
-            const timerKey = `${gameId}_${seat}`;
+    // 1. FRIENDLY LOBBY DISCONNECT:
+    // keep the seat for a short grace period so refresh/reconnect works
+    if (game.isPrivate && game.isLobby) {
+        const timerKey = `lobby_${gameId}_${seat}`;
 
-            disconnectTimers[timerKey] = setTimeout(() => {
-                console.log(`[Forfeit] Player ${seat} failed to reconnect. Ending Game ${gameId}.`);
-                handleForfeit(gameId, seat);
-            }, 60000); // 1 Minute
+        disconnectTimers[timerKey] = setTimeout(() => {
+            const currentGame = games[gameId];
+            if (!currentGame) return;
+
+            // If the player reconnected with a new socket, do nothing
+            const presence = username ? activeFriendlyPlayers[username] : null;
+            if (presence && presence.socketId !== socket.id) {
+                return;
+            }
+
+            // Remove their seat only if they still own it
+            if (
+                seat !== undefined &&
+                seat !== null &&
+                currentGame.names[seat] === username
+            ) {
+                currentGame.names[seat] = null;
+            }
+
+            if (currentGame.readySeats) {
+                currentGame.readySeats.delete(seat);
+            }
+
+            clearFriendlyPresence(username);
+
+            if (
+                token &&
+                playerSessions[token] &&
+                playerSessions[token].gameId === gameId &&
+                playerSessions[token].seat === seat
+            ) {
+                delete playerSessions[token];
+            }
+
+            const remainingPlayers = currentGame.names.filter(n => n !== null).length;
+
+            if (remainingPlayers === 0) {
+                console.log(`[LOBBY] Empty friendly room ${gameId} deleted after disconnect timeout.`);
+                delete games[gameId];
+            } else {
+                if (currentGame.host === socket.id) {
+                    promoteNewHost(gameId);
+                }
+                broadcastLobby(gameId);
+            }
+
+            emitFriendlyGamesList();
+        }, 30000); // 30 seconds to reconnect
+
+        return;
+    }
+
+    // 2. ACTIVE MATCH DISCONNECT:
+    // start the normal forfeit timer
+    if (!game.isLobby && !game.matchIsOver) {
+        console.log(`[Game ${gameId}] Player ${seat} disconnected. Starting 60s timer.`);
+
+        if (!game.disconnectedPlayers) {
+            game.disconnectedPlayers = {};
         }
-    });
+        game.disconnectedPlayers[seat] = true;
+
+        const timerKey = `${gameId}_${seat}`;
+
+        disconnectTimers[timerKey] = setTimeout(() => {
+            console.log(`[Forfeit] Player ${seat} failed to reconnect. Ending Game ${gameId}.`);
+            handleForfeit(gameId, seat);
+        }, 60000);
+    }
+});
 
     // --- LOBBY ACTIONS ---
 
@@ -532,6 +607,7 @@ if (DEV_MODE && !socket.data.gameId) {
         // 1. DEAL CARDS NOW
         game.resetMatch();
         game.isLobby = false;
+        emitFriendlyGamesList();
 
         // 2. MOVE EVERYONE TO GAME SCREEN
         io.sockets.sockets.forEach((s) => {
@@ -565,93 +641,163 @@ if (DEV_MODE && !socket.data.gameId) {
     });
 
     socket.on('request_create_private', (data) => {
-        // 1. Validate Input (Room Name is the ID)
-        const requestedId = data.gameId ? data.gameId.trim() : "";
-        const pCount = parseInt(data.playerCount) || 4;
-        const ruleset = data.ruleset || 'standard';
+    const pCount = parseInt(data.playerCount) || 4;
+    const ruleset = data.ruleset || 'standard';
+    const gameId = generateFriendlyTableId();
+    const tableNumber = gameId.split('_')[1];
+    const token = socket.handshake.auth.token;
+    const username = socket.handshake.auth.username || "Host";
 
-        if (!requestedId) return socket.emit('error_message', "Please enter a Room Name.");
+    // Determine base config
+    let config = (pCount === 2)
+        ? { PLAYER_COUNT: 2, HAND_SIZE: 15 }
+        : { PLAYER_COUNT: 4, HAND_SIZE: 11 };
 
-        // 2. Check if Room ID is taken
-        if (games[requestedId]) {
-            return socket.emit('error_message', "Room Name already exists. Try another.");
-        }
+    if (ruleset === 'easy') {
+        config.DRAW_COUNT = 1;
+        config.MIN_CANASTAS_OUT = 1;
+    } else {
+        config.DRAW_COUNT = 2;
+        config.MIN_CANASTAS_OUT = 2;
+    }
 
-        const gameId = requestedId;
+    // Initialize game
+    games[gameId] = new CanastaGame(config);
+    games[gameId].isPrivate = true;
+    games[gameId].isFriendly = true;
+    games[gameId].isLobby = true;
+    games[gameId].host = socket.id;
+    games[gameId].readySeats = new Set();
+    games[gameId].matchIsOver = false;
+    games[gameId].turnCounter = 1;
 
-        // 3. Determine Base Config
-        let config = (pCount === 2)
-            ? { PLAYER_COUNT: 2, HAND_SIZE: 15 }
-            : { PLAYER_COUNT: 4, HAND_SIZE: 11 };
+    games[gameId].names = Array(pCount).fill(null);
+    games[gameId].names[0] = username;
+    games[gameId].roomName = `Table ${tableNumber}`;
+    games[gameId].creatorName = username;
+    games[gameId].friendlyRuleset = ruleset;
+    games[gameId].createdAt = Date.now();
 
-        if (ruleset === 'easy') {
-            config.DRAW_COUNT = 1;
-            config.MIN_CANASTAS_OUT = 1;
-        } else {
-            config.DRAW_COUNT = 2;
-            config.MIN_CANASTAS_OUT = 2;
-        }
+    // Join host
+    socket.join(gameId);
+    socket.data.gameId = gameId;
+    socket.data.seat = 0;
+    if (token) {
+        playerSessions[token] = {
+            gameId,
+            seat: 0,
+            username
+        };
+    }
 
-        // 4. Initialize Game
-        games[gameId] = new CanastaGame(config);
-        games[gameId].isPrivate = true;
-        games[gameId].isLobby = true;
-        games[gameId].host = socket.id;
-        games[gameId].readySeats = new Set();
-        games[gameId].matchIsOver = false; // Flag to track completion for cleanup
-        games[gameId].turnCounter = 1;
-
-        games[gameId].names = Array(pCount).fill(null);
-        games[gameId].names[0] = socket.handshake.auth.username || "Host";
-
-        // Join Host
-        socket.join(gameId);
-        socket.data.gameId = gameId;
-        socket.data.seat = 0;
-
-        // Send success (Removed PIN from payload)
-        socket.emit('private_created', { gameId: gameId, seat: 0 });
-        broadcastLobby(gameId);
+    socket.emit('private_created', {
+        gameId: gameId,
+        roomName: games[gameId].roomName,
+        seat: 0
     });
 
+    broadcastLobby(gameId);
+});
+
     socket.on('request_join_private', (data) => {
-        const { gameId } = data;
-        const game = games[gameId];
+    const { gameId } = data;
+    const game = games[gameId];
+    const token = socket.handshake.auth.token;
+    const username = socket.handshake.auth.username || "Guest";
 
-        if (!game) return socket.emit('error_message', "Game not found.");
-        if (!game.isPrivate) return socket.emit('error_message', "Not a private game.");
+    // 1. Basic room checks
+    if (!game) return socket.emit('error_message', "Game not found.");
+    if (!game.isPrivate) return socket.emit('error_message', "Not a private game.");
+    if (!game.isLobby) return socket.emit('error_message', "This room is already in progress.");
 
-        // Find the first empty seat (null)
-        let seat = game.names.findIndex(n => n === null);
-        if (seat === -1) return socket.emit('error_message', "Room is full.");
+    // 2. Clean up stale presence record if it points to a room that no longer exists
+    if (
+        activeFriendlyPlayers[username] &&
+        (
+            !games[activeFriendlyPlayers[username].gameId] ||
+            games[activeFriendlyPlayers[username].gameId].names[activeFriendlyPlayers[username].seat] !== username
+        )
+    ) {
+        delete activeFriendlyPlayers[username];
+    }
 
-        // Join
+    // 3. If this user is already seated in THIS SAME ROOM,
+    // reattach them instead of giving them another seat
+    const existingSeat = game.names.findIndex(name => name === username);
+
+    if (existingSeat !== -1) {
         socket.join(gameId);
         socket.data.gameId = gameId;
-        socket.data.seat = seat;
+        socket.data.seat = existingSeat;
 
-        // Update Name
-        const pName = socket.handshake.auth.username || `Player ${seat + 1}`;
-        game.names[seat] = pName;
-
-        const token = socket.handshake.auth.token;
         if (token) {
-            // Save the guest's session so the server remembers them
             playerSessions[token] = {
-                gameId: gameId,
-                seat: seat,
-                username: pName
+                gameId,
+                seat: existingSeat,
+                username
             };
         }
 
-        // Broadcast to everyone in room
+        activeFriendlyPlayers[username] = {
+            gameId,
+            seat: existingSeat,
+            socketId: socket.id,
+            joinedAt: Date.now()
+        };
+
         broadcastLobby(gameId);
         broadcastAll(gameId);
-        socket.emit('joined_private_success', { gameId, seat });
 
-        // If full, auto-start logic? Or wait for Host to click start?
-        // For now, let's auto-start if 4 join, or rely on Ready button.
+        return socket.emit('joined_private_success', {
+            gameId,
+            roomName: game.roomName || `Table ${gameId.split('_')[1] || gameId}`,
+            seat: existingSeat
+        });
+    }
+
+    // 4. If this user is already seated in ANOTHER friendly room, reject the join
+    const activePresence = activeFriendlyPlayers[username];
+    if (activePresence && activePresence.gameId !== gameId) {
+        return socket.emit('error_message', "You are already seated in another friendly room.");
+    }
+
+    // 5. Find an empty seat
+    let seat = game.names.findIndex(n => n === null);
+    if (seat === -1) return socket.emit('error_message', "Room is full.");
+
+    // 6. Join the room normally
+    socket.join(gameId);
+    socket.data.gameId = gameId;
+    socket.data.seat = seat;
+    game.names[seat] = username;
+
+    // 7. Save reconnect session
+    if (token) {
+        playerSessions[token] = {
+            gameId,
+            seat,
+            username
+        };
+    }
+
+    // 8. Save active friendly-room presence
+    activeFriendlyPlayers[username] = {
+        gameId,
+        seat,
+        socketId: socket.id,
+        joinedAt: Date.now()
+    };
+
+    // 9. Update everyone
+    broadcastLobby(gameId);
+    broadcastAll(gameId);
+
+    socket.emit('joined_private_success', {
+        gameId,
+        roomName: game.roomName || `Table ${gameId.split('_')[1] || gameId}`,
+        seat
     });
+});
 
     // --- NEW: SOCIAL EVENTS ---
     socket.on('updateBotSpeed', ({ speed }) => {
@@ -1143,7 +1289,7 @@ if (DEV_MODE && !socket.data.gameId) {
 
         // NEW: Ignore timeouts in bot games to allow teaching/debugging
         if (gameBots[gameId]) return;
-
+        if (game.isFriendly) return;
         // We trust the client's 60s trigger but add a small 2s buffer 
         // to account for network lag vs the server's lastActionTime.
         const now = Date.now();
@@ -1159,52 +1305,213 @@ if (DEV_MODE && !socket.data.gameId) {
         handleForfeit(gameId, game.currentPlayer);
     });
 
-    socket.on('leave_game', async () => {
-        const gameId = socket.data.gameId;
-        const token = socket.handshake.auth.token;
-        const game = games[gameId];
+        socket.on('leave_game', async () => {
+    const gameId = socket.data.gameId;
+    const seat = socket.data.seat;
+    const token = socket.handshake.auth.token;
+    const username =
+        socket.handshake.auth.username ||
+        (token && playerSessions[token]?.username) ||
+        null;
+    const game = games[gameId];
 
-        // 1. Remove from matchmaking queue
-        matchmakingService.removeSocketFromQueue(socket.id);
+    // 1. Remove from matchmaking queue
+    matchmakingService.removeSocketFromQueue(socket.id);
 
-        console.log(`[Leave] User requesting to leave Game ${gameId}`);
+    console.log(`[Leave] User requesting to leave Game ${gameId}`);
 
-        // 2. Remove from session tracking
-        if (token && playerSessions[token]) delete playerSessions[token];
+    // 2. Cancel any disconnect timers for this seat
+    const activeTimerKey = `${gameId}_${seat}`;
+    const lobbyTimerKey = `lobby_${gameId}_${seat}`;
+
+    if (disconnectTimers[activeTimerKey]) {
+        clearTimeout(disconnectTimers[activeTimerKey]);
+        delete disconnectTimers[activeTimerKey];
+    }
+
+    if (disconnectTimers[lobbyTimerKey]) {
+        clearTimeout(disconnectTimers[lobbyTimerKey]);
+        delete disconnectTimers[lobbyTimerKey];
+    }
+
+    // 3. If leaving an active match, treat it as an immediate forfeit
+    if (game && !game.isLobby && !game.matchIsOver) {
+        if (game.disconnectedPlayers) {
+            delete game.disconnectedPlayers[seat];
+        }
+
+        if (token && playerSessions[token]) {
+            delete playerSessions[token];
+        }
+
+        clearFriendlyPresence(username);
+
         socket.data.gameId = null;
         socket.data.seat = null;
 
-        // 3. Leave the socket room & Clean up
         if (gameId) {
             await socket.leave(gameId);
-
-            // Handle Lobby Leave
-            if (game && game.isPrivate && game.isLobby) {
-                const seat = socket.data.seat;
-                if (seat !== undefined && seat !== null) {
-                    console.log(`[LOBBY] Seat ${seat} freed in Game ${gameId}`);
-                    game.names[seat] = null;
-                    if (game.readySeats) game.readySeats.delete(seat);
-                    broadcastLobby(gameId);
-                }
-            }
-
-            // Handle Private Match Cleanup
-            if (game && game.isPrivate && game.matchIsOver) {
-                console.log(`[CLEANUP] Private Match ${gameId} finished and player left. Deleting room.`);
-                delete games[gameId];
-                if (gameBots[gameId]) delete gameBots[gameId];
-            }
         }
-    });
+
+        handleForfeit(gameId, seat);
+        return;
+    }
+
+    // 4. Remove reconnect session and friendly presence
+    if (token && playerSessions[token]) {
+        delete playerSessions[token];
+    }
+
+    clearFriendlyPresence(username);
+
+    socket.data.gameId = null;
+    socket.data.seat = null;
+
+    // 5. Leave the socket room
+    if (gameId) {
+        await socket.leave(gameId);
+
+        // Friendly lobby leave
+        if (game && game.isPrivate && game.isLobby) {
+            if (
+                seat !== undefined &&
+                seat !== null &&
+                game.names[seat] === username
+            ) {
+                console.log(`[LOBBY] Seat ${seat} freed in Game ${gameId}`);
+                game.names[seat] = null;
+            }
+
+            if (game.readySeats) {
+                game.readySeats.delete(seat);
+            }
+
+            if (game.host === socket.id) {
+                promoteNewHost(gameId);
+            }
+
+            const remainingPlayers = game.names.filter(n => n !== null).length;
+
+            if (remainingPlayers === 0) {
+                console.log(`[LOBBY] Empty friendly room ${gameId} deleted.`);
+                delete games[gameId];
+            } else {
+                broadcastLobby(gameId);
+            }
+
+            emitFriendlyGamesList();
+        }
+
+        // Finished private match cleanup
+        if (game && game.isPrivate && game.matchIsOver) {
+            console.log(`[CLEANUP] Private Match ${gameId} finished and player left. Deleting room.`);
+            delete games[gameId];
+            if (gameBots[gameId]) delete gameBots[gameId];
+            emitFriendlyGamesList();
+        }
+    }
+});
 });
 
 // --- HELPER FUNCTIONS ---
 
+function getSocketUsername(socket) {
+    return socket?.handshake?.auth?.username || null;
+}
+function clearFriendlyPresence(username) {
+    if (!username) return;
+    delete activeFriendlyPlayers[username];
+}
+function setFriendlyPresence(username, gameId, seat, socketId) {
+    if (!username) return;
+    activeFriendlyPlayers[username] = {
+        gameId,
+        seat,
+        socketId,
+        joinedAt: Date.now()
+    };
+}
+function findSeatByUsername(game, username) {
+    if (!game || !Array.isArray(game.names)) return -1;
+    return game.names.findIndex(name => name === username);
+}
+function promoteNewHost(gameId) {
+    const game = games[gameId];
+    if (!game || !game.isLobby) return;
+
+    const room = io.sockets.adapter.rooms.get(gameId);
+    if (!room) return;
+
+    for (const socketId of room) {
+        const s = io.sockets.sockets.get(socketId);
+        if (!s) continue;
+        if (s.data.gameId !== gameId) continue;
+        if (s.data.seat === undefined || s.data.seat === null) continue;
+
+        game.host = socketId;
+        return;
+    }
+
+    game.host = null;
+}
+
 function generateGameId() {
     return 'game_' + Math.random().toString(36).substr(2, 9);
 }
+function generateFriendlyTableId() {
+    const usedNumbers = Object.keys(games)
+        .filter(id => id.startsWith('friendly_'))
+        .map(id => parseInt(id.replace('friendly_', ''), 10))
+        .filter(n => !isNaN(n))
+        .sort((a, b) => a - b);
 
+    let nextNumber = 1;
+
+    for (const num of usedNumbers) {
+        if (num === nextNumber) {
+            nextNumber++;
+        } else if (num > nextNumber) {
+            break;
+        }
+    }
+
+    return `friendly_${nextNumber}`;
+}
+function getFriendlyRuleset(game) {
+    if (game.friendlyRuleset) return game.friendlyRuleset;
+    return game.config && game.config.DRAW_COUNT === 1 ? 'easy' : 'standard';
+}
+
+function getFriendlyGamesList() {
+    return Object.entries(games)
+        .filter(([roomId, game]) => game && game.isPrivate && !game.matchIsOver)
+        .map(([roomId, game]) => {
+            const playerNames = Array.isArray(game.names) ? game.names.filter(Boolean) : [];
+            const maxSeats = game?.config?.PLAYER_COUNT || 4;
+
+            return {
+                roomId,
+                roomName: game.roomName || `Table ${roomId.split('_')[1] || roomId}`,
+                creatorName: game.creatorName || playerNames[0] || 'Unknown',
+                status: game.isLobby ? 'waiting' : 'in-progress',
+                playerNames,
+                seatsUsed: playerNames.length,
+                maxSeats,
+                ruleset: getFriendlyRuleset(game),
+                createdAt: game.createdAt || Date.now()
+            };
+        })
+        .sort((a, b) => {
+            if (a.status !== b.status) {
+                return a.status === 'waiting' ? -1 : 1;
+            }
+            return b.createdAt - a.createdAt;
+        });
+}
+
+function emitFriendlyGamesList() {
+    io.emit('friendly_games_list', getFriendlyGamesList());
+}
 function broadcastLobby(gameId) {
     const game = games[gameId];
     if (!game) return;
@@ -1225,12 +1532,14 @@ function broadcastLobby(gameId) {
         }
     }
 
-    io.to(gameId).emit('lobby_update', {
+        io.to(gameId).emit('lobby_update', {
         names: game.names,
         hostSeat: actualHostSeat,
         maxPlayers: game.config.PLAYER_COUNT,
         isHost: false
     });
+
+    emitFriendlyGamesList();
 }
 
 async function startBotGame(humanSocket, difficulty, playerCount = 4, ruleset = 'standard') {
@@ -1325,6 +1634,7 @@ function sendUpdate(gameId, socketId, seat) {
         hand: game.players[seat],
         currentPlayer: game.currentPlayer,
         phase: game.turnPhase,
+        isFriendly: !!game.isFriendly,
         bankTimers: game.bankTimers,
         topDiscard: topCard,
         previousDiscard: prevCard,
@@ -1366,6 +1676,8 @@ function broadcastAll(gameId, activeSeat) {
             let update = {
                 bankTimers: game.bankTimers,
                 currentPlayer: game.currentPlayer,
+                isFriendly: !!game.isFriendly,
+                isFrozen: isFrozen,
                 handBacks: handBacks,
                 nextDeckColor: nextDeckColor,
                 phase: game.turnPhase,
@@ -1760,7 +2072,7 @@ setInterval(() => {
         
         // NEW: Disable bank timers for bot games
         if (gameBots[gameId]) return;
-
+        if (game.isFriendly) return;
         if (game && !game.matchIsOver && !game.isLobby && game.currentPlayer !== -1) {
             const activeSeat = game.currentPlayer;
             if (game.bankTimers[activeSeat] > 0) {

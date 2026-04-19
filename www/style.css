@@ -2070,3 +2070,163 @@ h2 {
     border-radius: 8px;
     cursor: pointer;
 }
+/* ========================================= */
+/* === FRIENDLY GAMES TABLE LAYOUT       === */
+/* ========================================= */
+
+#screen-friendly-games {
+    justify-content: flex-start;
+    overflow-y: auto;
+    padding: calc(20px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+}
+
+.friendly-games-intro {
+    color: var(--text-secondary);
+    text-align: center;
+    margin: 0 0 14px 0;
+}
+
+.friendly-games-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+    max-width: 920px;
+    margin-bottom: 14px;
+}
+
+.friendly-games-actions .menu-btn {
+    max-width: 240px;
+}
+
+.friendly-games-summary {
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+.friendly-games-section {
+    width: 100%;
+    max-width: 920px;
+    margin-top: 18px;
+}
+
+.friendly-games-section-title {
+    margin: 0 0 10px 0;
+    font-family: var(--font-title);
+    font-size: 18px;
+    letter-spacing: 1px;
+}
+
+.friendly-games-section-title.waiting {
+    color: #2ecc71;
+}
+
+.friendly-games-section-title.playing {
+    color: #f1c40f;
+}
+
+.friendly-games-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.friendly-games-table {
+    width: 100%;
+    min-width: 560px;
+    border-collapse: collapse;
+}
+
+.friendly-games-table thead th {
+    background: rgba(241, 196, 15, 0.16);
+    color: var(--accent-color);
+    text-align: left;
+    padding: 14px 16px;
+    font-family: var(--font-title);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.friendly-games-table tbody td {
+    padding: 14px 16px;
+    color: var(--text-primary);
+    font-size: 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    vertical-align: middle;
+}
+
+.friendly-games-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.friendly-games-row {
+    background: transparent;
+}
+
+.friendly-games-row--joinable {
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.friendly-games-row--joinable:hover {
+    background: rgba(46, 204, 113, 0.12);
+}
+
+.friendly-games-row--joinable:active {
+    background: rgba(46, 204, 113, 0.18);
+}
+
+.friendly-games-hint {
+    color: var(--text-secondary);
+    font-size: 12px;
+    margin-top: 8px;
+    text-align: right;
+}
+
+.friendly-games-empty {
+    text-align: center;
+    color: #aaa;
+    padding: 18px;
+    background: rgba(0, 0, 0, 0.18);
+    border: 1px dashed rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+}
+
+@media (max-width: 800px) {
+    #screen-friendly-games {
+        padding-left: 12px;
+        padding-right: 12px;
+    }
+
+    .friendly-games-actions {
+        gap: 8px;
+    }
+
+    .friendly-games-actions .menu-btn {
+        max-width: none;
+    }
+
+    .friendly-games-section-title {
+        font-size: 16px;
+    }
+
+    .friendly-games-table {
+        min-width: 480px;
+    }
+
+    .friendly-games-table thead th,
+    .friendly-games-table tbody td {
+        padding: 12px 10px;
+        font-size: 13px;
+    }
+
+    .friendly-games-hint {
+        text-align: left;
+    }
+}

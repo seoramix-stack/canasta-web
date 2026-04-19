@@ -21,11 +21,9 @@ export function renderDiscardPile(data) {
     const discardDiv = document.getElementById('discard-display');
     if (!discardDiv) return;
 
-    // --- CRITICAL FIX START ---
     // 1. FREEZE STATE CHECK MUST BE FIRST!
     // If we clear innerHTML before this line, the pile will disappear.
     if (state.discardAnimationActive) return;
-    // --- CRITICAL FIX END ---
 
     // 2. NOW it is safe to clear the pile for the new render
     discardDiv.innerHTML = "";
@@ -970,20 +968,23 @@ export function renderLobbySeats(data, mySeat) {
     container.style.justifyContent = "center";
 
     // Host Controls
-    const hostControls = document.getElementById('lobby-host-controls');
-    // Simple check: If I am in seat 0, I am host (default logic)
-    // Or simpler: The server won't execute the command if I'm not host.
-    // Let's just show the button if I am Seat 0 for now.
-    if (mySeat === 0) {
-        hostControls.style.display = 'block';
-        // Rebind the button to the NEW function
-        const btn = hostControls.querySelector('button');
-        addTapListener(btn, () => window.hostStartGame());
+const hostControls = document.getElementById('lobby-host-controls');
+const waitMsg = document.getElementById('lobby-wait-msg');
+const amIHost = data.hostSeat === mySeat;
+
+if (amIHost) {
+    hostControls.style.display = 'block';
+    waitMsg.style.display = 'none';
+
+    const btn = hostControls.querySelector('button');
+    if (btn) {
         btn.innerText = "START MATCH";
-    } else {
-        hostControls.style.display = 'none';
-        document.getElementById('lobby-wait-msg').style.display = 'block';
+        addTapListener(btn, () => window.hostStartGame());
     }
+} else {
+    hostControls.style.display = 'none';
+    waitMsg.style.display = 'block';
+}
 
     // Render 4 Slots
     for (let i = 0; i < data.maxPlayers; i++) {
@@ -1043,4 +1044,103 @@ export function showInactivityWarning(secondsLeft) {
 export function hideInactivityWarning() {
     const el = document.getElementById('inactivity-warning');
     if (el) el.style.display = 'none';
+}
+
+export function renderFriendlyGamesList(rooms) {
+    const waitingEl = document.getElementById('friendly-games-waiting-list');
+    const playingEl = document.getElementById('friendly-games-playing-list');
+    const summaryEl = document.getElementById('friendly-games-summary');
+
+    if (!waitingEl || !playingEl) return;
+
+    const safeRooms = Array.isArray(rooms) ? rooms : [];
+
+    const waitingRooms = safeRooms.filter(room => room.status === 'waiting');
+    const playingRooms = safeRooms.filter(room => room.status === 'in-progress');
+
+    const escapeHtml = (value = '') => {
+        return String(value).replace(/[&<>"']/g, (char) => {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            };
+            return map[char];
+        });
+    };
+
+    const getRulesetLabel = (room) => {
+        return room.ruleset === 'easy' ? 'Easy' : 'Standard';
+    };
+
+    const getPlayersLabel = (room) => {
+        return Array.isArray(room.playerNames) && room.playerNames.length
+            ? room.playerNames.join(', ')
+            : 'No players yet';
+    };
+
+    if (summaryEl) {
+        summaryEl.innerText = `${waitingRooms.length} waiting • ${playingRooms.length} in progress`;
+    }
+
+    const renderTable = (tableRooms, isWaiting) => {
+        if (!tableRooms.length) {
+            return `
+                <div class="friendly-games-empty">
+                    ${isWaiting ? 'No waiting rooms right now.' : 'No games in progress right now.'}
+                </div>
+            `;
+        }
+
+        const rowsHtml = tableRooms.map((room) => {
+            const roomName = room.roomName || `Table ${room.roomId || ''}`;
+            const ruleset = getRulesetLabel(room);
+            const players = getPlayersLabel(room);
+
+            if (isWaiting) {
+                return `
+                    <tr
+                        class="friendly-games-row friendly-games-row--joinable"
+                        data-room-id="${encodeURIComponent(room.roomId)}"
+                        onclick="joinFriendlyGame(decodeURIComponent(this.dataset.roomId))"
+                    >
+                        <td>${escapeHtml(roomName)}</td>
+                        <td>${escapeHtml(ruleset)}</td>
+                        <td>${escapeHtml(players)}</td>
+                    </tr>
+                `;
+            }
+
+            return `
+                <tr class="friendly-games-row">
+                    <td>${escapeHtml(roomName)}</td>
+                    <td>${escapeHtml(ruleset)}</td>
+                    <td>${escapeHtml(players)}</td>
+                </tr>
+            `;
+        }).join('');
+
+        return `
+            <div class="friendly-games-table-wrap">
+                <table class="friendly-games-table">
+                    <thead>
+                        <tr>
+                            <th>Table number</th>
+                            <th>Ruleset</th>
+                            <th>Pseudo of the players</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rowsHtml}
+                    </tbody>
+                </table>
+            </div>
+            ${isWaiting ? '<div class="friendly-games-hint">Tap a waiting row to join that table.</div>' : ''}
+        `;
+    };
+
+    waitingEl.innerHTML = renderTable(waitingRooms, true);
+    playingEl.innerHTML = renderTable(playingRooms, false);
 }
