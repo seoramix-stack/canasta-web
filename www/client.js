@@ -48,10 +48,14 @@ window.hardReset = () => {
 };
 let afkSeconds = 0; // Tracks seconds since last action
 let timeoutSent = false;
+
 function resetActivity() {
     afkSeconds = 0;
     timeoutSent = false;
-    UI.hideInactivityWarning(); // Call the exported function from ui.js
+
+    if (typeof UI.hideInactivityWarning === 'function') {
+        UI.hideInactivityWarning();
+    }
 }
 
 // NEW: Listeners to detect any activity
@@ -232,14 +236,16 @@ window.showInterstitialAd = () => {
 };
 
 window.goHome = () => {
-    // 1. Clean up any active game states
-    UI.hideInactivityWarning();
+    if (typeof UI.hideInactivityWarning === 'function') {
+        UI.hideInactivityWarning();
+    }
+
     state.selectedIndices = [];
     state.isStaging = false;
 
-    // 2. Navigate to the public landing page instead of the lobby
     window.navTo('screen-home');
 };
+
 window.navTo = (screenId) => {
     UI.navTo(screenId);
 
@@ -376,6 +382,13 @@ window.connectToGame = (mode) => {
 window.leaveGame = () => {
     if (state.socket) state.socket.emit('leave_game');
     if (state.timerInterval) clearInterval(state.timerInterval);
+
+    window.currentFriendlyRoomId = null;
+    window.currentFriendlyRoomName = null;
+
+    const browser = document.getElementById('lobby-room-browser');
+    if (browser) browser.style.display = 'none';
+
     window.navTo('screen-home');
 };
 
@@ -738,13 +751,9 @@ function initSocket(token) {
         UI.renderLobbySeats(data, state.mySeat);
     });
         state.socket.on('friendly_games_list', (rooms) => {
-        window.currentFriendlyGames = rooms || [];
-
-        const screen = document.getElementById('screen-friendly-games');
-        if (screen && screen.classList.contains('active-screen')) {
-            UI.renderFriendlyGamesList(window.currentFriendlyGames);
-        }
-    });
+    window.currentFriendlyGames = rooms || [];
+    UI.renderFriendlyGamesList(window.currentFriendlyGames);
+});
     state.socket.on('seat_changed', (data) => {
         state.mySeat = data.newSeat;
         // We don't need to call render here because 'lobby_update' usually follows immediately
@@ -866,8 +875,11 @@ function initSocket(token) {
         const performFullUpdate = () => UI.updateUI(data);
         // RESET AFK TIMER because an action happened
         afkSeconds = 0;
-        timeoutSent = false;
-        UI.hideInactivityWarning(); // Remove warning if it was showing
+timeoutSent = false;
+if (typeof UI.hideInactivityWarning === 'function') {
+    UI.hideInactivityWarning();
+}
+// Remove warning if it was showing
         if (state.activeData) {
             // 2. Pass the FULL update function to animations
             Anim.handleServerAnimations(state.activeData, data, performFullUpdate);
@@ -1053,10 +1065,16 @@ function initSocket(token) {
 
     state.socket.on('private_created', (data) => {
     state.mySeat = data.seat;
+    window.currentFriendlyRoomId = data.gameId;
+    window.currentFriendlyRoomName = data.roomName || data.gameId;
+
     UI.navTo('screen-lobby');
     document.getElementById('lobby-room-id').innerText = data.roomName || data.gameId;
     document.getElementById('lobby-host-controls').style.display = 'block';
     document.getElementById('lobby-wait-msg').style.display = 'none';
+
+    const browser = document.getElementById('lobby-room-browser');
+    if (browser) browser.style.display = 'none';
 
     document.getElementById('join-id').value = data.gameId;
 });
@@ -1070,10 +1088,16 @@ function initSocket(token) {
 
     state.socket.on('joined_private_success', (data) => {
     state.mySeat = data.seat;
+    window.currentFriendlyRoomId = data.gameId;
+    window.currentFriendlyRoomName = data.roomName || data.gameId;
+
     UI.navTo('screen-lobby');
     document.getElementById('lobby-room-id').innerText = data.roomName || data.gameId;
     document.getElementById('lobby-host-controls').style.display = 'none';
     document.getElementById('lobby-wait-msg').style.display = 'block';
+
+    const browser = document.getElementById('lobby-room-browser');
+    if (browser) browser.style.display = 'none';
 });
 
     state.socket.on('social_list_data', (data) => {
@@ -1102,7 +1126,9 @@ function startTimerSystem() {
     timeoutSent = false;
 
     if (state.activeData?.isFriendly) {
-        UI.hideInactivityWarning();
+        if (typeof UI.hideInactivityWarning === 'function') {
+            UI.hideInactivityWarning();
+        }
         return;
     }
 
@@ -1118,8 +1144,10 @@ function startTimerSystem() {
         if (state.currentTurnSeat === state.mySeat) {
             afkSeconds++;
             if (afkSeconds >= 45 && afkSeconds < 60) {
-                UI.showInactivityWarning(60 - afkSeconds);
-            }
+    if (typeof UI.showInactivityWarning === 'function') {
+        UI.showInactivityWarning(60 - afkSeconds);
+    }
+}
             if (afkSeconds >= 60 && !timeoutSent) {
                 timeoutSent = true;
                 state.socket.emit('act_timeout');
@@ -1172,7 +1200,7 @@ function setGameTimerVisibility(show) {
 window.doCreateRoom = () => {
     state.socket.emit('request_create_private', {
         playerCount: state.currentPlayerCount || 4,
-        ruleset: state.currentRuleset || 'standard'
+        ruleset: 'standard'
     });
 };
 
@@ -1190,6 +1218,24 @@ window.doJoinPrivate = () => {
 window.openFriendlyGamesLobby = () => {
     UI.navTo('screen-friendly-games');
     window.refreshFriendlyGamesList();
+};
+
+window.openLobbyRoomBrowser = () => {
+    const browser = document.getElementById('lobby-room-browser');
+    if (!browser) return;
+
+    browser.style.display = 'flex';
+
+    if (window.currentFriendlyGames && window.currentFriendlyGames.length) {
+        UI.renderFriendlyGamesList(window.currentFriendlyGames);
+    }
+
+    window.refreshFriendlyGamesList();
+};
+
+window.closeLobbyRoomBrowser = () => {
+    const browser = document.getElementById('lobby-room-browser');
+    if (browser) browser.style.display = 'none';
 };
 
 window.refreshFriendlyGamesList = async () => {

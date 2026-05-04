@@ -10,19 +10,23 @@
     <meta name="theme-color" content="#1a252f">
 
     <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
-                    .then(reg => console.log('PWA Service Worker Registered'))
-                    .catch(err => console.log('PWA Error:', err));
-            });
-        }
-    </script>
+    const isLocalDev =
+        location.hostname === 'localhost' ||
+        location.hostname === '127.0.0.1';
+
+    if ('serviceWorker' in navigator && !isLocalDev) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js')
+                .then(reg => console.log('PWA Service Worker Registered'))
+                .catch(err => console.log('PWA Error:', err));
+        });
+    }
+</script>
     <meta charset="UTF-8">
     <title>Canasta Master Club | Online Multiplayer & Rated ELO Play</title>
 
     <meta name="description"
-        content="Play classic Canasta online with 2 or 4 players. Features rated ELO matchmaking, 12-minute match banks, and 1-minute turn timers. Choose between Standard (Draw 2) or Easy rules.">
+        content="Play classic Canasta online with 2/4 players. Features rated ELO matchmaking, 12-minute match banks, and 1-minute turn timers. Choose between Standard (Draw 2) or Easy rules.">
     <meta name="keywords"
         content="Canasta online, multiplayer Canasta, Canasta ELO ranking, play Canasta with bots, Canasta rules 2 players">
 
@@ -217,42 +221,42 @@
         </div>
 
         <div class="menu-list">
-            <button class="menu-btn primary" onclick="navTo('screen-online')"><span></span> PLAY ONLINE</button>
-            <button class="menu-btn secondary" onclick="openFriendsScreen()"><span></span> FRIENDS</button>
-            <button class="menu-btn secondary" onclick="openProfile()"><span></span> MY PROFILE</button>
-            <button class="menu-btn" onclick="navTo('screen-how-to')"><span></span>RULES</button>
-            <!-- REPLACED MEMBERSHIP WITH LEADERBOARD FOR LAUNCH -->
-            <!-- <button class="menu-btn primary" onclick="openSubscribeScreen()" style="background: linear-gradient(135deg, #9b59b6, #8e44ad) !important; box-shadow: 0 0 15px rgba(155, 89, 182, 0.4); border: none;">MEMBERSHIP</button> -->
-            <button class="menu-btn primary" onclick="navTo('screen-leaderboard')"
-                style="background: linear-gradient(135deg, #f1c40f, #f39c12) !important; border: none; color: #2c3e50;">LEADERBOARD</button>
-            </button>
-        </div>
+    <button class="menu-btn primary" onclick="navTo('screen-online')"><span></span> PLAY ONLINE</button>
+    <button class="menu-btn secondary" onclick="openProfile()"><span></span> MY PROFILE</button>
+    <button class="menu-btn secondary" onclick="openFriendsScreen()"><span></span> FRIENDS</button>
+    <button class="menu-btn primary" onclick="navTo('screen-leaderboard')"
+        style="background: linear-gradient(135deg, #f1c40f, #f39c12) !important; border: none; color: #2c3e50;">
+        LEADERBOARD
+    </button>
+    <button class="menu-btn" onclick="navTo('screen-how-to')"><span></span>RULES</button>
+</div>
     </div>
 
     <div id="screen-bot" class="app-screen">
-        <h2>VS BOTS</h2>
-        <div class="info-text">Practice match</div>
+    <h2>VS BOTS</h2>
+    <div class="info-text">Practice match</div>
 
-        <div style="margin-bottom: 10px; color: #bdc3c7; font-size: 14px; margin-top: 10px;">PLAYERS</div>
-        <div class="diff-grid">
-            <button class="diff-btn p-count-btn" onclick="selectPlayerCount(2, this)">2 PLAYERS</button>
-            <button class="diff-btn p-count-btn selected" onclick="selectPlayerCount(4, this)">4 PLAYERS</button>
-        </div>
-
-        <div style="margin-bottom: 10px; color: #bdc3c7; font-size: 14px; margin-top: 15px;">RULES</div>
-        <div class="diff-grid">
-            <button class="diff-btn rules-btn selected" onclick="selectRuleset('standard', this)"
-                style="font-size: 12px; padding: 10px;">
-                DRAW 2<br>2 OUT
-            </button>
-            <button class="diff-btn rules-btn" onclick="selectRuleset('easy', this)"
-                style="font-size: 12px; padding: 10px;">
-                DRAW 1<br>1 OUT
-            </button>
-        </div>
-        <button class="menu-btn primary" onclick="connectToGame('bot')" style="margin-top: 20px;">START MATCH</button>
-        <button class="menu-btn text-only" onclick="navTo('screen-home')">BACK</button>
+    <div style="margin-bottom: 10px; color: #bdc3c7; font-size: 14px; margin-top: 10px;">PLAYERS</div>
+    <div class="diff-grid">
+        <button class="diff-btn p-count-btn" onclick="selectPlayerCount(2, this)">2 PLAYERS</button>
+        <button class="diff-btn p-count-btn selected" onclick="selectPlayerCount(4, this)">4 PLAYERS</button>
     </div>
+
+    <div style="margin-bottom: 10px; color: #bdc3c7; font-size: 14px; margin-top: 15px;">RULES</div>
+    <div class="diff-grid">
+        <button class="diff-btn rules-btn selected" onclick="selectRuleset('standard', this)"
+            style="font-size: 12px; padding: 10px;">
+            DRAW 2<br>2 OUT
+        </button>
+        <button class="diff-btn rules-btn" onclick="selectRuleset('easy', this)"
+            style="font-size: 12px; padding: 10px;">
+            DRAW 1<br>1 OUT
+        </button>
+    </div>
+
+    <button class="menu-btn primary" onclick="connectToGame('bot')" style="margin-top: 20px;">START MATCH</button>
+    <button class="menu-btn text-only" onclick="navTo('screen-home')">BACK</button>
+</div>
 
     <div id="screen-profile" class="app-screen">
         <div class="screen-header">
@@ -337,10 +341,10 @@
 
     <div id="screen-friendly-games" class="app-screen">
     <h2>FRIENDLY GAMES</h2>
-    <p class="friendly-games-intro">Join a waiting room or create a new one</p>
+    <p class="friendly-games-intro">LOBBY</p>
 
     <div class="friendly-games-actions">
-        <button class="menu-btn primary" onclick="navTo('screen-create-room')">CREATE NEW ROOM</button>
+        <button class="menu-btn primary" onclick="navTo('screen-create-room')">CREATE NEW TABLE</button>
         <button class="menu-btn secondary" onclick="refreshFriendlyGamesList()">REFRESH</button>
     </div>
 
@@ -361,30 +365,35 @@
     <button class="menu-btn text-only" onclick="navTo('screen-online')">BACK</button>
 </div>
 
-    <div id="screen-create-room" class="app-screen">
-    <h2>CREATE FRIENDLY ROOM</h2>
-    <p>Your table name will be assigned automatically</p>
+    <div id="screen-create-room" class="app-screen create-room-screen">
+    <div class="create-room-shell">
+        <h2>CREATE FRIENDLY TABLE</h2>
 
-        <div style="margin: 15px 0;">
-            <div style="color: #bdc3c7; font-size: 14px; margin-bottom: 5px;">MAX PLAYERS</div>
-            <div class="diff-grid">
+        <p class="create-room-subtitle">
+            Your table number will be assigned<br>
+            automatically.
+        </p>
+
+        <div class="create-room-section">
+            <div class="diff-grid create-room-player-grid">
                 <button class="diff-btn p-count-btn" onclick="selectPlayerCount(2, this)">2 PLAYERS</button>
                 <button class="diff-btn p-count-btn selected" onclick="selectPlayerCount(4, this)">4 PLAYERS</button>
             </div>
         </div>
-        <div style="margin: 15px 0;">
-            <div style="color: #bdc3c7; font-size: 14px; margin-bottom: 5px;">GAME RULES</div>
-            <div class="diff-grid">
-                <button class="diff-btn rules-btn selected" onclick="selectRuleset('standard', this)"
-                    style="font-size: 12px; padding: 10px;">
-                    DRAW 2<br>2 OUT
-                </button>
-                <button class="diff-btn rules-btn" onclick="selectRuleset('easy', this)"
-                    style="font-size: 12px; padding: 10px;">
-                    DRAW 1<br>1 OUT
-                </button>
-            </div>
+
+        <div class="create-room-rules-text">
+            <div class="create-room-rules-line">GAME RULES</div>
+            <div class="create-room-rules-line">Draw 2 cards</div>
+            <div class="create-room-rules-line">2 canastas to go out</div>
         </div>
+
+        <div class="create-room-actions">
+            <button class="menu-btn success create-room-primary-btn" onclick="doCreateRoom()">CREATE & JOIN</button>
+            <button class="menu-btn text-only create-room-cancel-btn" onclick="openFriendlyGamesLobby()">CANCEL</button>
+        </div>
+    </div>
+</div>
+
         <br>
         <button class="menu-btn success" onclick="doCreateRoom()">CREATE & JOIN</button>
         <button class="menu-btn text-only" onclick="openFriendlyGamesLobby()">CANCEL</button>
@@ -425,21 +434,57 @@
     </div>
 
     <div id="screen-lobby" class="app-screen">
-        <h2>LOBBY</h2>
-        <div style="background:#2ecc71; color:white; padding:5px 10px; border-radius:5px; margin-bottom:10px;">
-            ROOM ID: <span id="lobby-room-id" style="font-weight:bold;">---</span>
-        </div>
+    <h2>ROOM</h2>
 
-        <div id="lobby-players" style="margin: 20px 0; width: 100%;">
-        </div>
-
-        <div id="lobby-host-controls" style="display:none;">
-            <button class="menu-btn success" onclick="sendReady()">START MATCH</button>
-        </div>
-        <div id="lobby-wait-msg" style="color:#f1c40f;">Waiting for host...</div>
-
-        <button class="menu-btn danger" onclick="leaveGame()">LEAVE LOBBY</button>
+    <div class="lobby-room-badge">
+        ROOM ID: <span id="lobby-room-id" style="font-weight:bold;">---</span>
     </div>
+
+    <div id="lobby-players" style="margin: 20px 0; width: 100%;"></div>
+
+    <div id="lobby-host-controls" style="display:none;">
+        <button class="menu-btn success" onclick="sendReady()">START MATCH</button>
+    </div>
+
+    <div id="lobby-wait-msg" style="color:#f1c40f;">Waiting for host...</div>
+
+    <div class="lobby-secondary-actions">
+        <button class="menu-btn secondary" onclick="openLobbyRoomBrowser()">CHECK OTHER TABLES</button>
+        <button class="menu-btn danger" onclick="leaveGame()">LEAVE ROOM</button>
+    </div>
+
+    <div id="lobby-room-browser" class="lobby-room-browser" style="display:none;">
+        <div class="lobby-room-browser-card">
+            <div class="lobby-room-browser-header">
+                <h3>ALL TABLES</h3>
+                <button class="lobby-room-browser-close" onclick="closeLobbyRoomBrowser()">✕</button>
+            </div>
+
+            <div id="lobby-room-browser-summary" class="info-text" style="margin-bottom: 12px;">
+                Loading rooms...
+            </div>
+
+            <div class="lobby-room-browser-actions">
+                <button class="menu-btn secondary" onclick="refreshFriendlyGamesList()">REFRESH</button>
+            </div>
+
+            <div class="friendly-games-section">
+                <h3 class="friendly-games-section-title waiting">WAITING FOR PLAYERS</h3>
+                <div id="lobby-room-browser-waiting-list"></div>
+            </div>
+
+            <div class="friendly-games-section">
+                <h3 class="friendly-games-section-title playing">GAMES IN PROGRESS</h3>
+                <div id="lobby-room-browser-playing-list"></div>
+            </div>
+
+            <div class="lobby-room-browser-note">
+    You stay seated at your current table while browsing all tables.
+    Leave your room first if you want to join another table.
+</div>
+        </div>
+    </div>
+</div>
 
     <div id="screen-victory" class="app-screen">
         <div class="victory-content">

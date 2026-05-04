@@ -1022,41 +1022,8 @@ if (amIHost) {
         container.appendChild(slot);
     }
 }
-export function showInactivityWarning(secondsLeft) {
-    let warningEl = document.getElementById('inactivity-warning');
-
-    if (!warningEl) {
-        warningEl = document.createElement('div');
-        warningEl.id = 'inactivity-warning';
-        document.body.appendChild(warningEl);
-    }
-
-    // Now uses clean class names managed by style.css
-    warningEl.innerHTML = `
-        <div class="warning-icon">⏳</div>
-        <div>ARE YOU STILL THERE?</div>
-        <div class="warning-countdown">FORFEIT IN: ${secondsLeft}s</div>
-        <div class="warning-hint">Move or touch to continue</div>
-    `;
-    warningEl.style.display = 'block';
-}
-
-export function hideInactivityWarning() {
-    const el = document.getElementById('inactivity-warning');
-    if (el) el.style.display = 'none';
-}
-
 export function renderFriendlyGamesList(rooms) {
-    const waitingEl = document.getElementById('friendly-games-waiting-list');
-    const playingEl = document.getElementById('friendly-games-playing-list');
-    const summaryEl = document.getElementById('friendly-games-summary');
-
-    if (!waitingEl || !playingEl) return;
-
     const safeRooms = Array.isArray(rooms) ? rooms : [];
-
-    const waitingRooms = safeRooms.filter(room => room.status === 'waiting');
-    const playingRooms = safeRooms.filter(room => room.status === 'in-progress');
 
     const escapeHtml = (value = '') => {
         return String(value).replace(/[&<>"']/g, (char) => {
@@ -1071,8 +1038,9 @@ export function renderFriendlyGamesList(rooms) {
         });
     };
 
-    const getRulesetLabel = (room) => {
-        return room.ruleset === 'easy' ? 'Easy' : 'Standard';
+    const getPlayerCountLabel = (room) => {
+        const count = Number(room.maxSeats) || 4;
+        return `${count} players`;
     };
 
     const getPlayersLabel = (room) => {
@@ -1081,66 +1049,110 @@ export function renderFriendlyGamesList(rooms) {
             : 'No players yet';
     };
 
-    if (summaryEl) {
-        summaryEl.innerText = `${waitingRooms.length} waiting • ${playingRooms.length} in progress`;
-    }
+    const renderInto = ({
+        waitingId,
+        playingId,
+        summaryId,
+        excludeRoomId = null,
+        waitingIsJoinable = false,
+        emptyWaitingText = 'No waiting rooms right now.',
+        emptyPlayingText = 'No games in progress right now.',
+        hintText = ''
+    }) => {
+        const waitingEl = document.getElementById(waitingId);
+        const playingEl = document.getElementById(playingId);
+        const summaryEl = document.getElementById(summaryId);
 
-    const renderTable = (tableRooms, isWaiting) => {
-        if (!tableRooms.length) {
-            return `
-                <div class="friendly-games-empty">
-                    ${isWaiting ? 'No waiting rooms right now.' : 'No games in progress right now.'}
-                </div>
-            `;
+        if (!waitingEl || !playingEl) return;
+
+        const filteredRooms = excludeRoomId
+            ? safeRooms.filter(room => room.roomId !== excludeRoomId)
+            : safeRooms;
+
+        const waitingRooms = filteredRooms.filter(room => room.status === 'waiting');
+        const playingRooms = filteredRooms.filter(room => room.status === 'in-progress');
+
+        if (summaryEl) {
+            summaryEl.innerText = `${waitingRooms.length} waiting • ${playingRooms.length} in progress`;
         }
 
-        const rowsHtml = tableRooms.map((room) => {
-            const roomName = room.roomName || `Table ${room.roomId || ''}`;
-            const ruleset = getRulesetLabel(room);
-            const players = getPlayersLabel(room);
-
-            if (isWaiting) {
+        const renderTable = (tableRooms, isWaiting) => {
+            if (!tableRooms.length) {
                 return `
-                    <tr
-                        class="friendly-games-row friendly-games-row--joinable"
-                        data-room-id="${encodeURIComponent(room.roomId)}"
-                        onclick="joinFriendlyGame(decodeURIComponent(this.dataset.roomId))"
-                    >
-                        <td>${escapeHtml(roomName)}</td>
-                        <td>${escapeHtml(ruleset)}</td>
-                        <td>${escapeHtml(players)}</td>
-                    </tr>
+                    <div class="friendly-games-empty">
+                        ${isWaiting ? emptyWaitingText : emptyPlayingText}
+                    </div>
                 `;
             }
 
-            return `
-                <tr class="friendly-games-row">
-                    <td>${escapeHtml(roomName)}</td>
-                    <td>${escapeHtml(ruleset)}</td>
-                    <td>${escapeHtml(players)}</td>
-                </tr>
-            `;
-        }).join('');
+            const rowsHtml = tableRooms.map((room) => {
+                const roomName = room.roomName || `Table ${room.roomId || ''}`;
+                const playerCount = getPlayerCountLabel(room);
+                const players = getPlayersLabel(room);
 
-        return `
-            <div class="friendly-games-table-wrap">
-                <table class="friendly-games-table">
-                    <thead>
-                        <tr>
-                            <th>Table number</th>
-                            <th>Ruleset</th>
-                            <th>Pseudo of the players</th>
+                if (waitingIsJoinable && isWaiting) {
+                    return `
+                        <tr
+                            class="friendly-games-row friendly-games-row--joinable"
+                            data-room-id="${encodeURIComponent(room.roomId)}"
+                            onclick="joinFriendlyGame(decodeURIComponent(this.dataset.roomId))"
+                        >
+                            <td>${escapeHtml(roomName)}</td>
+                            <td>${escapeHtml(playerCount)}</td>
+                            <td>${escapeHtml(players)}</td>
                         </tr>
-                    </thead>
-                    <tbody>
-                        ${rowsHtml}
-                    </tbody>
-                </table>
-            </div>
-            ${isWaiting ? '<div class="friendly-games-hint">Tap a waiting row to join that table.</div>' : ''}
-        `;
+                    `;
+                }
+
+                return `
+                    <tr class="friendly-games-row">
+                        <td>${escapeHtml(roomName)}</td>
+                        <td>${escapeHtml(playerCount)}</td>
+                        <td>${escapeHtml(players)}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            return `
+                <div class="friendly-games-table-wrap">
+                    <table class="friendly-games-table">
+                        <thead>
+                            <tr>
+                                <th>Table number</th>
+                                <th>2/4 players</th>
+                                <th>Players</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rowsHtml}
+                        </tbody>
+                    </table>
+                </div>
+                ${hintText && isWaiting ? `<div class="friendly-games-hint">${hintText}</div>` : ''}
+            `;
+        };
+
+        waitingEl.innerHTML = renderTable(waitingRooms, true);
+        playingEl.innerHTML = renderTable(playingRooms, false);
     };
 
-    waitingEl.innerHTML = renderTable(waitingRooms, true);
-    playingEl.innerHTML = renderTable(playingRooms, false);
+    renderInto({
+        waitingId: 'friendly-games-waiting-list',
+        playingId: 'friendly-games-playing-list',
+        summaryId: 'friendly-games-summary',
+        waitingIsJoinable: true,
+        emptyWaitingText: 'No waiting rooms right now.',
+        emptyPlayingText: 'No games in progress right now.',
+        hintText: 'Tap a waiting row to join that table.'
+    });
+
+    renderInto({
+    waitingId: 'lobby-room-browser-waiting-list',
+    playingId: 'lobby-room-browser-playing-list',
+    summaryId: 'lobby-room-browser-summary',
+    waitingIsJoinable: false,
+    emptyWaitingText: 'No waiting rooms right now.',
+    emptyPlayingText: 'No games in progress right now.',
+    hintText: ''
+});
 }
