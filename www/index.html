@@ -224,10 +224,10 @@
     <button class="menu-btn primary" onclick="navTo('screen-online')"><span></span> PLAY ONLINE</button>
     <button class="menu-btn secondary" onclick="openProfile()"><span></span> MY PROFILE</button>
     <button class="menu-btn secondary" onclick="openFriendsScreen()"><span></span> FRIENDS</button>
-    <button class="menu-btn primary" onclick="navTo('screen-leaderboard')"
-        style="background: linear-gradient(135deg, #f1c40f, #f39c12) !important; border: none; color: #2c3e50;">
-        LEADERBOARD
-    </button>
+    <button class="menu-btn primary" onclick="openLeaderboard()"
+    style="background: linear-gradient(135deg, #f1c40f, #f39c12) !important; border: none; color: #2c3e50;">
+    LEADERBOARD
+</button>
     <button class="menu-btn" onclick="navTo('screen-how-to')"><span></span>RULES</button>
 </div>
     </div>
@@ -324,8 +324,8 @@
             </div>
         </div>
 
-        <button class="menu-btn primary" onclick="connectToGame('rated')">🏆 FIND MATCH</button>
-        <div class="info-text">Ranked matches. Auto-match.</div>
+        <button class="menu-btn primary" onclick="openRatedGamesLobby()">🏆 RATED GAMES</button>
+<div class="info-text">Ranked tables. Choose a table by rating.</div>
 
         <hr style="width: 50%; border-color: #555; margin: 15px 0;">
 
@@ -338,6 +338,35 @@
         <br>
         <button class="menu-btn text-only" onclick="navTo('screen-home')">BACK</button>
     </div>
+    <div id="screen-rated-games" class="app-screen">
+    <h2>RATED GAMES</h2>
+    <p class="friendly-games-intro">ONE SHARED LOBBY · ELO VISIBLE</p>
+
+    <div class="friendly-games-actions">
+        <button class="menu-btn primary" onclick="navTo('screen-create-rated-room')">CREATE RATED TABLE</button>
+        <button class="menu-btn secondary" onclick="refreshRatedGamesList()">REFRESH</button>
+    </div>
+
+    <div id="rated-games-summary" class="info-text friendly-games-summary">
+        Loading rated tables...
+    </div>
+
+    <section class="friendly-games-section">
+        <h3 class="friendly-games-section-title waiting">WAITING FOR PLAYERS</h3>
+        <div id="rated-games-waiting-list"></div>
+    </section>
+
+    <section class="friendly-games-section">
+        <h3 class="friendly-games-section-title playing">GAMES IN PROGRESS</h3>
+        <div id="rated-games-playing-list"></div>
+    </section>
+
+    <div class="friendly-games-hint" style="max-width:920px; width:100%; text-align:center;">
+        Ratings and colours help players self-select. No hard ELO restrictions yet.
+    </div>
+
+    <button class="menu-btn text-only" onclick="navTo('screen-online')">BACK</button>
+</div>
 
     <div id="screen-friendly-games" class="app-screen">
     <h2>FRIENDLY GAMES</h2>
@@ -398,6 +427,35 @@
         <button class="menu-btn success" onclick="doCreateRoom()">CREATE & JOIN</button>
         <button class="menu-btn text-only" onclick="openFriendlyGamesLobby()">CANCEL</button>
     </div>
+
+    <div id="screen-create-rated-room" class="app-screen create-room-screen">
+    <div class="create-room-shell">
+        <h2>CREATE RATED TABLE</h2>
+
+        <p class="create-room-subtitle">
+            Rated tables stay in one shared lobby.<br>
+            Player ELO is shown so everyone can choose wisely.
+        </p>
+
+        <div class="create-room-section">
+            <div class="diff-grid create-room-player-grid">
+                <button class="diff-btn p-count-btn" onclick="selectPlayerCount(2, this)">2 PLAYERS</button>
+                <button class="diff-btn p-count-btn selected" onclick="selectPlayerCount(4, this)">4 PLAYERS</button>
+            </div>
+        </div>
+
+        <div class="create-room-rules-text">
+            <div class="create-room-rules-line">RATED RULES</div>
+            <div class="create-room-rules-line">Draw 2 cards</div>
+            <div class="create-room-rules-line">2 canastas to go out</div>
+        </div>
+
+        <div class="create-room-actions">
+            <button class="menu-btn success create-room-primary-btn" onclick="doCreateRatedRoom()">CREATE & JOIN</button>
+            <button class="menu-btn text-only create-room-cancel-btn" onclick="openRatedGamesLobby()">CANCEL</button>
+        </div>
+    </div>
+</div>
 
     <div id="screen-join-room" class="app-screen">
     <h2>JOIN FRIENDLY ROOM</h2>
@@ -465,7 +523,7 @@
             </div>
 
             <div class="lobby-room-browser-actions">
-                <button class="menu-btn secondary" onclick="refreshFriendlyGamesList()">REFRESH</button>
+                <button class="menu-btn secondary" onclick="refreshLobbyRoomBrowser()">REFRESH</button>
             </div>
 
             <div class="friendly-games-section">

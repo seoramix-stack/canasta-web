@@ -3,6 +3,66 @@ import { state } from './state.js';
 import { getCardImage } from './animations.js';
 import { addTapListener } from './utils.js';
 // --- HELPERS ---
+
+function escapeHtml(value = '') {
+    return String(value).replace(/[&<>"']/g, (char) => {
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        };
+        return map[char];
+    });
+}
+
+function getRankForRating(rating) {
+    const safeRating = Number.isFinite(Number(rating)) ? Math.round(Number(rating)) : 1200;
+
+    if (safeRating < 1000) return { rankName: 'Beginner', rankClass: 'rank-beginner' };
+    if (safeRating < 1200) return { rankName: 'Bronze', rankClass: 'rank-bronze' };
+    if (safeRating < 1400) return { rankName: 'Club', rankClass: 'rank-club' };
+    if (safeRating < 1600) return { rankName: 'Advanced', rankClass: 'rank-advanced' };
+    if (safeRating < 1800) return { rankName: 'Expert', rankClass: 'rank-expert' };
+    return { rankName: 'Master', rankClass: 'rank-master' };
+}
+
+function normalizePlayerProfile(nameOrProfile, fallbackName = '') {
+    if (nameOrProfile && typeof nameOrProfile === 'object') {
+        const rating = Number.isFinite(Number(nameOrProfile.rating)) ? Math.round(Number(nameOrProfile.rating)) : 1200;
+        const rank = nameOrProfile.rankName && nameOrProfile.rankClass
+            ? { rankName: nameOrProfile.rankName, rankClass: nameOrProfile.rankClass }
+            : getRankForRating(rating);
+
+        return {
+            username: nameOrProfile.username || fallbackName || 'Player',
+            rating,
+            rankName: rank.rankName,
+            rankClass: rank.rankClass
+        };
+    }
+
+    if (fallbackName) {
+        const rating = 1200;
+        const rank = getRankForRating(rating);
+
+        return {
+            username: fallbackName,
+            rating,
+            rankName: rank.rankName,
+            rankClass: rank.rankClass
+        };
+    }
+
+    return null;
+}
+
+function renderRankBadge(profile) {
+    if (!profile) return '';
+    return `<span class="rank-badge ${escapeHtml(profile.rankClass)}">${escapeHtml(profile.rankName)} · ${escapeHtml(profile.rating)}</span>`;
+}
+
 export function navTo(screenId) {
     document.querySelectorAll('.app-screen').forEach(el => el.classList.remove('active-screen'));
     const target = document.getElementById(screenId);
@@ -233,13 +293,21 @@ export function updateUI(data) {
     if (data.deckSize !== undefined) document.getElementById('deck-count').innerText = data.deckSize;
 
     // Labels
-    const amITeam1 = (state.mySeat === 0 || state.mySeat === 2);
-    const lbl1 = document.getElementById('lbl-s1');
-    const lbl2 = document.getElementById('lbl-s2');
-    if (lbl1 && lbl2) {
+const amITeam1 = (state.mySeat === 0 || state.mySeat === 2);
+const lbl1 = document.getElementById('lbl-s1');
+const lbl2 = document.getElementById('lbl-s2');
+
+if (lbl1 && lbl2) {
+    if (state.currentPlayerCount === 2) {
+        // 2-player mode is individual, not team-based.
+        lbl1.innerText = amITeam1 ? "MY SCORE" : "OPPONENT";
+        lbl2.innerText = amITeam1 ? "OPPONENT" : "MY SCORE";
+    } else {
+        // 4-player mode uses partners/teams.
         lbl1.innerText = amITeam1 ? "MY TEAM" : "OPPONENTS";
         lbl2.innerText = amITeam1 ? "OPPONENTS" : "MY TEAM";
     }
+}
 
     state.currentTurnSeat = data.currentPlayer;
     state.gameStarted = true;
@@ -352,6 +420,54 @@ function renderTable(elementId, meldsObj, red3sArray) {
     const suffix = (elementId === 'my-melds') ? 'my' : 'enemy';
 
     // Helpers
+    
+    function escapeHtml(value = '') {
+    return String(value).replace(/[&<>"']/g, (char) => {
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        };
+        return map[char];
+    });
+}
+
+function getRankForRating(rating) {
+    const safeRating = Number.isFinite(Number(rating)) ? Math.round(Number(rating)) : 1200;
+
+    if (safeRating < 1000) return { rankName: 'Beginner', rankClass: 'rank-beginner' };
+    if (safeRating < 1200) return { rankName: 'Bronze', rankClass: 'rank-bronze' };
+    if (safeRating < 1400) return { rankName: 'Club', rankClass: 'rank-club' };
+    if (safeRating < 1600) return { rankName: 'Advanced', rankClass: 'rank-advanced' };
+    if (safeRating < 1800) return { rankName: 'Expert', rankClass: 'rank-expert' };
+    return { rankName: 'Master', rankClass: 'rank-master' };
+}
+
+function normalizePlayerProfile(nameOrProfile, fallbackName = '') {
+    if (nameOrProfile && typeof nameOrProfile === 'object') {
+        const rating = Number.isFinite(Number(nameOrProfile.rating)) ? Math.round(Number(nameOrProfile.rating)) : 1200;
+        const rank = nameOrProfile.rankName && nameOrProfile.rankClass
+            ? { rankName: nameOrProfile.rankName, rankClass: nameOrProfile.rankClass }
+            : getRankForRating(rating);
+
+        return {
+            username: nameOrProfile.username || fallbackName || 'Player',
+            rating,
+            rankName: rank.rankName,
+            rankClass: rank.rankClass
+        };
+    }
+
+    return null;
+}
+
+function renderRankBadge(profile) {
+    if (!profile) return '';
+    return `<span class="rank-badge ${escapeHtml(profile.rankClass)}">${escapeHtml(profile.rankName)} · ${escapeHtml(profile.rating)}</span>`;
+}
+
     const getVerticalOffset = (itemCount) => {
         const defaultStep = isDesktop ? 45 : 25;
         const availableH = isDesktop ? 195 : (container.clientHeight || 150);
@@ -958,7 +1074,7 @@ export function renderLobbySeats(data, mySeat) {
     // Ensure we are on the lobby screen
     navTo('screen-lobby');
 
-    const container = document.getElementById('lobby-players'); // <--- ADDED THIS LINE
+    const container = document.getElementById('lobby-players');
     if (!container) return;
 
     container.innerHTML = "";
@@ -967,44 +1083,48 @@ export function renderLobbySeats(data, mySeat) {
     container.style.gap = "10px";
     container.style.justifyContent = "center";
 
-    // Host Controls
-const hostControls = document.getElementById('lobby-host-controls');
-const waitMsg = document.getElementById('lobby-wait-msg');
-const amIHost = data.hostSeat === mySeat;
+    // Host Controls: use server-provided hostSeat, not seat 0.
+    const hostControls = document.getElementById('lobby-host-controls');
+    const waitMsg = document.getElementById('lobby-wait-msg');
+    const amIHost = data.hostSeat === mySeat;
 
-if (amIHost) {
-    hostControls.style.display = 'block';
-    waitMsg.style.display = 'none';
+    if (hostControls && waitMsg) {
+        if (amIHost) {
+            hostControls.style.display = 'block';
+            waitMsg.style.display = 'none';
 
-    const btn = hostControls.querySelector('button');
-    if (btn) {
-        btn.innerText = "START MATCH";
-        addTapListener(btn, () => window.hostStartGame());
+            const btn = hostControls.querySelector('button');
+            if (btn) {
+                btn.innerText = "START MATCH";
+                addTapListener(btn, () => window.hostStartGame());
+            }
+        } else {
+            hostControls.style.display = 'none';
+            waitMsg.style.display = 'block';
+        }
     }
-} else {
-    hostControls.style.display = 'none';
-    waitMsg.style.display = 'block';
-}
 
-    // Render 4 Slots
+    // Render Slots
     for (let i = 0; i < data.maxPlayers; i++) {
         const name = data.names[i];
+        const profile = normalizePlayerProfile(data.playerProfiles?.[i], name);
         const isMe = (i === mySeat);
         const isEmpty = (name === null);
 
         const slot = document.createElement('div');
         slot.style.cssText = `
-            width: 45%; 
-            height: 80px; 
-            background: ${isEmpty ? 'rgba(255,255,255,0.1)' : '#2c3e50'}; 
-            border: 2px solid ${isMe ? '#f1c40f' : '#555'}; 
+            width: 45%;
+            min-height: 86px;
+            background: ${isEmpty ? 'rgba(255,255,255,0.1)' : '#2c3e50'};
+            border: 2px solid ${isMe ? '#f1c40f' : '#555'};
             border-radius: 8px;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             cursor: ${isEmpty ? 'pointer' : 'default'};
             transition: all 0.2s;
+            padding: 8px;
+            text-align: center;
         `;
 
-        // Teams Label
         let teamLabel = (i % 2 === 0) ? "TEAM 1" : "TEAM 2";
 
         if (isEmpty) {
@@ -1013,43 +1133,24 @@ if (amIHost) {
             slot.onmouseover = () => slot.style.background = 'rgba(255,255,255,0.2)';
             slot.onmouseout = () => slot.style.background = 'rgba(255,255,255,0.1)';
         } else {
+            const safeName = escapeHtml(name);
+            const rankLine = data.isRated && profile
+                ? `<div class="lobby-seat-rank">${renderRankBadge(profile)}</div>`
+                : '';
+
             slot.innerHTML = `
                 <div style="color:#f1c40f; font-size:10px; font-weight:bold;">${teamLabel}</div>
-                <div style="color:white; font-weight:bold; font-size:16px;">${name} ${isMe ? '(YOU)' : ''}</div>
+                <div style="color:white; font-weight:bold; font-size:16px;">${safeName} ${isMe ? '(YOU)' : ''}</div>
+                ${rankLine}
             `;
         }
 
         container.appendChild(slot);
     }
 }
-export function renderFriendlyGamesList(rooms) {
+function renderLobbyRoomLists(rooms, options) {
     const safeRooms = Array.isArray(rooms) ? rooms : [];
-
-    const escapeHtml = (value = '') => {
-        return String(value).replace(/[&<>"']/g, (char) => {
-            const map = {
-                '&': '&amp;',
-                '<': '&lt;',
-                '>': '&gt;',
-                '"': '&quot;',
-                "'": '&#39;'
-            };
-            return map[char];
-        });
-    };
-
-    const getPlayerCountLabel = (room) => {
-        const count = Number(room.maxSeats) || 4;
-        return `${count} players`;
-    };
-
-    const getPlayersLabel = (room) => {
-        return Array.isArray(room.playerNames) && room.playerNames.length
-            ? room.playerNames.join(', ')
-            : 'No players yet';
-    };
-
-    const renderInto = ({
+    const {
         waitingId,
         playingId,
         summaryId,
@@ -1057,102 +1158,174 @@ export function renderFriendlyGamesList(rooms) {
         waitingIsJoinable = false,
         emptyWaitingText = 'No waiting rooms right now.',
         emptyPlayingText = 'No games in progress right now.',
-        hintText = ''
-    }) => {
-        const waitingEl = document.getElementById(waitingId);
-        const playingEl = document.getElementById(playingId);
-        const summaryEl = document.getElementById(summaryId);
+        hintText = '',
+        joinFunctionName = 'joinFriendlyGame',
+        isRatedList = false
+    } = options;
 
-        if (!waitingEl || !playingEl) return;
+    const waitingEl = document.getElementById(waitingId);
+    const playingEl = document.getElementById(playingId);
+    const summaryEl = document.getElementById(summaryId);
 
-        const filteredRooms = excludeRoomId
-            ? safeRooms.filter(room => room.roomId !== excludeRoomId)
-            : safeRooms;
+    if (!waitingEl || !playingEl) return;
 
-        const waitingRooms = filteredRooms.filter(room => room.status === 'waiting');
-        const playingRooms = filteredRooms.filter(room => room.status === 'in-progress');
+    const filteredRooms = excludeRoomId
+        ? safeRooms.filter(room => room.roomId !== excludeRoomId)
+        : safeRooms;
 
-        if (summaryEl) {
-            summaryEl.innerText = `${waitingRooms.length} waiting • ${playingRooms.length} in progress`;
+    const waitingRooms = filteredRooms.filter(room => room.status === 'waiting');
+    const playingRooms = filteredRooms.filter(room => room.status === 'in-progress');
+
+    if (summaryEl) {
+        summaryEl.innerText = `${waitingRooms.length} waiting • ${playingRooms.length} in progress`;
+    }
+
+    const getPlayerCountLabel = (room) => {
+        const count = Number(room.maxSeats) || 4;
+        const used = Number(room.seatsUsed) || (Array.isArray(room.playerNames) ? room.playerNames.length : 0);
+        return `${used}/${count} players`;
+    };
+
+    const getPlayersHtml = (room) => {
+        if (isRatedList && Array.isArray(room.playerProfiles) && room.playerProfiles.length) {
+            return room.playerProfiles.map(rawProfile => {
+                const profile = normalizePlayerProfile(rawProfile);
+                if (!profile) return '';
+                return `<span class="rated-player-chip">${escapeHtml(profile.username)} (${escapeHtml(profile.rating)}) ${renderRankBadge(profile)}</span>`;
+            }).filter(Boolean).join(' ');
         }
 
-        const renderTable = (tableRooms, isWaiting) => {
-            if (!tableRooms.length) {
+        return Array.isArray(room.playerNames) && room.playerNames.length
+            ? escapeHtml(room.playerNames.join(', '))
+            : 'No players yet';
+    };
+
+    const getAverageHtml = (room) => {
+        if (!isRatedList) return '';
+        const average = Number(room.averageRating);
+        if (!Number.isFinite(average)) return '<span class="table-rating-muted">Avg: —</span>';
+        const rank = getRankForRating(average);
+        return `<span class="table-rating ${escapeHtml(rank.rankClass)}">Avg ${Math.round(average)} · ${escapeHtml(rank.rankName)}</span>`;
+    };
+
+    const renderTable = (tableRooms, isWaiting) => {
+        if (!tableRooms.length) {
+            return `
+                <div class="friendly-games-empty">
+                    ${isWaiting ? emptyWaitingText : emptyPlayingText}
+                </div>
+            `;
+        }
+
+        const rowsHtml = tableRooms.map((room) => {
+            const roomName = room.roomName || `Table ${room.roomId || ''}`;
+            const playerCount = getPlayerCountLabel(room);
+            const players = getPlayersHtml(room);
+            const ratingCell = isRatedList ? `<td>${getAverageHtml(room)}</td>` : '';
+
+            if (waitingIsJoinable && isWaiting) {
                 return `
-                    <div class="friendly-games-empty">
-                        ${isWaiting ? emptyWaitingText : emptyPlayingText}
-                    </div>
+                    <tr
+                        class="friendly-games-row friendly-games-row--joinable"
+                        data-room-id="${encodeURIComponent(room.roomId)}"
+                        onclick="${joinFunctionName}(decodeURIComponent(this.dataset.roomId))"
+                    >
+                        <td>${escapeHtml(roomName)}</td>
+                        <td>${escapeHtml(playerCount)}</td>
+                        ${ratingCell}
+                        <td>${players}</td>
+                    </tr>
                 `;
             }
 
-            const rowsHtml = tableRooms.map((room) => {
-                const roomName = room.roomName || `Table ${room.roomId || ''}`;
-                const playerCount = getPlayerCountLabel(room);
-                const players = getPlayersLabel(room);
-
-                if (waitingIsJoinable && isWaiting) {
-                    return `
-                        <tr
-                            class="friendly-games-row friendly-games-row--joinable"
-                            data-room-id="${encodeURIComponent(room.roomId)}"
-                            onclick="joinFriendlyGame(decodeURIComponent(this.dataset.roomId))"
-                        >
-                            <td>${escapeHtml(roomName)}</td>
-                            <td>${escapeHtml(playerCount)}</td>
-                            <td>${escapeHtml(players)}</td>
-                        </tr>
-                    `;
-                }
-
-                return `
-                    <tr class="friendly-games-row">
-                        <td>${escapeHtml(roomName)}</td>
-                        <td>${escapeHtml(playerCount)}</td>
-                        <td>${escapeHtml(players)}</td>
-                    </tr>
-                `;
-            }).join('');
-
             return `
-                <div class="friendly-games-table-wrap">
-                    <table class="friendly-games-table">
-                        <thead>
-                            <tr>
-                                <th>Table number</th>
-                                <th>2/4 players</th>
-                                <th>Players</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${rowsHtml}
-                        </tbody>
-                    </table>
-                </div>
-                ${hintText && isWaiting ? `<div class="friendly-games-hint">${hintText}</div>` : ''}
+                <tr class="friendly-games-row">
+                    <td>${escapeHtml(roomName)}</td>
+                    <td>${escapeHtml(playerCount)}</td>
+                    ${ratingCell}
+                    <td>${players}</td>
+                </tr>
             `;
-        };
+        }).join('');
 
-        waitingEl.innerHTML = renderTable(waitingRooms, true);
-        playingEl.innerHTML = renderTable(playingRooms, false);
+        return `
+            <div class="friendly-games-table-wrap">
+                <table class="friendly-games-table ${isRatedList ? 'rated-games-table' : ''}">
+                    <thead>
+                        <tr>
+                            <th>Table number</th>
+                            <th>Players</th>
+                            ${isRatedList ? '<th>Table rating</th>' : ''}
+                            <th>${isRatedList ? 'Rated players' : 'Players'}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rowsHtml}
+                    </tbody>
+                </table>
+            </div>
+            ${hintText && isWaiting ? `<div class="friendly-games-hint">${hintText}</div>` : ''}
+        `;
     };
 
-    renderInto({
+    waitingEl.innerHTML = renderTable(waitingRooms, true);
+    playingEl.innerHTML = renderTable(playingRooms, false);
+}
+
+export function renderFriendlyGamesList(rooms) {
+    renderLobbyRoomLists(rooms, {
         waitingId: 'friendly-games-waiting-list',
         playingId: 'friendly-games-playing-list',
         summaryId: 'friendly-games-summary',
         waitingIsJoinable: true,
         emptyWaitingText: 'No waiting rooms right now.',
         emptyPlayingText: 'No games in progress right now.',
-        hintText: 'Tap a waiting row to join that table.'
+        hintText: 'Tap a waiting row to join that table.',
+        joinFunctionName: 'joinFriendlyGame',
+        isRatedList: false
     });
 
-    renderInto({
-    waitingId: 'lobby-room-browser-waiting-list',
-    playingId: 'lobby-room-browser-playing-list',
-    summaryId: 'lobby-room-browser-summary',
-    waitingIsJoinable: false,
-    emptyWaitingText: 'No waiting rooms right now.',
-    emptyPlayingText: 'No games in progress right now.',
-    hintText: ''
-});
+    if (window.currentLobbyRoomType !== 'rated') {
+        renderLobbyRoomLists(rooms, {
+            waitingId: 'lobby-room-browser-waiting-list',
+            playingId: 'lobby-room-browser-playing-list',
+            summaryId: 'lobby-room-browser-summary',
+            excludeRoomId: window.currentFriendlyRoomId || null,
+            waitingIsJoinable: false,
+            emptyWaitingText: 'No waiting rooms right now.',
+            emptyPlayingText: 'No games in progress right now.',
+            hintText: '',
+            joinFunctionName: 'joinFriendlyGame',
+            isRatedList: false
+        });
+    }
+}
+
+export function renderRatedGamesList(rooms) {
+    renderLobbyRoomLists(rooms, {
+        waitingId: 'rated-games-waiting-list',
+        playingId: 'rated-games-playing-list',
+        summaryId: 'rated-games-summary',
+        waitingIsJoinable: true,
+        emptyWaitingText: 'No rated tables waiting right now.',
+        emptyPlayingText: 'No rated games in progress right now.',
+        hintText: 'Tap a waiting rated table to join. Ratings are guidance only; no ELO bands are enforced yet.',
+        joinFunctionName: 'joinRatedGame',
+        isRatedList: true
+    });
+
+    if (window.currentLobbyRoomType === 'rated') {
+        renderLobbyRoomLists(rooms, {
+            waitingId: 'lobby-room-browser-waiting-list',
+            playingId: 'lobby-room-browser-playing-list',
+            summaryId: 'lobby-room-browser-summary',
+            excludeRoomId: window.currentFriendlyRoomId || null,
+            waitingIsJoinable: false,
+            emptyWaitingText: 'No rated tables waiting right now.',
+            emptyPlayingText: 'No rated games in progress right now.',
+            hintText: '',
+            joinFunctionName: 'joinRatedGame',
+            isRatedList: true
+        });
+    }
 }

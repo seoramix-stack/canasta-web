@@ -9,6 +9,33 @@ import * as Anim from './animations.js';
 // Expose state for Live Bot Teaching (Console Access)
 window.state = state;
 window.currentFriendlyGames = [];
+window.currentRatedGames = [];
+window.currentLobbyRoomType = null;
+
+function getDisplayStats(p = {}) {
+    const stats = p.stats || {};
+
+    return {
+        rating: Number.isFinite(Number(stats.rating))
+            ? Number(stats.rating)
+            : Number.isFinite(Number(p.eloRating))
+                ? Number(p.eloRating)
+                : 1200,
+
+        wins: Number.isFinite(Number(stats.wins))
+            ? Number(stats.wins)
+            : Number.isFinite(Number(p.wins))
+                ? Number(p.wins)
+                : 0,
+
+        losses: Number.isFinite(Number(stats.losses))
+            ? Number(stats.losses)
+            : Number.isFinite(Number(p.losses))
+                ? Number(p.losses)
+                : 0
+    };
+}
+
 // Enable immersive/fullscreen mode on native app
 if (isNative) {
     // Import and use StatusBar to hide system bars
@@ -137,13 +164,29 @@ async function fetchLeaderboardPreview() {
         const res = await fetch(`${API_BASE}/api/leaderboard`);
         const data = await res.json();
         if (data.success) {
-            container.innerHTML = data.leaderboard.slice(0, 5).map((p, i) => `
-                <div class="lb-mini-row">
-                    <span>#${i + 1} ${p.username}</span>
-                    <span class="gold">${Math.round(p.stats.rating)} ELO</span>
-                </div>
-            `).join('');
-        }
+    const players = data.leaderboard || [];
+
+    if (players.length === 0) {
+        container.innerHTML = `
+            <div class="lb-mini-row">
+                <span>No ranked players yet</span>
+                <span class="gold">—</span>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = players.slice(0, 5).map((p, i) => {
+        const stats = getDisplayStats(p);
+
+        return `
+            <div class="lb-mini-row">
+                <span>#${i + 1} ${p.username}</span>
+                <span class="gold">${Math.round(stats.rating)} ELO</span>
+            </div>
+        `;
+    }).join('');
+}
     } catch (e) { container.innerHTML = ""; }
 }
 
@@ -385,6 +428,7 @@ window.leaveGame = () => {
 
     window.currentFriendlyRoomId = null;
     window.currentFriendlyRoomName = null;
+    window.currentLobbyRoomType = null;
 
     const browser = document.getElementById('lobby-room-browser');
     if (browser) browser.style.display = 'none';
@@ -747,12 +791,28 @@ function initSocket(token) {
     auth: { token: token, username: storedUser }
 });
     state.socket.on('lobby_update', (data) => {
-        // This triggers the UI update whenever someone joins or switches seats
+    console.log('[lobby_update]', data, 'mySeat:', state.mySeat);
+
+    try {
         UI.renderLobbySeats(data, state.mySeat);
-    });
+    } catch (err) {
+        console.error('[lobby_update render error]', err);
+    }
+});
         state.socket.on('friendly_games_list', (rooms) => {
     window.currentFriendlyGames = rooms || [];
     UI.renderFriendlyGamesList(window.currentFriendlyGames);
+});
+    state.socket.on('rated_games_list', (rooms) => {
+    console.log('[rated_games_list]', rooms);
+
+    window.currentRatedGames = rooms || [];
+
+    try {
+        UI.renderRatedGamesList(window.currentRatedGames);
+    } catch (err) {
+        console.error('[rated_games_list render error]', err);
+    }
 });
     state.socket.on('seat_changed', (data) => {
         state.mySeat = data.newSeat;
@@ -980,38 +1040,44 @@ if (typeof UI.hideInactivityWarning === 'function') {
             setText('vic-total-1', match.team1);
             setText('vic-total-2', match.team2);
 
-            // D. Set Victory Title / Message
+                        // D. Set Victory / Defeat Title / Message
             const vicTitle = document.getElementById('vic-title');
             const vicSub = document.getElementById('vic-sub');
 
-            if (data.winner) {
+            if (vicTitle && vicSub && data.winner) {
+                // Reset subtitle colour every time, because forfeit may have set it red before.
+                vicSub.style.color = "";
+
                 if (data.winner === 'draw') {
                     vicTitle.innerText = "DRAW!";
                     vicTitle.style.color = "#ffffff";
                     vicSub.innerText = "IT'S A TIE";
                 } else {
-                    if (state.currentPlayerCount === 2) {
-                        const wName = (data.winner === 'team1') ? name1 : name2;
-                        vicTitle.innerText = "VICTORY!";
-                        vicTitle.style.color = "#f1c40f"; // Gold
-                        vicSub.innerText = `${wName} WINS!`;
+                    const mySeat = Number(state.mySeat);
+
+                    // Team 1 = seat 0 in 2P, seats 0 + 2 in 4P.
+                    // Team 2 = seat 1 in 2P, seats 1 + 3 in 4P.
+                    const amITeam1 = (mySeat === 0 || mySeat === 2);
+
+                    const myWin =
+                        (data.winner === 'team1' && amITeam1) ||
+                        (data.winner === 'team2' && !amITeam1);
+
+                    const winnerName =
+                        data.winner === 'team1'
+                            ? (state.currentPlayerCount === 2 ? name1 : "TEAM 1")
+                            : (state.currentPlayerCount === 2 ? name2 : "TEAM 2");
+
+                    vicTitle.innerText = myWin ? "VICTORY!" : "DEFEAT";
+                    vicTitle.style.color = myWin ? "#f1c40f" : "#e74c3c";
+
+                    if (data.reason === 'forfeit') {
+                        vicSub.innerText = `${winnerName} WINS BY FORFEIT`;
+                        vicSub.style.color = "#e74c3c";
                     } else {
-
-                        // Did I win?
-                        const myWin = (data.winner === 'team1' && amITeam1) || (data.winner === 'team2' && !amITeam1);
-
-                        vicTitle.innerText = myWin ? "VICTORY!" : "DEFEAT";
-                        vicTitle.style.color = myWin ? "#f1c40f" : "#e74c3c"; // Gold vs Red
-                        vicSub.innerText = `${winLabel} WINS THE MATCH`;
+                        vicSub.innerText = `${winnerName} WINS THE MATCH`;
                     }
                 }
-            }
-
-            if (data.reason === 'forfeit') {
-                vicSub.innerText = `${winLabel} WINS (OPPONENT FORFEIT)`;
-                vicSub.style.color = "#e74c3c"; // Red text for emphasis
-            } else {
-                vicSub.innerText = `${winLabel} WINS THE MATCH`;
             }
             // E. Handle Ratings (Existing Logic)
             const rateBox = document.getElementById('victory-ratings');
@@ -1067,16 +1133,16 @@ if (typeof UI.hideInactivityWarning === 'function') {
     state.mySeat = data.seat;
     window.currentFriendlyRoomId = data.gameId;
     window.currentFriendlyRoomName = data.roomName || data.gameId;
+    window.currentLobbyRoomType = data.roomType || (data.isRated ? 'rated' : 'friendly');
 
     UI.navTo('screen-lobby');
     document.getElementById('lobby-room-id').innerText = data.roomName || data.gameId;
-    document.getElementById('lobby-host-controls').style.display = 'block';
-    document.getElementById('lobby-wait-msg').style.display = 'none';
 
     const browser = document.getElementById('lobby-room-browser');
     if (browser) browser.style.display = 'none';
 
-    document.getElementById('join-id').value = data.gameId;
+    const joinInput = document.getElementById('join-id');
+    if (joinInput) joinInput.value = data.gameId;
 });
 
     state.socket.on('rematch_update', (data) => {
@@ -1090,11 +1156,10 @@ if (typeof UI.hideInactivityWarning === 'function') {
     state.mySeat = data.seat;
     window.currentFriendlyRoomId = data.gameId;
     window.currentFriendlyRoomName = data.roomName || data.gameId;
+    window.currentLobbyRoomType = data.roomType || (data.isRated ? 'rated' : 'friendly');
 
     UI.navTo('screen-lobby');
     document.getElementById('lobby-room-id').innerText = data.roomName || data.gameId;
-    document.getElementById('lobby-host-controls').style.display = 'none';
-    document.getElementById('lobby-wait-msg').style.display = 'block';
 
     const browser = document.getElementById('lobby-room-browser');
     if (browser) browser.style.display = 'none';
@@ -1226,16 +1291,30 @@ window.openLobbyRoomBrowser = () => {
 
     browser.style.display = 'flex';
 
-    if (window.currentFriendlyGames && window.currentFriendlyGames.length) {
-        UI.renderFriendlyGamesList(window.currentFriendlyGames);
+    if (window.currentLobbyRoomType === 'rated') {
+        if (window.currentRatedGames && window.currentRatedGames.length) {
+            UI.renderRatedGamesList(window.currentRatedGames);
+        }
+        window.refreshRatedGamesList();
+    } else {
+        if (window.currentFriendlyGames && window.currentFriendlyGames.length) {
+            UI.renderFriendlyGamesList(window.currentFriendlyGames);
+        }
+        window.refreshFriendlyGamesList();
     }
-
-    window.refreshFriendlyGamesList();
 };
 
 window.closeLobbyRoomBrowser = () => {
     const browser = document.getElementById('lobby-room-browser');
     if (browser) browser.style.display = 'none';
+};
+
+window.refreshLobbyRoomBrowser = () => {
+    if (window.currentLobbyRoomType === 'rated') {
+        window.refreshRatedGamesList();
+    } else {
+        window.refreshFriendlyGamesList();
+    }
 };
 
 window.refreshFriendlyGamesList = async () => {
@@ -1259,6 +1338,43 @@ window.refreshFriendlyGamesList = async () => {
 window.joinFriendlyGame = (roomId) => {
     if (!roomId) return;
     state.socket.emit('request_join_private', { gameId: roomId });
+};
+
+// --- RATED GAMES LOBBY ---
+
+window.openRatedGamesLobby = () => {
+    UI.navTo('screen-rated-games');
+    window.refreshRatedGamesList();
+};
+
+window.doCreateRatedRoom = () => {
+    state.socket.emit('request_create_rated', {
+        playerCount: state.currentPlayerCount || 4,
+        ruleset: 'standard'
+    });
+};
+
+window.refreshRatedGamesList = async () => {
+    try {
+        const res = await fetch(`${API_BASE}/api/rated-games`);
+        const data = await res.json();
+
+        if (!data.success) {
+            alert(data.message || 'Could not load rated games.');
+            return;
+        }
+
+        window.currentRatedGames = data.rooms || [];
+        UI.renderRatedGamesList(window.currentRatedGames);
+    } catch (err) {
+        console.error('Rated Games fetch error:', err);
+        alert('Could not load rated games.');
+    }
+};
+
+window.joinRatedGame = (roomId) => {
+    if (!roomId) return;
+    state.socket.emit('request_join_rated', { gameId: roomId });
 };
 
 // --- FRIENDS LOGIC ---
@@ -1403,11 +1519,13 @@ function renderLeaderboard(players) {
         else if (index === 1) { rankClass += ' rank-2'; rankIcon = '🥈 ' + rankIcon; }
         else if (index === 2) { rankClass += ' rank-3'; rankIcon = '🥉 ' + rankIcon; }
 
+                const stats = getDisplayStats(p);
+
         row.innerHTML = `
             <span class="${rankClass}">${rankIcon}</span>
             <span class="lb-name">${p.username}</span>
-            <span class="lb-rating">${Math.round(p.stats.rating)}</span>
-            <span class="lb-stats">${p.stats.wins} / ${p.stats.losses}</span>
+            <span class="lb-rating">${Math.round(stats.rating)}</span>
+            <span class="lb-stats">${stats.wins} / ${stats.losses}</span>
         `;
         container.appendChild(row);
     });
@@ -1466,12 +1584,14 @@ window.openProfile = async () => {
 
         if (data.success) {
             // 4. Update UI with fresh DB data
+            const stats = getDisplayStats(data);
+
             document.getElementById('my-username').innerText = data.username;
-            document.getElementById('my-rating').innerText = Math.round(data.stats.rating);
-            document.getElementById('my-wins').innerText = data.stats.wins;
+            document.getElementById('my-rating').innerText = Math.round(stats.rating);
+            document.getElementById('my-wins').innerText = stats.wins;
 
             const lossEl = document.getElementById('my-losses');
-            if (lossEl) lossEl.innerText = data.stats.losses;
+            if (lossEl) lossEl.innerText = stats.losses;
             console.log("Premium Status:", data.isPremium);
             const badge = document.getElementById('premium-badge');
             if (badge) {

@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
+    
     username: {
         type: String,
         required: true,
@@ -32,6 +33,20 @@ const userSchema = new mongoose.Schema({
         type: String,
         default: null
     },
+    stats: {
+        rating: {
+            type: Number,
+            default: 1200
+        },
+        wins: {
+            type: Number,
+            default: 0
+        },
+        losses: {
+            type: Number,
+            default: 0
+        }
+    },
     eloRating: {
         type: Number,
         default: 1200
@@ -58,6 +73,7 @@ const userSchema = new mongoose.Schema({
         type: Date,
         default: Date.now
     }
+    
 });
 
 module.exports = mongoose.model('User', userSchema);

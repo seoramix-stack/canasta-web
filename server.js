@@ -203,11 +203,13 @@ app.get('/api/dev-bootstrap', (req, res) => {
         botSpeed: 500
     };
 
+        const devEntry = getDevPlayerEntry(username);
+
     res.json({
         success: true,
         token,
-        username,
-        stats: { rating: 1250, wins: 0, losses: 0 },
+        username: devEntry.username,
+        stats: normalizeStats(devEntry),
         isPremium: true
     });
 });
@@ -276,6 +278,113 @@ function normalizeDevUsername(value) {
     const cleaned = String(value || 'DevPlayer').trim();
     return cleaned || 'DevPlayer';
 }
+
+const devPlayerStats = {};
+
+function normalizeStats(source = {}) {
+    source = source || {};
+    const stats = source.stats || {};
+
+    const rating = Number.isFinite(Number(stats.rating))
+        ? Number(stats.rating)
+        : Number.isFinite(Number(source.eloRating))
+            ? Number(source.eloRating)
+            : 1200;
+
+    const wins = Number.isFinite(Number(stats.wins))
+        ? Number(stats.wins)
+        : Number.isFinite(Number(source.wins))
+            ? Number(source.wins)
+            : 0;
+
+    const losses = Number.isFinite(Number(stats.losses))
+        ? Number(stats.losses)
+        : Number.isFinite(Number(source.losses))
+            ? Number(source.losses)
+            : 0;
+
+    return {
+        rating: Math.round(rating),
+        wins: Math.max(0, Math.round(wins)),
+        losses: Math.max(0, Math.round(losses))
+    };
+}
+
+function setRatingRecordStats(record, nextStats = {}) {
+    const normalized = normalizeStats({ stats: nextStats });
+
+    record.stats = normalized;
+
+    // Keep old top-level fields in sync while old live users still exist.
+    record.eloRating = normalized.rating;
+    record.wins = normalized.wins;
+    record.losses = normalized.losses;
+
+    if (typeof record.markModified === 'function') {
+        record.markModified('stats');
+    }
+
+    return normalized;
+}
+
+function getDevPlayerEntry(username = 'DevPlayer') {
+    const safeUsername = normalizeDevUsername(username);
+    const key = safeUsername.toLowerCase();
+
+    if (!devPlayerStats[key]) {
+        devPlayerStats[key] = {
+            username: safeUsername,
+            stats: { rating: 1200, wins: 0, losses: 0 }
+        };
+    }
+
+    return devPlayerStats[key];
+}
+
+function getUsernameFromToken(token) {
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        return decoded?.username ? normalizeDevUsername(decoded.username) : null;
+    } catch (err) {
+        return null;
+    }
+}
+
+async function loadRatingPlayersForGame(game, playerCount) {
+    const players = {};
+
+    for (let i = 0; i < playerCount; i++) {
+        const token = (game.playerTokens && game.playerTokens[i]) ? game.playerTokens[i] : null;
+        if (!token) continue;
+
+        if (DEV_MODE) {
+            const username = getUsernameFromToken(token) || game.names?.[i] || `DevPlayer${i + 1}`;
+            const devEntry = getDevPlayerEntry(username);
+
+            players[i] = {
+                username: devEntry.username,
+                stats: { ...devEntry.stats },
+                save: async function () {
+                    const entry = getDevPlayerEntry(this.username);
+                    entry.stats = normalizeStats({ stats: this.stats });
+                }
+            };
+
+            continue;
+        }
+
+        if (!User) continue;
+
+        const userDoc = await User.findOne({ token });
+        if (userDoc) {
+            setRatingRecordStats(userDoc, normalizeStats(userDoc));
+            players[i] = userDoc;
+        }
+    }
+
+    return players;
+}
+
 const matchmakingService = require('./www/matchmaking.js')(
     games,
     gameBots,
@@ -290,10 +399,13 @@ app.get('/api/profile', async (req, res) => {
 
     // 2. Handle Dev Mode
     if (DEV_MODE) {
+        const username = getUsernameFromToken(token) || 'DevPlayer';
+        const devEntry = getDevPlayerEntry(username);
+
         return res.json({
             success: true,
-            username: "DevPlayer",
-            stats: { rating: 1250, wins: 5, losses: 2 },
+            username: devEntry.username,
+            stats: normalizeStats(devEntry),
             isPremium: true
         });
     }
@@ -306,11 +418,11 @@ app.get('/api/profile', async (req, res) => {
         const user = await User.findOne({ username: decoded.username });
         if (!user) return res.json({ success: false, message: "User not found" });
 
-        // 4. Return Stats
+                // 4. Return Stats
         res.json({
             success: true,
             username: user.username,
-            stats: user.stats,
+            stats: normalizeStats(user),
             isPremium: user.isPremium || false
         });
     } catch (e) {
@@ -320,28 +432,38 @@ app.get('/api/profile', async (req, res) => {
 });
 
 // --- LEADERBOARD ROUTE ---
+// --- LEADERBOARD ROUTE ---
 app.get('/api/leaderboard', async (req, res) => {
-    // 1. Dev Mode Mock Data (for testing without DB)
+    // 1. Dev Mode: show only real in-memory DevPlayers.
+    // No fake Player_1 / Player_2 rows.
     if (DEV_MODE) {
-        const mockData = Array.from({ length: 25 }, (_, i) => ({
-            username: `Player_${i + 1}`,
-            stats: {
-                rating: 2000 - (i * 50),
-                wins: 50 - i,
-                losses: 10 + i
-            }
-        }));
-        return res.json({ success: true, leaderboard: mockData });
+        const leaderboard = Object.values(devPlayerStats || {})
+            .map(entry => ({
+                username: entry.username,
+                stats: normalizeStats(entry)
+            }))
+            .sort((a, b) => b.stats.rating - a.stats.rating)
+            .slice(0, 100);
+
+        return res.json({ success: true, leaderboard });
     }
 
-    // 2. Production DB Query
+    // 2. Production DB Query: show only real MongoDB users.
     try {
-        const topPlayers = await User.find({})
-            .sort({ 'stats.rating': -1 }) // Sort Descending by Rating
-            .limit(10)                   // Top 10 only
-            .select('username stats.rating stats.wins stats.losses -_id'); // Only safe fields
+        const users = await User.find({})
+            .select('username stats.rating stats.wins stats.losses eloRating wins losses -_id')
+            .lean();
 
-        res.json({ success: true, leaderboard: topPlayers });
+        const leaderboard = users
+            .map(user => ({
+                username: user.username,
+                stats: normalizeStats(user)
+            }))
+            .filter(player => player.username)
+            .sort((a, b) => b.stats.rating - a.stats.rating)
+            .slice(0, 100);
+
+        res.json({ success: true, leaderboard });
     } catch (e) {
         console.error("[API] Leaderboard Error:", e);
         res.status(500).json({ success: false, message: "Server Error" });
@@ -358,6 +480,18 @@ app.get('/api/friendly-games', (req, res) => {
     } catch (err) {
         console.error('[API] Friendly Games Error:', err);
         res.status(500).json({ success: false, message: 'Could not load friendly games.' });
+    }
+});
+
+app.get('/api/rated-games', (req, res) => {
+    try {
+        res.json({
+            success: true,
+            rooms: getRatedGamesList()
+        });
+    } catch (err) {
+        console.error('[API] Rated Games Error:', err);
+        res.status(500).json({ success: false, message: 'Could not load rated games.' });
     }
 });
 
@@ -423,13 +557,15 @@ if (session && session.gameId) {
         // 5. If reconnecting to a friendly lobby, send them back to the lobby screen
         if (game.isPrivate && game.isLobby) {
             socket.emit('joined_private_success', {
-                gameId: session.gameId,
-                roomName: game.roomName || `Table ${session.gameId.split('_')[1] || session.gameId}`,
-                seat: session.seat
-            });
+    gameId: session.gameId,
+    roomName: game.roomName || `Table ${session.gameId.split('_')[1] || session.gameId}`,
+    seat: session.seat,
+    roomType: getRoomType(game),
+    isRated: !!game.isRated
+});
 
             broadcastLobby(session.gameId);
-            emitFriendlyGamesList();
+            emitAllLobbyLists();
         } else {
             // 6. Otherwise restore active game board
             sendUpdate(session.gameId, socket.id, session.seat);
@@ -508,7 +644,8 @@ if (DEV_MODE && !socket.data.gameId) {
             ) {
                 currentGame.names[seat] = null;
             }
-
+            if (currentGame.playerTokens) currentGame.playerTokens[seat] = null;
+            if (currentGame.playerProfiles) currentGame.playerProfiles[seat] = null;
             if (currentGame.readySeats) {
                 currentGame.readySeats.delete(seat);
             }
@@ -536,7 +673,7 @@ if (DEV_MODE && !socket.data.gameId) {
                 broadcastLobby(gameId);
             }
 
-            emitFriendlyGamesList();
+            emitAllLobbyLists();
         }, 30000); // 30 seconds to reconnect
 
         return;
@@ -572,9 +709,23 @@ if (DEV_MODE && !socket.data.gameId) {
         if (targetSeat < 0 || targetSeat >= game.config.PLAYER_COUNT) return;
         if (game.names[targetSeat] !== null) return; // Seat taken
 
-        // Swap Names
-        game.names[targetSeat] = game.names[currentSeat];
-        game.names[currentSeat] = null;
+        const movingName = game.names[currentSeat];
+const movingToken = game.playerTokens ? game.playerTokens[currentSeat] : null;
+const movingProfile = game.playerProfiles ? game.playerProfiles[currentSeat] : null;
+
+// Swap Names + rated metadata
+game.names[targetSeat] = movingName;
+game.names[currentSeat] = null;
+
+if (game.playerTokens) {
+    game.playerTokens[targetSeat] = movingToken || null;
+    game.playerTokens[currentSeat] = null;
+}
+
+if (game.playerProfiles) {
+    game.playerProfiles[targetSeat] = movingProfile || null;
+    game.playerProfiles[currentSeat] = null;
+}
 
         // Update Socket Data
         socket.data.seat = targetSeat;
@@ -585,6 +736,10 @@ if (DEV_MODE && !socket.data.gameId) {
         if (token && playerSessions[token]) {
             playerSessions[token].seat = targetSeat;
         }
+        const username = socket.handshake.auth.username || movingName;
+if (username) {
+    setFriendlyPresence(username, gameId, targetSeat, socket.id);
+}
 
         broadcastLobby(gameId);
     });
@@ -607,7 +762,7 @@ if (DEV_MODE && !socket.data.gameId) {
         // 1. DEAL CARDS NOW
         game.resetMatch();
         game.isLobby = false;
-        emitFriendlyGamesList();
+        emitAllLobbyLists();
 
         // 2. MOVE EVERYONE TO GAME SCREEN
         io.sockets.sockets.forEach((s) => {
@@ -640,163 +795,20 @@ if (DEV_MODE && !socket.data.gameId) {
         }
     });
 
-    socket.on('request_create_private', (data) => {
-    const pCount = parseInt(data.playerCount) || 4;
-    const ruleset = data.ruleset || 'standard';
-    const gameId = generateFriendlyTableId();
-    const tableNumber = gameId.split('_')[1];
-    const token = socket.handshake.auth.token;
-    const username = socket.handshake.auth.username || "Host";
-
-    // Determine base config
-    let config = (pCount === 2)
-        ? { PLAYER_COUNT: 2, HAND_SIZE: 15 }
-        : { PLAYER_COUNT: 4, HAND_SIZE: 11 };
-
-    if (ruleset === 'easy') {
-        config.DRAW_COUNT = 1;
-        config.MIN_CANASTAS_OUT = 1;
-    } else {
-        config.DRAW_COUNT = 2;
-        config.MIN_CANASTAS_OUT = 2;
-    }
-
-    // Initialize game
-    games[gameId] = new CanastaGame(config);
-    games[gameId].isPrivate = true;
-    games[gameId].isFriendly = true;
-    games[gameId].isLobby = true;
-    games[gameId].host = socket.id;
-    games[gameId].readySeats = new Set();
-    games[gameId].matchIsOver = false;
-    games[gameId].turnCounter = 1;
-
-    games[gameId].names = Array(pCount).fill(null);
-    games[gameId].names[0] = username;
-    games[gameId].roomName = `Table ${tableNumber}`;
-    games[gameId].creatorName = username;
-    games[gameId].friendlyRuleset = ruleset;
-    games[gameId].createdAt = Date.now();
-
-    // Join host
-    socket.join(gameId);
-    socket.data.gameId = gameId;
-    socket.data.seat = 0;
-    if (token) {
-        playerSessions[token] = {
-            gameId,
-            seat: 0,
-            username
-        };
-    }
-
-    socket.emit('private_created', {
-        gameId: gameId,
-        roomName: games[gameId].roomName,
-        seat: 0
-    });
-
-    broadcastLobby(gameId);
+    socket.on('request_create_private', async (data) => {
+    await createLobbyRoom(socket, data, 'friendly');
 });
 
-    socket.on('request_join_private', (data) => {
-    const { gameId } = data;
-    const game = games[gameId];
-    const token = socket.handshake.auth.token;
-    const username = socket.handshake.auth.username || "Guest";
+socket.on('request_join_private', async (data) => {
+    await joinLobbyRoom(socket, data, 'friendly');
+});
 
-    // 1. Basic room checks
-    if (!game) return socket.emit('error_message', "Game not found.");
-    if (!game.isPrivate) return socket.emit('error_message', "Not a private game.");
-    if (!game.isLobby) return socket.emit('error_message', "This room is already in progress.");
+socket.on('request_create_rated', async (data) => {
+    await createLobbyRoom(socket, data, 'rated');
+});
 
-    // 2. Clean up stale presence record if it points to a room that no longer exists
-    if (
-        activeFriendlyPlayers[username] &&
-        (
-            !games[activeFriendlyPlayers[username].gameId] ||
-            games[activeFriendlyPlayers[username].gameId].names[activeFriendlyPlayers[username].seat] !== username
-        )
-    ) {
-        delete activeFriendlyPlayers[username];
-    }
-
-    // 3. If this user is already seated in THIS SAME ROOM,
-    // reattach them instead of giving them another seat
-    const existingSeat = game.names.findIndex(name => name === username);
-
-    if (existingSeat !== -1) {
-        socket.join(gameId);
-        socket.data.gameId = gameId;
-        socket.data.seat = existingSeat;
-
-        if (token) {
-            playerSessions[token] = {
-                gameId,
-                seat: existingSeat,
-                username
-            };
-        }
-
-        activeFriendlyPlayers[username] = {
-            gameId,
-            seat: existingSeat,
-            socketId: socket.id,
-            joinedAt: Date.now()
-        };
-
-        broadcastLobby(gameId);
-        broadcastAll(gameId);
-
-        return socket.emit('joined_private_success', {
-            gameId,
-            roomName: game.roomName || `Table ${gameId.split('_')[1] || gameId}`,
-            seat: existingSeat
-        });
-    }
-
-    // 4. If this user is already seated in ANOTHER friendly room, reject the join
-    const activePresence = activeFriendlyPlayers[username];
-    if (activePresence && activePresence.gameId !== gameId) {
-        return socket.emit('error_message', "You are already seated in another friendly room.");
-    }
-
-    // 5. Find an empty seat
-    let seat = game.names.findIndex(n => n === null);
-    if (seat === -1) return socket.emit('error_message', "Room is full.");
-
-    // 6. Join the room normally
-    socket.join(gameId);
-    socket.data.gameId = gameId;
-    socket.data.seat = seat;
-    game.names[seat] = username;
-
-    // 7. Save reconnect session
-    if (token) {
-        playerSessions[token] = {
-            gameId,
-            seat,
-            username
-        };
-    }
-
-    // 8. Save active friendly-room presence
-    activeFriendlyPlayers[username] = {
-        gameId,
-        seat,
-        socketId: socket.id,
-        joinedAt: Date.now()
-    };
-
-    // 9. Update everyone
-    broadcastLobby(gameId);
-    broadcastAll(gameId);
-
-    socket.emit('joined_private_success', {
-        gameId,
-        roomName: game.roomName || `Table ${gameId.split('_')[1] || gameId}`,
-        seat
-    });
+socket.on('request_join_rated', async (data) => {
+    await joinLobbyRoom(socket, data, 'rated');
 });
 
     // --- NEW: SOCIAL EVENTS ---
@@ -1381,7 +1393,8 @@ if (DEV_MODE && !socket.data.gameId) {
                 console.log(`[LOBBY] Seat ${seat} freed in Game ${gameId}`);
                 game.names[seat] = null;
             }
-
+            if (game.playerTokens) game.playerTokens[seat] = null;
+            if (game.playerProfiles) game.playerProfiles[seat] = null;
             if (game.readySeats) {
                 game.readySeats.delete(seat);
             }
@@ -1399,7 +1412,7 @@ if (DEV_MODE && !socket.data.gameId) {
                 broadcastLobby(gameId);
             }
 
-            emitFriendlyGamesList();
+            emitAllLobbyLists();
         }
 
         // Finished private match cleanup
@@ -1407,7 +1420,7 @@ if (DEV_MODE && !socket.data.gameId) {
             console.log(`[CLEANUP] Private Match ${gameId} finished and player left. Deleting room.`);
             delete games[gameId];
             if (gameBots[gameId]) delete gameBots[gameId];
-            emitFriendlyGamesList();
+            emitAllLobbyLists();
         }
     }
 });
@@ -1458,10 +1471,77 @@ function promoteNewHost(gameId) {
 function generateGameId() {
     return 'game_' + Math.random().toString(36).substr(2, 9);
 }
-function generateFriendlyTableId() {
+function getRankForRating(rating) {
+    const safeRating = Number.isFinite(Number(rating)) ? Math.round(Number(rating)) : 1200;
+
+    if (safeRating < 1000) return { rankName: 'Beginner', rankClass: 'rank-beginner' };
+    if (safeRating < 1200) return { rankName: 'Bronze', rankClass: 'rank-bronze' };
+    if (safeRating < 1400) return { rankName: 'Club', rankClass: 'rank-club' };
+    if (safeRating < 1600) return { rankName: 'Advanced', rankClass: 'rank-advanced' };
+    if (safeRating < 1800) return { rankName: 'Expert', rankClass: 'rank-expert' };
+    return { rankName: 'Master', rankClass: 'rank-master' };
+}
+
+function buildLobbyProfile(username, rating = 1200) {
+    const safeRating = Number.isFinite(Number(rating)) ? Math.round(Number(rating)) : 1200;
+    const rank = getRankForRating(safeRating);
+
+    return {
+        username,
+        rating: safeRating,
+        rankName: rank.rankName,
+        rankClass: rank.rankClass
+    };
+}
+
+async function getLobbyProfile(username) {
+    if (!username) return null;
+
+        if (DEV_MODE || !User) {
+        const devEntry = getDevPlayerEntry(username);
+        return buildLobbyProfile(username, normalizeStats(devEntry).rating);
+    }
+
+    try {
+            const user = await User.findOne({ username })
+            .select('username stats.rating eloRating wins losses -_id')
+            .lean();
+
+        return buildLobbyProfile(username, normalizeStats(user).rating);
+    } catch (err) {
+        console.error(`[Lobby] Could not load rating for ${username}:`, err);
+        return buildLobbyProfile(username, 1200);
+    }
+}
+
+function ensureLobbyArrays(game) {
+    if (!game) return;
+    const maxSeats = game?.config?.PLAYER_COUNT || 4;
+
+    if (!Array.isArray(game.names)) {
+        game.names = Array(maxSeats).fill(null);
+    }
+
+    if (!Array.isArray(game.playerTokens)) {
+        game.playerTokens = Array(maxSeats).fill(null);
+    }
+
+    if (!Array.isArray(game.playerProfiles)) {
+        game.playerProfiles = Array(maxSeats).fill(null);
+    }
+}
+
+async function setLobbySeat(game, seat, username, token = null) {
+    ensureLobbyArrays(game);
+    game.names[seat] = username;
+    game.playerTokens[seat] = token || null;
+    game.playerProfiles[seat] = await getLobbyProfile(username);
+}
+
+function generateTableId(prefix) {
     const usedNumbers = Object.keys(games)
-        .filter(id => id.startsWith('friendly_'))
-        .map(id => parseInt(id.replace('friendly_', ''), 10))
+        .filter(id => id.startsWith(`${prefix}_`))
+        .map(id => parseInt(id.replace(`${prefix}_`, ''), 10))
         .filter(n => !isNaN(n))
         .sort((a, b) => a - b);
 
@@ -1475,18 +1555,51 @@ function generateFriendlyTableId() {
         }
     }
 
-    return `friendly_${nextNumber}`;
+    return `${prefix}_${nextNumber}`;
 }
+
+function generateFriendlyTableId() {
+    return generateTableId('friendly');
+}
+
+function generateRatedTableId() {
+    return generateTableId('rated');
+}
+
 function getFriendlyRuleset(game) {
     if (game.friendlyRuleset) return game.friendlyRuleset;
     return game.config && game.config.DRAW_COUNT === 1 ? 'easy' : 'standard';
 }
 
-function getFriendlyGamesList() {
+function getRoomType(game) {
+    return game?.isRated ? 'rated' : 'friendly';
+}
+
+function getTableAverageRating(game) {
+    if (!game || !Array.isArray(game.playerProfiles)) return null;
+
+    const ratings = game.playerProfiles
+        .filter(Boolean)
+        .map(profile => Number(profile.rating))
+        .filter(rating => Number.isFinite(rating));
+
+    if (!ratings.length) return null;
+    return Math.round(ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length);
+}
+
+function getLobbyGamesList(roomType = 'friendly') {
     return Object.entries(games)
-        .filter(([roomId, game]) => game && game.isPrivate && !game.matchIsOver)
+        .filter(([roomId, game]) => {
+            if (!game || !game.isPrivate || game.matchIsOver) return false;
+            return roomType === 'rated' ? !!game.isRated : !!game.isFriendly;
+        })
         .map(([roomId, game]) => {
+            ensureLobbyArrays(game);
+
             const playerNames = Array.isArray(game.names) ? game.names.filter(Boolean) : [];
+            const playerProfiles = Array.isArray(game.playerProfiles)
+                ? game.playerProfiles.filter(Boolean)
+                : playerNames.map(name => buildLobbyProfile(name, 1200));
             const maxSeats = game?.config?.PLAYER_COUNT || 4;
 
             return {
@@ -1494,7 +1607,11 @@ function getFriendlyGamesList() {
                 roomName: game.roomName || `Table ${roomId.split('_')[1] || roomId}`,
                 creatorName: game.creatorName || playerNames[0] || 'Unknown',
                 status: game.isLobby ? 'waiting' : 'in-progress',
+                roomType: getRoomType(game),
+                isRated: !!game.isRated,
                 playerNames,
+                playerProfiles,
+                averageRating: getTableAverageRating(game),
                 seatsUsed: playerNames.length,
                 maxSeats,
                 ruleset: getFriendlyRuleset(game),
@@ -1509,14 +1626,205 @@ function getFriendlyGamesList() {
         });
 }
 
+function getFriendlyGamesList() {
+    return getLobbyGamesList('friendly');
+}
+
+function getRatedGamesList() {
+    return getLobbyGamesList('rated');
+}
+
 function emitFriendlyGamesList() {
     io.emit('friendly_games_list', getFriendlyGamesList());
+}
+
+function emitRatedGamesList() {
+    io.emit('rated_games_list', getRatedGamesList());
+}
+
+function emitAllLobbyLists() {
+    emitFriendlyGamesList();
+    emitRatedGamesList();
+}
+
+async function createLobbyRoom(socket, data = {}, roomType = 'friendly') {
+    const isRated = roomType === 'rated';
+    const pCount = parseInt(data.playerCount) || 4;
+    const ruleset = data.ruleset || 'standard';
+    const gameId = isRated ? generateRatedTableId() : generateFriendlyTableId();
+    const tableNumber = gameId.split('_')[1];
+    const token = socket.handshake.auth.token;
+    const username = socket.handshake.auth.username || (isRated ? 'Player' : 'Host');
+
+    if (
+        activeFriendlyPlayers[username] &&
+        (
+            !games[activeFriendlyPlayers[username].gameId] ||
+            games[activeFriendlyPlayers[username].gameId].names[activeFriendlyPlayers[username].seat] !== username
+        )
+    ) {
+        delete activeFriendlyPlayers[username];
+    }
+
+    if (activeFriendlyPlayers[username]) {
+        return socket.emit('error_message', 'You are already seated in another lobby room.');
+    }
+
+    let config = (pCount === 2)
+        ? { PLAYER_COUNT: 2, HAND_SIZE: 15 }
+        : { PLAYER_COUNT: 4, HAND_SIZE: 11 };
+
+    if (ruleset === 'easy') {
+        config.DRAW_COUNT = 1;
+        config.MIN_CANASTAS_OUT = 1;
+    } else {
+        config.DRAW_COUNT = 2;
+        config.MIN_CANASTAS_OUT = 2;
+    }
+
+    games[gameId] = new CanastaGame(config);
+    games[gameId].isPrivate = true;
+    games[gameId].isFriendly = !isRated;
+    games[gameId].isRated = isRated;
+    games[gameId].roomType = roomType;
+    games[gameId].isLobby = true;
+    games[gameId].host = socket.id;
+    games[gameId].readySeats = new Set();
+    games[gameId].matchIsOver = false;
+    games[gameId].turnCounter = 1;
+
+    games[gameId].names = Array(pCount).fill(null);
+    games[gameId].playerTokens = Array(pCount).fill(null);
+    games[gameId].playerProfiles = Array(pCount).fill(null);
+    games[gameId].roomName = `Table ${tableNumber}`;
+    games[gameId].creatorName = username;
+    games[gameId].friendlyRuleset = ruleset;
+    games[gameId].createdAt = Date.now();
+
+    await setLobbySeat(games[gameId], 0, username, token);
+
+    await socket.join(gameId);
+    socket.data.gameId = gameId;
+    socket.data.seat = 0;
+
+    if (token) {
+        playerSessions[token] = {
+            gameId,
+            seat: 0,
+            username
+        };
+    }
+
+    setFriendlyPresence(username, gameId, 0, socket.id);
+
+    socket.emit('private_created', {
+        gameId,
+        roomName: games[gameId].roomName,
+        seat: 0,
+        roomType,
+        isRated
+    });
+
+    broadcastLobby(gameId);
+}
+
+async function joinLobbyRoom(socket, data = {}, expectedRoomType = 'friendly') {
+    const { gameId } = data;
+    const game = games[gameId];
+    const token = socket.handshake.auth.token;
+    const username = socket.handshake.auth.username || 'Guest';
+    const expectedRated = expectedRoomType === 'rated';
+
+    if (!game) return socket.emit('error_message', 'Game not found.');
+    if (!game.isPrivate) return socket.emit('error_message', 'Not a private game.');
+    if (!!game.isRated !== expectedRated) {
+        return socket.emit('error_message', expectedRated ? 'This is not a rated table.' : 'This is not a friendly table.');
+    }
+    if (!game.isLobby) return socket.emit('error_message', 'This room is already in progress.');
+
+    ensureLobbyArrays(game);
+
+    if (
+        activeFriendlyPlayers[username] &&
+        (
+            !games[activeFriendlyPlayers[username].gameId] ||
+            games[activeFriendlyPlayers[username].gameId].names[activeFriendlyPlayers[username].seat] !== username
+        )
+    ) {
+        delete activeFriendlyPlayers[username];
+    }
+
+    const existingSeat = game.names.findIndex(name => name === username);
+
+    if (existingSeat !== -1) {
+        await socket.join(gameId);
+        socket.data.gameId = gameId;
+        socket.data.seat = existingSeat;
+
+        if (token) {
+            playerSessions[token] = {
+                gameId,
+                seat: existingSeat,
+                username
+            };
+        }
+
+        game.playerTokens[existingSeat] = token || game.playerTokens[existingSeat] || null;
+        game.playerProfiles[existingSeat] = await getLobbyProfile(username);
+        setFriendlyPresence(username, gameId, existingSeat, socket.id);
+
+        broadcastLobby(gameId);
+        broadcastAll(gameId);
+
+        return socket.emit('joined_private_success', {
+            gameId,
+            roomName: game.roomName || `Table ${gameId.split('_')[1] || gameId}`,
+            seat: existingSeat,
+            roomType: getRoomType(game),
+            isRated: !!game.isRated
+        });
+    }
+
+    const activePresence = activeFriendlyPlayers[username];
+    if (activePresence && activePresence.gameId !== gameId) {
+        return socket.emit('error_message', 'You are already seated in another lobby room.');
+    }
+
+    let seat = game.names.findIndex(n => n === null);
+    if (seat === -1) return socket.emit('error_message', 'Room is full.');
+
+    await socket.join(gameId);
+    socket.data.gameId = gameId;
+    socket.data.seat = seat;
+    await setLobbySeat(game, seat, username, token);
+
+    if (token) {
+        playerSessions[token] = {
+            gameId,
+            seat,
+            username
+        };
+    }
+
+    setFriendlyPresence(username, gameId, seat, socket.id);
+
+    broadcastLobby(gameId);
+    broadcastAll(gameId);
+
+    socket.emit('joined_private_success', {
+        gameId,
+        roomName: game.roomName || `Table ${gameId.split('_')[1] || gameId}`,
+        seat,
+        roomType: getRoomType(game),
+        isRated: !!game.isRated
+    });
 }
 function broadcastLobby(gameId) {
     const game = games[gameId];
     if (!game) return;
 
-    // Find the current seat of the Host (by matching Socket ID)
+    ensureLobbyArrays(game);
+
     let actualHostSeat = 0;
 
     const room = io.sockets.adapter.rooms.get(gameId);
@@ -1532,14 +1840,18 @@ function broadcastLobby(gameId) {
         }
     }
 
-        io.to(gameId).emit('lobby_update', {
+    io.to(gameId).emit('lobby_update', {
         names: game.names,
+        playerProfiles: game.playerProfiles,
         hostSeat: actualHostSeat,
         maxPlayers: game.config.PLAYER_COUNT,
+        roomType: getRoomType(game),
+        isRated: !!game.isRated,
+        averageRating: getTableAverageRating(game),
         isHost: false
     });
 
-    emitFriendlyGamesList();
+    emitAllLobbyLists();
 }
 
 async function startBotGame(humanSocket, difficulty, playerCount = 4, ruleset = 'standard') {
@@ -1799,43 +2111,29 @@ for (const botSeatStr of botSeats) {
 if (result.isMatchOver) {
         console.log(`[MATCH END] Game ${gameId} won by ${result.winner}`);
         game.matchIsOver = true;
+        emitAllLobbyLists();
 
         // Prepare Data Holder for Client
         let ratingUpdates = {}; // Will hold { seatIndex: { newRating, delta } }
 
-        // --- RATING & STATS UPDATE START ---
-        if (!DEV_MODE) {
+                // --- RATING & STATS UPDATE START ---
+        if (game.isRated) {
             try {
-                const players = {};
                 const playerCount = game.config.PLAYER_COUNT;
-
-                // Loop through all EXPECTED seats (0 to N-1)
-                for (let i = 0; i < playerCount; i++) {
-                    // Retrieve the token we saved at the start of the game
-                    const token = (game.playerTokens && game.playerTokens[i]) ? game.playerTokens[i] : null;
-
-                    if (token) {
-                        const userDoc = await User.findOne({ token: token });
-                        if (userDoc) players[i] = userDoc;
-                    }
-                }
+                const players = await loadRatingPlayersForGame(game, playerCount);
 
                 console.log(`[ELO] Found ${Object.keys(players).length} / ${playerCount} players for rating update.`);
 
-                // Check if we found all players in the DB (regardless of if they are online)
-                if (Object.keys(players).length === playerCount && game.isRated) {
-
+                if (Object.keys(players).length === playerCount) {
                     // A. Calculate Average Ratings Dynamically
                     let team1Rating, team2Rating;
 
                     if (playerCount === 2) {
-                        // 1v1 Logic
-                        team1Rating = players[0].stats.rating;
-                        team2Rating = players[1].stats.rating;
+                        team1Rating = normalizeStats(players[0]).rating;
+                        team2Rating = normalizeStats(players[1]).rating;
                     } else {
-                        // 2v2 Logic (Average of partners)
-                        team1Rating = (players[0].stats.rating + players[2].stats.rating) / 2;
-                        team2Rating = (players[1].stats.rating + players[3].stats.rating) / 2;
+                        team1Rating = (normalizeStats(players[0]).rating + normalizeStats(players[2]).rating) / 2;
+                        team2Rating = (normalizeStats(players[1]).rating + normalizeStats(players[3]).rating) / 2;
                     }
 
                     // B. Get Scores
@@ -1848,22 +2146,24 @@ if (result.isMatchOver) {
                     // D. Apply Updates & Save
                     const savePromises = [];
 
-                    // Loop only through the ACTUAL seats (0..1 OR 0..3)
                     for (let seat = 0; seat < playerCount; seat++) {
                         const isTeam1 = (seat === 0 || seat === 2);
                         const change = isTeam1 ? delta : -delta;
-
-                        players[seat].stats.rating += change;
+                        const currentStats = normalizeStats(players[seat]);
 
                         const winnerTeam = (result.winner === 'team1') ? 0 : 1; // 0=Team1, 1=Team2
                         const won = (winnerTeam === 0 && isTeam1) || (winnerTeam === 1 && !isTeam1);
 
-                        if (won) players[seat].stats.wins++;
-                        else players[seat].stats.losses++;
+                        const nextStats = {
+                            rating: currentStats.rating + change,
+                            wins: currentStats.wins + (won ? 1 : 0),
+                            losses: currentStats.losses + (won ? 0 : 1)
+                        };
 
-                        // Store for Client
+                        const savedStats = setRatingRecordStats(players[seat], nextStats);
+
                         ratingUpdates[seat] = {
-                            newRating: Math.round(players[seat].stats.rating),
+                            newRating: savedStats.rating,
                             delta: change
                         };
 
@@ -1874,7 +2174,7 @@ if (result.isMatchOver) {
                     console.log("[ELO] Ratings updated successfully.");
 
                 } else {
-                    console.log("[ELO] Skipped: Not enough players found or not rated.");
+                    console.log("[ELO] Skipped: Not enough players found.");
                 }
 
             } catch (e) {
@@ -1959,104 +2259,100 @@ async function handleForfeit(gameId, loserSeat) {
         : (loserSeat === 0);
 
     const winnerTeam = isTeam1Loser ? "team2" : "team1";
+    let ratingUpdates = {};
 
     console.log(`[FORFEIT] Game ${gameId} ended. Leaver: Seat ${loserSeat}. Winner: ${winnerTeam}`);
     game.matchIsOver = true;
+    emitAllLobbyLists();
 
-    // 1) Notify clients immediately
-    io.to(gameId).emit('match_over', {
-        winner: winnerTeam,
-        scores: game.cumulativeScores,
-        reason: "forfeit",
-        names: game.names
-    });
-
-    // 2) ELO CALCULATION (Ranked only)
-    if (!DEV_MODE && game.isRated) {
+    // ELO CALCULATION (rated only). Do this before match_over so the victory UI can show it.
+    if (game.isRated) {
         try {
-            const players = {};
+            const players = await loadRatingPlayersForGame(game, playerCount);
 
-            // A. Retrieve user docs for all seats
-            for (let i = 0; i < playerCount; i++) {
-                const token = (game.playerTokens && game.playerTokens[i]) ? game.playerTokens[i] : null;
-                if (!token) continue;
-                const user = await User.findOne({ token });
-                if (user) players[i] = user;
-            }
+            console.log(`[FORFEIT ELO] Found ${Object.keys(players).length} / ${playerCount} players for rating update.`);
 
-            // B. Team average ratings (fallback 1200 per missing seat)
-            let team1Rating, team2Rating;
-            if (playerCount === 2) {
-                team1Rating = (players[0]?.stats.rating ?? 1200);
-                team2Rating = (players[1]?.stats.rating ?? 1200);
-            } else {
-                const p0 = (players[0]?.stats.rating ?? 1200);
-                const p2 = (players[2]?.stats.rating ?? 1200);
-                const p1 = (players[1]?.stats.rating ?? 1200);
-                const p3 = (players[3]?.stats.rating ?? 1200);
-                team1Rating = (p0 + p2) / 2;
-                team2Rating = (p1 + p3) / 2;
-            }
-
-            // C. Compute a base loss using a "stomp" score, then apply special rules
-            // calculateEloChange returns Team1's change.
-            const team1Won = !isTeam1Loser;
-            const s1 = team1Won ? 5000 : 0;
-            const s2 = team1Won ? 0 : 5000;
-
-            const team1Delta = calculateEloChange(team1Rating, team2Rating, s1, s2);
-
-            // Convert to the losing team's "natural" loss (always negative)
-            const baseLoss = Math.round(team1Won ? -team1Delta : team1Delta);
-
-            const LEAVER_PENALTY_MULTIPLIER = 1.5; // 50% extra penalty for the quitter
-            const updates = {};
-
-            for (let seat = 0; seat < playerCount; seat++) {
-                if (!players[seat]) continue;
-
-                // Is this seat on the losing team?
-                const onLosingTeam = (playerCount === 2)
-                    ? (seat === loserSeat)
-                    : ((isTeam1Loser && (seat === 0 || seat === 2)) ||
-                        (!isTeam1Loser && (seat === 1 || seat === 3)));
-
-                if (onLosingTeam) {
-                    if (seat === loserSeat) {
-                        // Rule 1: The inactive/leaving player gets the full penalty
-                        const penalty = Math.round(baseLoss * LEAVER_PENALTY_MULTIPLIER); // negative
-                        players[seat].stats.rating += penalty;
-                        players[seat].stats.losses++;
-                        updates[seat] = { delta: penalty, newRating: players[seat].stats.rating };
-                    } else if (playerCount === 4) {
-                        // Rule 2: In 4P ranked, the partner gets no rating penalty
-                        // (and no loss stat)
-                        updates[seat] = { delta: 0, newRating: players[seat].stats.rating };
-                    } else {
-                        // Should never happen in 2P, but keep a safe default
-                        players[seat].stats.rating += baseLoss;
-                        players[seat].stats.losses++;
-                        updates[seat] = { delta: baseLoss, newRating: players[seat].stats.rating };
-                    }
+            if (Object.keys(players).length === playerCount) {
+                // Team average ratings
+                let team1Rating, team2Rating;
+                if (playerCount === 2) {
+                    team1Rating = normalizeStats(players[0]).rating;
+                    team2Rating = normalizeStats(players[1]).rating;
                 } else {
-                    // Rule 3: Winners gain the standard win amount
-                    const winPoints = Math.abs(baseLoss);
-                    players[seat].stats.rating += winPoints;
-                    players[seat].stats.wins++;
-                    updates[seat] = { delta: winPoints, newRating: players[seat].stats.rating };
+                    team1Rating = (normalizeStats(players[0]).rating + normalizeStats(players[2]).rating) / 2;
+                    team2Rating = (normalizeStats(players[1]).rating + normalizeStats(players[3]).rating) / 2;
                 }
 
-                await players[seat].save();
-            }
+                // calculateEloChange returns Team1's change.
+                const team1Won = !isTeam1Loser;
+                const s1 = team1Won ? 5000 : 0;
+                const s2 = team1Won ? 0 : 5000;
+                const team1Delta = calculateEloChange(team1Rating, team2Rating, s1, s2);
 
-            io.to(gameId).emit('rating_update', updates);
+                // Convert to the losing team's natural loss, always negative.
+                const baseLoss = Math.round(team1Won ? -team1Delta : team1Delta);
+                const LEAVER_PENALTY_MULTIPLIER = 1.5;
+
+                const savePromises = [];
+
+                for (let seat = 0; seat < playerCount; seat++) {
+                    const currentStats = normalizeStats(players[seat]);
+                    let delta = 0;
+
+                    const onLosingTeam = (playerCount === 2)
+                        ? (seat === loserSeat)
+                        : ((isTeam1Loser && (seat === 0 || seat === 2)) ||
+                            (!isTeam1Loser && (seat === 1 || seat === 3)));
+
+                    let nextStats = { ...currentStats };
+
+                    if (onLosingTeam) {
+                        if (seat === loserSeat) {
+                            // Quitter gets 50% extra penalty.
+                            delta = Math.round(baseLoss * LEAVER_PENALTY_MULTIPLIER);
+                            nextStats.rating += delta;
+                            nextStats.losses += 1;
+                        } else if (playerCount === 4) {
+                            // Partner gets no penalty and no loss in 4P rated forfeit.
+                            delta = 0;
+                        } else {
+                            delta = baseLoss;
+                            nextStats.rating += delta;
+                            nextStats.losses += 1;
+                        }
+                    } else {
+                        // Winners gain the standard win amount.
+                        delta = Math.abs(baseLoss);
+                        nextStats.rating += delta;
+                        nextStats.wins += 1;
+                    }
+
+                    const savedStats = setRatingRecordStats(players[seat], nextStats);
+                    ratingUpdates[seat] = { delta, newRating: savedStats.rating };
+                    savePromises.push(players[seat].save());
+                }
+
+                await Promise.all(savePromises);
+                console.log("[FORFEIT ELO] Ratings updated successfully.");
+            } else {
+                console.log("[FORFEIT ELO] Skipped: Not enough players found.");
+            }
 
         } catch (e) {
             console.error("Forfeit Elo Error:", e);
         }
     }
 
-    // 3) Cleanup game from memory
+    // Notify clients after rating calculation so match_over includes ratings.
+    io.to(gameId).emit('match_over', {
+        winner: winnerTeam,
+        scores: game.cumulativeScores,
+        reason: "forfeit",
+        names: game.names,
+        ratings: ratingUpdates
+    });
+
+    // Cleanup game from memory
     // CHANGE: Assign this to game.cleanupTimer so Rematch can cancel it!
     if (game.cleanupTimer) clearTimeout(game.cleanupTimer); // Safety clear
 

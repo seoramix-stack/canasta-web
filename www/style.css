@@ -530,7 +530,8 @@ h2 {
     width: var(--card-w);
     height: var(--card-h);
     border-radius: 4px;
-    box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.3);
+    border: 0.5px solid rgba(0, 0, 0, 0.55);
+    box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.35);
     background: white;
 }
 
@@ -633,6 +634,8 @@ h2 {
     width: 100%;
     height: 100%;
     border-radius: 4px;
+    border: 0.5px solid rgba(0, 0, 0, 0.6);
+    box-sizing: border-box;
 }
 
 /* Melds */
@@ -2537,5 +2540,104 @@ h2 {
     .create-room-primary-btn {
         height: 52px;
         font-size: 15px;
+    }
+}
+/* ========================================= */
+/* === RATED LOBBY / RANK BADGES         === */
+/* ========================================= */
+
+#screen-rated-games {
+    justify-content: flex-start;
+    overflow-y: auto;
+    padding: calc(20px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+}
+
+.rank-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.3px;
+    line-height: 1.2;
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    white-space: nowrap;
+}
+
+.rank-beginner {
+    background: #7f8c8d;
+}
+
+.rank-bronze {
+    background: #a97142;
+}
+
+.rank-club {
+    background: #2980b9;
+}
+
+.rank-advanced {
+    background: #27ae60;
+}
+
+.rank-expert {
+    background: #8e44ad;
+}
+
+.rank-master {
+    background: #c0392b;
+}
+
+.lobby-seat-rank {
+    margin-top: 6px;
+}
+
+.rated-player-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 2px 6px 2px 0;
+    white-space: nowrap;
+}
+
+.table-rating,
+.table-rating-muted {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 9px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 800;
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    white-space: nowrap;
+}
+
+.table-rating-muted {
+    background: rgba(127, 140, 141, 0.6);
+}
+
+.rated-games-table {
+    min-width: 720px;
+}
+
+@media (max-width: 800px) {
+    #screen-rated-games {
+        padding-left: 12px;
+        padding-right: 12px;
+    }
+
+    .rated-games-table {
+        min-width: 680px;
+    }
+
+    .rated-player-chip {
+        display: flex;
+        margin-bottom: 6px;
     }
 }
