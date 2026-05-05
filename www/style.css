@@ -2641,3 +2641,118 @@ h2 {
         margin-bottom: 6px;
     }
 }
+
+#rated-pause-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 50000;
+
+    display: none;
+    align-items: center;
+    justify-content: center;
+
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(7px);
+    -webkit-backdrop-filter: blur(7px);
+
+    padding: 20px;
+}
+
+#rated-pause-overlay.active {
+    display: flex;
+}
+
+.rated-pause-box {
+    width: min(92vw, 430px);
+    max-width: 430px;
+
+    background: #1a252f;
+    border: 2px solid var(--accent-color);
+    border-radius: 14px;
+    padding: 24px;
+
+    text-align: center;
+    color: var(--text-primary);
+
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.85);
+}
+
+.rated-pause-box h2 {
+    margin: 0 0 14px 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(241, 196, 15, 0.35);
+    color: var(--accent-color);
+}
+
+.rated-pause-main {
+    font-size: 18px;
+    line-height: 1.4;
+    margin-bottom: 12px;
+}
+
+.rated-pause-time {
+    font-family: var(--font-title);
+    font-size: 46px;
+    font-weight: 900;
+    color: var(--accent-color);
+    margin: 12px 0 16px 0;
+    text-shadow: 2px 2px 0 #000;
+}
+
+.rated-pause-ready-list {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 18px;
+}
+
+.rated-pause-note {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.4;
+    margin-top: 14px;
+}
+
+#btn-rated-pause-ready {
+    margin: 0 auto;
+    width: 100%;
+    max-width: 280px;
+}
+
+/* ========================================= */
+/* === GAME SCREEN TRUE FULL HEIGHT FIX   === */
+/* ========================================= */
+
+#screen-game.active-screen {
+    display: flex !important;
+    position: absolute !important;
+    inset: 0 !important;
+
+    width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+}
+
+#screen-game > #game-ui {
+    position: absolute !important;
+    inset: 0 !important;
+
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 100% !important;
+
+    flex: none !important;
+    overflow: hidden !important;
+}
+
+#screen-game > #game-ui > #game-grid {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 100% !important;
+    margin: 0 !important;
+}

@@ -1329,3 +1329,21 @@ export function renderRatedGamesList(rooms) {
         });
     }
 }
+export function showInactivityWarning(secondsLeft) {
+    const warningEl = document.getElementById('inactivity-warning');
+    if (!warningEl) return;
+
+    const countdownEl = document.getElementById('inactivity-countdown');
+    if (countdownEl) {
+        countdownEl.innerText = String(Math.max(0, secondsLeft));
+    }
+
+    warningEl.style.display = 'block';
+}
+
+export function hideInactivityWarning() {
+    const warningEl = document.getElementById('inactivity-warning');
+    if (!warningEl) return;
+
+    warningEl.style.display = 'none';
+}

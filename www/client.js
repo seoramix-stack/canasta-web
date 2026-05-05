@@ -73,7 +73,10 @@ window.hardReset = () => {
     localStorage.clear();
     location.reload();
 };
-let afkSeconds = 0; // Tracks seconds since last action
+const RATED_TURN_INACTIVITY_LIMIT_SECONDS = 120; // 2 minutes
+const RATED_TURN_WARNING_SECONDS = 15; // show warning for final 15 seconds
+
+let afkSeconds = 0; // Tracks seconds since last activity
 let timeoutSent = false;
 
 function resetActivity() {
@@ -893,7 +896,7 @@ function initSocket(token) {
 
     state.socket.on('deal_hand', (data) => {
         state.mySeat = data.seat;
-        setGameTimerVisibility(!data.isFriendly);
+        setGameTimerVisibility(!!data.isRated);
         UI.navTo('screen-game');
         document.getElementById('status').style.display = 'none';
         if (data.bankTimers) {
@@ -901,7 +904,7 @@ function initSocket(token) {
             // Force a DOM update now so the user sees "12:00" instantly
             updateTimerDOM();
         }
-
+        renderRatedPauseUI(data.ratedPause);
         // Render UI first
         UI.updateUI(data);
         // If scores are 0-0, reset timer. Otherwise, keep existing time.
@@ -917,20 +920,27 @@ function initSocket(token) {
     });
 
     state.socket.on('timer_sync', (data) => {
-        if (data.bankTimers) {
-            // Update the local state with the server's truth
-            state.seatTimers = data.bankTimers;
-            // Call your existing function to update the 12:00 labels
-            updateTimerDOM();
-        }
-    });
+    if (data.bankTimers) {
+        state.seatTimers = data.bankTimers;
+        updateTimerDOM();
+    }
+
+    if (data.ratedPause) {
+        renderRatedPauseUI(data.ratedPause);
+    }
+});
+
+    state.socket.on('rated_pause_update', (data) => {
+    renderRatedPauseUI(data);
+});
 
     state.socket.on('update_game', (data) => {
-        setGameTimerVisibility(!data.isFriendly);
+        setGameTimerVisibility(!!data.isRated);
         if (data.bankTimers) {
             state.seatTimers = data.bankTimers;
             updateTimerDOM();
         }
+        renderRatedPauseUI(data.ratedPause);
         // 1. Define the full update callback
         const performFullUpdate = () => UI.updateUI(data);
         // RESET AFK TIMER because an action happened
@@ -1183,37 +1193,199 @@ if (typeof UI.hideInactivityWarning === 'function') {
     if (nameEl) nameEl.innerText = pName;
 }
 
+function formatRatedPauseTime(seconds) {
+    seconds = Number(seconds);
+    if (!Number.isFinite(seconds)) seconds = 0;
+
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+
+    return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function getPauseSeatName(seat) {
+    seat = Number(seat);
+
+    if (
+        state.activeData &&
+        state.activeData.names &&
+        state.activeData.names[seat]
+    ) {
+        return state.activeData.names[seat];
+    }
+
+    return `Player ${seat + 1}`;
+}
+
+function renderRatedPauseUI(pause) {
+    state.ratedPause = pause || null;
+
+    const isRated = !!state.activeData?.isRated || !!pause?.active;
+    const mySeat = Number(state.mySeat);
+
+    const overlay = document.getElementById('rated-pause-overlay');
+    const grid = document.getElementById('game-grid');
+    const menuBtn = document.getElementById('btn-rated-pause');
+    const gameMenu = document.getElementById('game-menu-overlay');
+
+    const pauseIsActive = !!pause?.active;
+
+    const usedSeats = Array.isArray(pause?.usedSeats)
+        ? pause.usedSeats.map(Number)
+        : [];
+
+    const readySeats = Array.isArray(pause?.readySeats)
+        ? pause.readySeats.map(Number)
+        : [];
+
+    const hasUsedPause = usedSeats.includes(mySeat);
+    const amReady = readySeats.includes(mySeat);
+
+    // Game-menu pause button
+    if (menuBtn) {
+        menuBtn.style.display = isRated ? 'flex' : 'none';
+
+        if (!isRated) {
+            menuBtn.disabled = true;
+            menuBtn.innerText = 'RATED PAUSE';
+        } else if (pauseIsActive) {
+            menuBtn.disabled = true;
+            menuBtn.innerText = 'PAUSE ACTIVE';
+        } else if (hasUsedPause) {
+            menuBtn.disabled = true;
+            menuBtn.innerText = 'PAUSE USED';
+        } else {
+            menuBtn.disabled = false;
+            menuBtn.innerText = 'TAKE 5 MIN PAUSE';
+        }
+
+        menuBtn.style.opacity = menuBtn.disabled ? '0.55' : '1';
+        menuBtn.style.cursor = menuBtn.disabled ? 'default' : 'pointer';
+    }
+
+    if (!overlay) return;
+
+    if (!isRated || !pauseIsActive) {
+    overlay.classList.remove('active');
+    return;
+}
+
+    // Hide the normal menu if pause starts while it is open.
+    if (gameMenu) {
+        gameMenu.style.display = 'none';
+    }
+
+    const startedByName =
+        pause.startedByName ||
+        getPauseSeatName(pause.startedBy);
+
+    const mainEl = document.getElementById('rated-pause-main');
+    const timeEl = document.getElementById('rated-pause-time');
+    const readyListEl = document.getElementById('rated-pause-ready-list');
+    const readyBtn = document.getElementById('btn-rated-pause-ready');
+
+    if (mainEl) {
+        if (Number(pause.startedBy) === mySeat) {
+            mainEl.innerText = 'You paused the rated game.';
+        } else {
+            mainEl.innerText = `${startedByName} paused the rated game.`;
+        }
+    }
+
+    if (timeEl) {
+        timeEl.innerText = formatRatedPauseTime(pause.secondsLeft);
+    }
+
+    if (readyListEl) {
+        const readyNames = Array.isArray(pause.readyPlayers)
+            ? pause.readyPlayers.map(p => p.name)
+            : readySeats.map(getPauseSeatName);
+
+        readyListEl.innerText = readyNames.length
+            ? `Ready: ${readyNames.join(', ')}`
+            : 'Ready: ---';
+    }
+
+    if (readyBtn) {
+        readyBtn.disabled = amReady;
+        readyBtn.innerText = amReady ? 'READY — WAITING FOR OTHERS' : 'I’M READY';
+        readyBtn.style.opacity = amReady ? '0.65' : '1';
+    }
+
+    // Pause also freezes the client-side 2-minute inactivity timer.
+    afkSeconds = 0;
+    timeoutSent = false;
+
+    if (typeof UI.hideInactivityWarning === 'function') {
+        UI.hideInactivityWarning();
+    }
+
+    overlay.classList.add('active');
+}
+
+window.requestRatedPause = () => {
+    if (!state.socket) return;
+    state.socket.emit('act_request_rated_pause');
+};
+
+window.readyDuringRatedPause = () => {
+    if (!state.socket) return;
+    state.socket.emit('act_ready_during_rated_pause');
+};
+
 // --- TIMER LOGIC ---
 
 function startTimerSystem() {
     if (state.timerInterval) clearInterval(state.timerInterval);
+
     afkSeconds = 0;
     timeoutSent = false;
 
-    if (state.activeData?.isFriendly) {
-        if (typeof UI.hideInactivityWarning === 'function') {
-            UI.hideInactivityWarning();
-        }
-        return;
+    if (typeof UI.hideInactivityWarning === 'function') {
+        UI.hideInactivityWarning();
     }
 
-    // Don't start timer if playing against bots
-    if (state.activeData && state.activeData.names && state.activeData.names.some(n => n && n.includes("Bot "))) {
+    // Rated games only. Friendly games keep their current behavior.
+    if (!state.activeData?.isRated) {
         return;
     }
 
     state.timerInterval = setInterval(() => {
         if (!state.gameStarted || state.currentTurnSeat === -1) return;
 
-        // ONLY track AFK for the local player
+        if (state.ratedPause?.active) {
+    afkSeconds = 0;
+    timeoutSent = false;
+
+    if (typeof UI.hideInactivityWarning === 'function') {
+        UI.hideInactivityWarning();
+    }
+
+    return;
+}
+
+        // Only track inactivity for ME when it is MY turn.
         if (state.currentTurnSeat === state.mySeat) {
             afkSeconds++;
-            if (afkSeconds >= 45 && afkSeconds < 60) {
-    if (typeof UI.showInactivityWarning === 'function') {
-        UI.showInactivityWarning(60 - afkSeconds);
-    }
-}
-            if (afkSeconds >= 60 && !timeoutSent) {
+
+            const warningStartsAt =
+                RATED_TURN_INACTIVITY_LIMIT_SECONDS - RATED_TURN_WARNING_SECONDS;
+
+            if (
+                afkSeconds >= warningStartsAt &&
+                afkSeconds < RATED_TURN_INACTIVITY_LIMIT_SECONDS
+            ) {
+                if (typeof UI.showInactivityWarning === 'function') {
+                    UI.showInactivityWarning(
+                        RATED_TURN_INACTIVITY_LIMIT_SECONDS - afkSeconds
+                    );
+                }
+            }
+
+            if (
+                afkSeconds >= RATED_TURN_INACTIVITY_LIMIT_SECONDS &&
+                !timeoutSent
+            ) {
                 timeoutSent = true;
                 state.socket.emit('act_timeout');
             }
@@ -1222,34 +1394,56 @@ function startTimerSystem() {
 }
 
 function updateTimerDOM() {
-    if (state.activeData?.isFriendly) return;
+    // Rated games only
+    if (!state.activeData?.isRated) return;
+
+    // Safety: no timers received yet
+    if (!state.seatTimers) return;
+
     // Helper to format 720 -> "12:00"
     const fmt = (s) => {
+        s = Number(s);
+        if (!Number.isFinite(s)) s = 720;
+
         const m = Math.floor(s / 60);
         const sec = s % 60;
         return `${m}:${sec.toString().padStart(2, '0')}`;
     };
 
-    // Helper to find the right HTML element for a seat
-    const getDomId = (seatIndex) => {
-        if (state.currentPlayerCount === 2) {
-            if (seatIndex === state.mySeat) return 'timer-me';
-            return 'timer-partner'; // Opponent is always "Partner" (Top) in 2P
-        }
-        const rel = (seatIndex - state.mySeat + 4) % 4;
-        if (rel === 0) return 'timer-me';
-        if (rel === 1) return 'timer-left';
-        if (rel === 2) return 'timer-partner';
-        if (rel === 3) return 'timer-right';
-        return null;
-    };
+    // 2-player rated game
+    // Only seats 0 and 1 exist, so DO NOT loop over seats 2 and 3.
+    if (state.currentPlayerCount === 2) {
+        const mySeat = Number(state.mySeat);
+        const opponentSeat = mySeat === 0 ? 1 : 0;
 
-    // Update all 4 timers
-    for (let i = 0; i < 4; i++) {
-        const elId = getDomId(i);
-        const el = document.getElementById(elId);
-        if (el) el.innerText = fmt(state.seatTimers[i]);
+        const myTimerEl = document.getElementById('timer-me');
+        const opponentTimerEl = document.getElementById('timer-partner');
+
+        if (myTimerEl) {
+            myTimerEl.innerText = fmt(state.seatTimers[mySeat]);
+        }
+
+        if (opponentTimerEl) {
+            opponentTimerEl.innerText = fmt(state.seatTimers[opponentSeat]);
+        }
+
+        return;
     }
+
+    // 4-player rated game
+    const timerMap = [
+        { seat: state.mySeat, domId: 'timer-me' },
+        { seat: (state.mySeat + 1) % 4, domId: 'timer-left' },
+        { seat: (state.mySeat + 2) % 4, domId: 'timer-partner' },
+        { seat: (state.mySeat + 3) % 4, domId: 'timer-right' }
+    ];
+
+    timerMap.forEach(({ seat, domId }) => {
+        const el = document.getElementById(domId);
+        if (el) {
+            el.innerText = fmt(state.seatTimers[seat]);
+        }
+    });
 }
 function setGameTimerVisibility(show) {
     const timerIds = ['timer-me', 'timer-left', 'timer-partner', 'timer-right'];

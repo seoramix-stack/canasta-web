@@ -432,7 +432,6 @@ app.get('/api/profile', async (req, res) => {
 });
 
 // --- LEADERBOARD ROUTE ---
-// --- LEADERBOARD ROUTE ---
 app.get('/api/leaderboard', async (req, res) => {
     // 1. Dev Mode: show only real in-memory DevPlayers.
     // No fake Player_1 / Player_2 rows.
@@ -691,10 +690,17 @@ if (DEV_MODE && !socket.data.gameId) {
 
         const timerKey = `${gameId}_${seat}`;
 
-        disconnectTimers[timerKey] = setTimeout(() => {
-            console.log(`[Forfeit] Player ${seat} failed to reconnect. Ending Game ${gameId}.`);
-            handleForfeit(gameId, seat);
-        }, 60000);
+        const pauseExtraMs = isRatedPauseActive(game)
+    ? Math.max(0, game.ratedPause.endsAt - Date.now())
+    : 0;
+
+disconnectTimers[timerKey] = setTimeout(() => {
+    const currentGame = games[gameId];
+    if (!currentGame || currentGame.matchIsOver) return;
+
+    console.log(`[Forfeit] Player ${seat} failed to reconnect. Ending Game ${gameId}.`);
+    handleForfeit(gameId, seat);
+}, pauseExtraMs + DISCONNECT_FORFEIT_MS);
     }
 });
 
@@ -761,6 +767,7 @@ if (username) {
 
         // 1. DEAL CARDS NOW
         game.resetMatch();
+        game.ratedPause = null;
         game.isLobby = false;
         emitAllLobbyLists();
 
@@ -1010,6 +1017,7 @@ socket.on('request_join_rated', async (data) => {
         const gameId = socket.data.gameId;
         const game = games[gameId];
         if (!game) return;
+        if (rejectIfRatedPaused(socket, game)) return;
 
         // Validation
         if (game.config.PLAYER_COUNT !== 4) return socket.emit('error_message', "Only in 4P mode.");
@@ -1052,6 +1060,7 @@ socket.on('request_join_rated', async (data) => {
         const gameId = socket.data.gameId;
         const game = games[gameId];
         if (!game) return;
+        if (rejectIfRatedPaused(socket, game)) return;
 
         // Ensure it matches the 'pending' state
         if (game.goOutPermission !== 'pending') return;
@@ -1066,6 +1075,7 @@ socket.on('request_join_rated', async (data) => {
         const gameId = socket.data.gameId;
         const game = games[gameId];
         if (!game) return;
+        if (rejectIfRatedPaused(socket, game)) return;
 
         const result = game.drawFromDeck(data.seat);
 
@@ -1093,6 +1103,7 @@ socket.on('request_join_rated', async (data) => {
         const gameId = socket.data.gameId;
         const game = games[gameId];
         if (game) {
+            if (rejectIfRatedPaused(socket, game)) return;
             const seat = socket.data.seat;
             if (gameBots[gameId] && seat === 0) {
                 const name = game.names ? game.names[seat] : "Unknown";
@@ -1108,6 +1119,7 @@ socket.on('request_join_rated', async (data) => {
         const gameId = socket.data.gameId;
         const game = games[gameId];
         if (game) {
+            if (rejectIfRatedPaused(socket, game)) return;
             const seat = socket.data.seat;
             if (gameBots[gameId] && seat === 0) {
                 const name = game.names ? game.names[data.seat] : "Unknown";
@@ -1172,6 +1184,7 @@ socket.on('request_join_rated', async (data) => {
         const gameId = socket.data.gameId;
         const game = games[gameId];
         if (game) {
+            if (rejectIfRatedPaused(socket, game)) return;
             const seat = socket.data.seat;
             if (gameBots[gameId] && seat === 0) {
                 // We need to look up the card RANK before it is removed from hand
@@ -1232,6 +1245,7 @@ socket.on('request_join_rated', async (data) => {
         const gameId = socket.data.gameId;
         const game = games[gameId];
         if (game) {
+            if (rejectIfRatedPaused(socket, game)) return;
             let res = game.processOpening(data.seat, data.melds, data.pickup);
             if (res.success && res.message === "GAME_OVER") {
                 handleRoundEnd(gameId, io); // <--- NEW FLOW
@@ -1293,20 +1307,87 @@ socket.on('request_join_rated', async (data) => {
         }
     });
 
+        socket.on('act_request_rated_pause', () => {
+        const gameId = socket.data.gameId;
+        const seat = Number(socket.data.seat);
+        const game = games[gameId];
+
+        if (!game) return;
+        if (!game.isRated) return;
+        if (game.isLobby) return;
+        if (game.matchIsOver) return;
+        if (game.turnPhase === 'game_over') return;
+
+        const pause = ensureRatedPauseState(game);
+
+        if (pause.active) {
+            socket.emit('error_message', 'A rated pause is already active.');
+            emitRatedPauseState(gameId);
+            return;
+        }
+
+        if (pause.usedSeats[seat]) {
+            socket.emit('error_message', 'You have already used your 5-minute rated pause this match.');
+            return;
+        }
+
+        const now = Date.now();
+
+        pause.active = true;
+        pause.startedBy = seat;
+        pause.startedAt = now;
+        pause.endsAt = now + RATED_PAUSE_DURATION_MS;
+        pause.readySeats = {};
+        pause.usedSeats[seat] = true;
+
+        // Freeze inactivity timing from this moment.
+        game.lastActionTime = now;
+
+        console.log(`[RATED PAUSE] Game ${gameId}: Seat ${seat} started a 5-minute pause.`);
+
+        emitRatedPauseState(gameId);
+    });
+
+    socket.on('act_ready_during_rated_pause', () => {
+        const gameId = socket.data.gameId;
+        const seat = Number(socket.data.seat);
+        const game = games[gameId];
+
+        if (!game) return;
+        if (!game.isRated) return;
+
+        const pause = ensureRatedPauseState(game);
+        if (!pause.active) return;
+
+        pause.readySeats[seat] = true;
+
+        console.log(`[RATED PAUSE] Game ${gameId}: Seat ${seat} is ready.`);
+
+        if (allConnectedPlayersReadyForPause(gameId)) {
+            endRatedPause(gameId, 'all_ready');
+        } else {
+            emitRatedPauseState(gameId);
+        }
+    });
+
     // --- TIMEOUT HANDLER ---
     socket.on('act_timeout', async () => {
         const gameId = socket.data.gameId;
         const game = games[gameId];
         if (!game || game.matchIsOver) return;
+        if (isRatedPauseActive(game)) return;
 
-        // NEW: Ignore timeouts in bot games to allow teaching/debugging
-        if (gameBots[gameId]) return;
-        if (game.isFriendly) return;
-        // We trust the client's 60s trigger but add a small 2s buffer 
-        // to account for network lag vs the server's lastActionTime.
-        const now = Date.now();
-        const INACTIVITY_LIMIT = 58000; // 58s buffer (be slightly more lenient than 60s)
-        const timeSinceAction = now - game.lastActionTime;
+        // Rated games only. Friendly games keep their current behavior.
+if (gameBots[gameId]) return;
+if (!game.isRated) return;
+
+// Only the player whose turn it is can trigger their own inactivity timeout.
+if (socket.data.seat !== game.currentPlayer) return;
+
+// Client triggers at 120s. Server allows a small 2s buffer for network timing.
+const now = Date.now();
+const INACTIVITY_LIMIT = 118000; // 118s buffer, slightly more lenient than 120s
+const timeSinceAction = now - game.lastActionTime;
 
         if (timeSinceAction < INACTIVITY_LIMIT) {
             console.log(`[TIMEOUT DENIED] Security check failed: ${timeSinceAction}ms`);
@@ -1918,6 +1999,184 @@ async function startBotGame(humanSocket, difficulty, playerCount = 4, ruleset = 
     sendUpdate(gameId, humanSocket.id, 0);
 }
 
+const RATED_PAUSE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
+const DISCONNECT_FORFEIT_MS = 60 * 1000; // normal reconnect grace after pause ends
+
+function ensureRatedPauseState(game) {
+    if (!game.ratedPause) {
+        game.ratedPause = {
+            active: false,
+            startedBy: null,
+            startedAt: null,
+            endsAt: null,
+            readySeats: {},
+            usedSeats: {}
+        };
+    }
+
+    if (!game.ratedPause.readySeats) game.ratedPause.readySeats = {};
+    if (!game.ratedPause.usedSeats) game.ratedPause.usedSeats = {};
+
+    return game.ratedPause;
+}
+
+function getSeatDisplayName(game, seat) {
+    const seatNum = Number(seat);
+
+    if (game && game.names && game.names[seatNum]) {
+        return game.names[seatNum];
+    }
+
+    return `Player ${seatNum + 1}`;
+}
+
+function getConnectedPauseSeats(gameId) {
+    const room = io.sockets.adapter.rooms.get(gameId);
+    const seats = new Set();
+
+    if (!room) return [];
+
+    for (const socketId of room) {
+        const s = io.sockets.sockets.get(socketId);
+        if (!s) continue;
+        if (s.data.gameId !== gameId) continue;
+
+        const seat = Number(s.data.seat);
+        const game = games[gameId];
+
+        if (
+            Number.isInteger(seat) &&
+            game &&
+            seat >= 0 &&
+            seat < game.config.PLAYER_COUNT
+        ) {
+            seats.add(seat);
+        }
+    }
+
+    return Array.from(seats);
+}
+
+function getRatedPausePayload(gameId) {
+    const game = games[gameId];
+    if (!game) {
+        return { active: false };
+    }
+
+    const pause = ensureRatedPauseState(game);
+
+    const readySeats = Object.keys(pause.readySeats || {})
+        .map(Number)
+        .filter(Number.isInteger);
+
+    const usedSeats = Object.keys(pause.usedSeats || {})
+        .map(Number)
+        .filter(Number.isInteger);
+
+    const connectedSeats = getConnectedPauseSeats(gameId);
+
+    const secondsLeft = pause.active
+        ? Math.max(0, Math.ceil((pause.endsAt - Date.now()) / 1000))
+        : 0;
+
+    return {
+        active: !!pause.active,
+        startedBy: pause.startedBy,
+        startedByName:
+            pause.startedBy !== null && pause.startedBy !== undefined
+                ? getSeatDisplayName(game, pause.startedBy)
+                : '',
+        secondsLeft,
+        readySeats,
+        readyPlayers: readySeats.map(seat => ({
+            seat,
+            name: getSeatDisplayName(game, seat)
+        })),
+        usedSeats,
+        connectedSeats,
+        connectedPlayers: connectedSeats.map(seat => ({
+            seat,
+            name: getSeatDisplayName(game, seat)
+        }))
+    };
+}
+
+function emitRatedPauseState(gameId) {
+    io.to(gameId).emit('rated_pause_update', getRatedPausePayload(gameId));
+}
+
+function isRatedPauseActive(game) {
+    return !!(
+        game &&
+        game.isRated &&
+        game.ratedPause &&
+        game.ratedPause.active
+    );
+}
+
+function allConnectedPlayersReadyForPause(gameId) {
+    const game = games[gameId];
+    if (!game || !game.ratedPause) return false;
+
+    const connectedSeats = getConnectedPauseSeats(gameId);
+    if (!connectedSeats.length) return false;
+
+    return connectedSeats.every(seat => game.ratedPause.readySeats[seat]);
+}
+
+function restartDisconnectTimersAfterRatedPause(gameId) {
+    const game = games[gameId];
+    if (!game || !game.disconnectedPlayers) return;
+
+    Object.keys(game.disconnectedPlayers).forEach(seatKey => {
+        const seat = Number(seatKey);
+        const timerKey = `${gameId}_${seat}`;
+
+        if (disconnectTimers[timerKey]) {
+            clearTimeout(disconnectTimers[timerKey]);
+            delete disconnectTimers[timerKey];
+        }
+
+        disconnectTimers[timerKey] = setTimeout(() => {
+            const currentGame = games[gameId];
+            if (!currentGame || currentGame.matchIsOver) return;
+
+            console.log(`[Forfeit] Player ${seat} failed to reconnect after rated pause. Ending Game ${gameId}.`);
+            handleForfeit(gameId, seat);
+        }, DISCONNECT_FORFEIT_MS);
+    });
+}
+
+function endRatedPause(gameId, reason = 'ended') {
+    const game = games[gameId];
+    if (!game || !game.ratedPause || !game.ratedPause.active) return;
+
+    game.ratedPause.active = false;
+    game.ratedPause.startedBy = null;
+    game.ratedPause.startedAt = null;
+    game.ratedPause.endsAt = null;
+    game.ratedPause.readySeats = {};
+
+    // Important: prevents the 2-minute inactivity timer from instantly firing after pause.
+    game.lastActionTime = Date.now();
+
+    io.to(gameId).emit('rated_pause_update', {
+        ...getRatedPausePayload(gameId),
+        reason
+    });
+
+    restartDisconnectTimersAfterRatedPause(gameId);
+
+    broadcastAll(gameId);
+}
+
+function rejectIfRatedPaused(socket, game) {
+    if (!isRatedPauseActive(game)) return false;
+
+    socket.emit('error_message', 'The rated game is paused.');
+    return true;
+}
+
 function getFreezingCard(game) {
     if (!game.discardPile || game.discardPile.length === 0) return null;
     for (let i = game.discardPile.length - 1; i >= 0; i--) {
@@ -1947,7 +2206,10 @@ function sendUpdate(gameId, socketId, seat) {
         currentPlayer: game.currentPlayer,
         phase: game.turnPhase,
         isFriendly: !!game.isFriendly,
+        isRated: !!game.isRated,
+        roomType: getRoomType(game),
         bankTimers: game.bankTimers,
+        ratedPause: getRatedPausePayload(gameId),
         topDiscard: topCard,
         previousDiscard: prevCard,
         freezingCard: freezingCard,
@@ -1989,6 +2251,9 @@ function broadcastAll(gameId, activeSeat) {
                 bankTimers: game.bankTimers,
                 currentPlayer: game.currentPlayer,
                 isFriendly: !!game.isFriendly,
+                isRated: !!game.isRated,
+                roomType: getRoomType(game),
+                ratedPause: getRatedPausePayload(gameId),
                 isFrozen: isFrozen,
                 handBacks: handBacks,
                 nextDeckColor: nextDeckColor,
@@ -2365,8 +2630,26 @@ async function handleForfeit(gameId, loserSeat) {
 setInterval(() => {
     Object.keys(games).forEach(gameId => {
         const game = games[gameId];
-        
-        // NEW: Disable bank timers for bot games
+        if (!game) return;
+
+        // Rated pause freezes the bank timer.
+        if (game.isRated && game.ratedPause && game.ratedPause.active) {
+            if (Date.now() >= game.ratedPause.endsAt) {
+                endRatedPause(gameId, 'expired');
+            } else {
+                const pausePayload = getRatedPausePayload(gameId);
+
+                io.to(gameId).emit('rated_pause_update', pausePayload);
+                io.to(gameId).emit('timer_sync', {
+                    bankTimers: game.bankTimers,
+                    ratedPause: pausePayload
+                });
+            }
+
+            return;
+        }
+
+        // Disable bank timers for bot/friendly games
         if (gameBots[gameId]) return;
         if (game.isFriendly) return;
         if (game && !game.matchIsOver && !game.isLobby && game.currentPlayer !== -1) {
@@ -2381,7 +2664,10 @@ setInterval(() => {
             }
 
             // NEW: Every second, send the current bank timers to everyone in this game room
-            io.to(gameId).emit('timer_sync', { bankTimers: game.bankTimers });
+            io.to(gameId).emit('timer_sync', {
+    bankTimers: game.bankTimers,
+    ratedPause: getRatedPausePayload(gameId)
+});
         }
     });
 }, 1000);

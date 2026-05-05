@@ -59,7 +59,7 @@ class CanastaGame {
         this.finalScores = null;
         this.cumulativeScores = { team1: 0, team2: 0 }; 
         this.lastActionTime = Date.now(); 
-        this.bankTimers = { 0: 720, 1: 720, 2: 720, 3: 720 };
+        this.bankTimers = { 0: 900, 1: 900, 2: 900, 3: 900 };
         this.disconnectedPlayers = {};
         this.lastActionTime = Date.now();
     }

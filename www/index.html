@@ -26,7 +26,7 @@
     <title>Canasta Master Club | Online Multiplayer & Rated ELO Play</title>
 
     <meta name="description"
-        content="Play classic Canasta online with 2/4 players. Features rated ELO matchmaking, 12-minute match banks, and 1-minute turn timers. Choose between Standard (Draw 2) or Easy rules.">
+        content="Play classic Canasta online with 2/4 players. Features rated ELO matchmaking, 15-minute match banks, and 2-minutes turn timers. Choose between Standard (Draw 2) or Easy rules.">
     <meta name="keywords"
         content="Canasta online, multiplayer Canasta, Canasta ELO ranking, play Canasta with bots, Canasta rules 2 players">
 
@@ -78,7 +78,7 @@
     {
       "@type": "HowToStep",
       "name": "Understand the Timers",
-      "text": "Manage your 12-minute match bank and 60-second turn limit to avoid automatic forfeit."
+      "text": "Manage your 15-minute match bank and 2-minute turn limit to avoid automatic forfeit."
     },
     {
       "@type": "HowToStep",
@@ -115,7 +115,7 @@
       "genre": ["Card Game", "Strategy Game"],
       "gamePlatform": ["Web Browser"],
       "featureList": [
-        "12-minute match bank timers",
+        "15-minute match bank timers",
         "1-minute turn timers to prevent AFK",
         "2-Player and 4-Player modes",
         "ELO Rating system with margin-of-victory scaling"
@@ -318,22 +318,13 @@
                 🏆 TOP 10 LEADERBOARD
             </button>
             <div class="diff-grid">
-                <button class="menu-btn secondary" onclick="connectToGame('casual')" style="display:none;">⚡ QUICK
-                    MATCH</button>
-                <button class="diff-btn p-count-btn selected" onclick="selectPlayerCount(4, this)">4 PLAYERS</button>
+                
             </div>
         </div>
 
-        <button class="menu-btn primary" onclick="openRatedGamesLobby()">🏆 RATED GAMES</button>
-<div class="info-text">Ranked tables. Choose a table by rating.</div>
+        <button class="menu-btn primary" onclick="openRatedGamesLobby()">RATED GAMES</button>
 
-        <hr style="width: 50%; border-color: #555; margin: 15px 0;">
-
-        <div style="color: #bdc3c7; margin-bottom:10px;">CASUAL</div>
-
-        <button class="menu-btn secondary" onclick="connectToGame('casual')" style="display:none;">⚡ QUICK
-            MATCH</button>
-        <button class="menu-btn secondary" onclick="openFriendlyGamesLobby()">🤝 FRIENDLY GAMES</button>
+        <button class="menu-btn secondary" onclick="openFriendlyGamesLobby()">FRIENDLY GAMES</button>
 
         <br>
         <button class="menu-btn text-only" onclick="navTo('screen-home')">BACK</button>
@@ -422,11 +413,6 @@
         </div>
     </div>
 </div>
-
-        <br>
-        <button class="menu-btn success" onclick="doCreateRoom()">CREATE & JOIN</button>
-        <button class="menu-btn text-only" onclick="openFriendlyGamesLobby()">CANCEL</button>
-    </div>
 
     <div id="screen-create-rated-room" class="app-screen create-room-screen">
     <div class="create-room-shell">
@@ -615,6 +601,14 @@
     </div>
     <div id="screen-game" class="app-screen game-bg">
         <div id="status" class="game-status">Connecting...</div>
+        <div id="inactivity-warning">
+    <div class="warning-icon">⏳</div>
+    <div>YOUR TURN TIMER IS RUNNING</div>
+    <div class="warning-countdown">
+        <span id="inactivity-countdown">15</span>s before forfeit
+    </div>
+    <div class="warning-hint">Click, tap, or make a move to stay active.</div>
+</div>
         <div id="queue-modal"
             style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:2000; flex-direction:column; align-items:center; justify-content:center;">
             <div class="ready-box">
@@ -742,11 +736,39 @@
                 <div class="menu-box">
                     <h3>PAUSED</h3>
                     <button class="menu-btn secondary" onclick="askToGoOut()" style="margin-bottom:10px;">ASK TO GO
-                        OUT</button>
-                    <button class="menu-btn primary" onclick="toggleGameMenu()">RESUME</button>
+    OUT</button>
+
+<button id="btn-rated-pause" class="menu-btn secondary" onclick="requestRatedPause()" style="margin-bottom:10px;">
+    TAKE 5 MIN PAUSE
+</button>
+
+<button class="menu-btn primary" onclick="toggleGameMenu()">RESUME</button>
                     <button class="menu-btn danger" onclick="confirmLeave()">LEAVE GAME</button>
                 </div>
             </div>
+            <div id="rated-pause-overlay">
+    <div class="rated-pause-box">
+        <h2>RATED PAUSE</h2>
+
+        <div id="rated-pause-main" class="rated-pause-main">
+            Player paused the game.
+        </div>
+
+        <div id="rated-pause-time" class="rated-pause-time">5:00</div>
+
+        <div id="rated-pause-ready-list" class="rated-pause-ready-list">
+            Ready: ---
+        </div>
+
+        <button id="btn-rated-pause-ready" class="menu-btn primary" onclick="readyDuringRatedPause()">
+            I’M READY
+        </button>
+
+        <div class="rated-pause-note">
+            Game resumes when all connected players are ready, or when the timer reaches 0:00.
+        </div>
+    </div>
+</div>
             <div id="game-grid">
 
                 <div id="partner-zone">
@@ -899,8 +921,8 @@
 
             <section class="rules-section">
                 <h3>⏱️ DUAL-TIMER SYSTEM</h3>
-                <p><strong>Fair play is maintained through a 12-minute match bank and a 60-second turn limit.</strong>
-                    If your personal bank reaches 0:00 or you exceed the 1-minute turn limit, you automatically forfeit
+                <p><strong>Fair play is maintained through a 15-minute match bank and a 2-minute turn limit.</strong>
+                    If your personal bank reaches 0:00 or you exceed the 2-minutes turn limit, you automatically forfeit
                     the match.</p>
             </section>
 
